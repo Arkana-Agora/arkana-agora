@@ -154,7 +154,7 @@
   "name": "Maria Silva",
   "username": "maria_silva",
   "bio": "Apaixonada por tarot há 10 anos",
-  "avatarUrl": "https://r2.akashaverso.com/avatars/.../120.webp",
+  "avatarUrl": "https://r2.arkanaagora.com/avatars/.../120.webp",
   "plan": "plus",
   "isVerified": true,
   "stats": {
