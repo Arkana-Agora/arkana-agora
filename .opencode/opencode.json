@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@mohak34/opencode-notifier@latest"],
+  "mcp": {
+    "headroom": {
+      "type": "local",
+      "command": ["D:/Python313/Scripts/headroom.exe", "mcp", "serve"],
+      "enabled": true
+    }
+  },
+  "permission": {
+    "skill": {
+      "*": "allow"
+    }
+  }
+}
