@@ -287,7 +287,7 @@ Authorization: Bearer <accessToken>
   "data": {
     "message": "Sua conta será excluída em 30 dias. Para cancelar, acesse sua conta antes do prazo.",
     "scheduledDeletionDate": "2025-02-14T10:30:00Z",
-    "supportEmail": "suporte@akashaverso.com.br"
+    "supportEmail": "suporte@arkanaagora.com.br"
   }
 }
 ```

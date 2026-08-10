@@ -171,7 +171,7 @@ Semana  1───3───5──────8──────13────
 - [ ] Pagamento via PIX processando e confirmando automaticamente
 - [ ] Pagamento via cartão de crédito com parcelamento até 12x
 - [ ] Webhooks Mercado Pago processando eventos corretamente
-- [ ] Assinatura Akasha Plus com trial de 7 dias
+- [ ] Assinatura Arkana Plus com trial de 7 dias
 - [ ] Recursos premium acessíveis apenas para assinantes
 - [ ] Perfil profissional com agenda e avaliações
 - [ ] Admin dashboard com métricas (MAU, receita, tiragens)
@@ -185,7 +185,7 @@ Semana  1───3───5──────8──────13────
 | Métrica | Meta |
 |---------|------|
 | Usuários cadastrados | 500+ |
-| Assinantes Akasha Plus | 20+ (beta) |
+| Assinantes Arkana Plus | 20+ (beta) |
 | Produtos no marketplace | 30+ |
 | Transações processadas | 50+ |
 | Taxa de conversão (free → plus) | > 4% |

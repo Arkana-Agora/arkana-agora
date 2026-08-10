@@ -99,7 +99,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "https://cdn.akashaverso.com.br"],
+      imgSrc: ["'self'", "https://cdn.arkanaagora.com.br"],
       connectSrc: ["'self'", "https://api.mercadopago.com"],
     },
   },
@@ -181,15 +181,18 @@ const cleanInput = DOMPurify.sanitize(userInput, {
 DATABASE_URL=
 JWT_PRIVATE_KEY=
 JWT_PUBLIC_KEY=
-MERCADO_PAGO_ACCESS_TOKEN=
+MP_ACCESS_TOKEN=
 FCM_SERVER_KEY=
 SMTP_HOST=
 SMTP_USER=
 SMTP_PASS=
 REDIS_URL=
-S3_BUCKET=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
+# Objeto storage é Cloudflare R2 (S3-compatible), não AWS S3
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_PUBLIC_URL=https://assets.arkanaagora.com.br
 ```
 
 ### Verificação em CI/CD

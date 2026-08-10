@@ -79,7 +79,7 @@ Total:  800 tokens                = $0,000255 (R$ 0,001)
 | **Total/mês** | | | **$3,23** |
 | **Total/mês (BRL)** | | | **R$ 16,15** |
 
-> **Receita**: Plano Plus R$ 29,90/mês → margem de **R$ 13,75/usuário**.
+> **Receita**: Plano Plus R$ 19,90/mês → margem de **R$ 3,75/usuário**.
 
 ### Usuário Plus (uso intensivo)
 
@@ -95,7 +95,7 @@ Total:  800 tokens                = $0,000255 (R$ 0,001)
 | **Total/mês** | | | **$2,99** |
 | **Total/mês (BRL)** | | | **R$ 14,95** |
 
-> **Nota**: Usuários Plus geram mais receita (R$ 29,90) que custo de IA. Custo de IA similar ao free pois o uso naturalmente não é 10x maior.
+> **Nota**: Usuários Plus geram mais receita (R$ 19,90) que custo de IA. Custo de IA similar ao free pois o uso naturalmente não é 10x maior.
 
 ---
 

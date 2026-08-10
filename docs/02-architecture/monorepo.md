@@ -215,13 +215,13 @@ packages:
 
 | Pacote | web | mobile | admin | ws-service | ai-service |
 |--------|:---:|:------:|:-----:|:----------:|:----------:|
-| `@akasha/types` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `@akasha/ui` | ✅ | ❌* | ✅ | ❌ | ❌ |
-| `@akasha/api-client` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| `@akasha/utils` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `@akasha/config` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/types` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/ui` | ✅ | ❌* | ✅ | ❌ | ❌ |
+| `@arkana/api-client` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `@arkana/utils` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/config` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-> \* Mobile utilizará componentes nativos (Tamagui ou NativeWind), mas pode importar lógica de `@akasha/ui/primitives`
+> \* Mobile utilizará componentes nativos (Tamagui ou NativeWind), mas pode importar lógica de `@arkana/ui/primitives`
 
 ### 4.2 Versionamento
 
@@ -239,7 +239,7 @@ pnpm changeset publish  # Publica pacotes no registry
 
 ### 4.3 Convenções de Nomenclatura
 
-- **Pacotes**: `@akasha/{nome}` — ex: `@akasha/types`, `@akasha/ui`
+- **Pacotes**: `@arkana/{nome}` — ex: `@arkana/types`, `@arkana/ui`
 - **Apps**: sem prefixo — ex: `web`, `mobile`, `admin`
 - **Services**: sem prefixo — ex: `ai-service`, `ws-service`
 
@@ -262,8 +262,8 @@ pnpm changeset publish  # Publica pacotes no registry
 
 ### Fase 2: Api Client Compartilhado (Sprint 5-6)
 - [ ] Extrair `packages/api-client` com lógica de fetch e endpoints
-- [ ] Refatorar web app para usar `@akasha/api-client`
-- [ ] Adicionar `apps/mobile/` (Expo) consumindo `@akasha/api-client`
+- [ ] Refatorar web app para usar `@arkana/api-client`
+- [ ] Adicionar `apps/mobile/` (Expo) consumindo `@arkana/api-client`
 
 ### Fase 3: Microsserviços (Sprint 7-8)
 - [ ] Mover ws-service para `services/ws-service/`

@@ -9,14 +9,35 @@
 | Ambiente | Propósito | URL | Banco de Dados |
 |----------|-----------|-----|----------------|
 | **Development** | Desenvolvimento local | `http://localhost:3000` | SQLite local |
-| **Staging** | Testes e QA | `staging.akashaverso.com.br` | Neon PostgreSQL (staging) |
-| **Production** | Produção | `akashaverso.com.br` | Neon PostgreSQL (prod) |
+| **Staging** | Testes e QA | `staging.arkanaagora.com.br` | Neon PostgreSQL (staging) |
+| **Production** | Produção | `arkanaagora.com.br` | Neon PostgreSQL (prod) |
 
 ---
 
 ## 2. Desenvolvimento Local
 
-### 2.1 Stack Local
+### 2.0 Toolchain (regra canônica)
+
+- **MVP / app único (este documento)**: package manager **`bun`** (instalação, scripts, Dockerfile, CI).
+- **Monorepo futuro (ADR-005, proposto)**: quando a migração iniciar, usa-se **`pnpm`** + Turborepo (ver `monorepo.md`).
+- Não misturar: aplicações do monorepo futuro devem usar `pnpm`; o app MVP continua `bun` até a migração.
+
+### 2.1 Backend e Frontend (frameworks e onde fica o código)
+
+> A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
+
+| Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
+|---|---|---|---|---|
+| **Frontend (web)** | Next.js 16 (App Router) + TypeScript | `apps/web` (monorepo futuro) / raiz do app (MVP) | 3000 | `bun run dev` |
+| **Backend (API)** | Next.js API Routes + Prisma + NextAuth v4 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
+| **Backend — WebSocket** | Node.js + Socket.io | `services/ws-service` | 3003 | `bun run dev:ws` |
+| **Backend — IA** (futuro) | Node.js | `services/ai-service` | 3004 | — |
+| **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
+| **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
+
+Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), NextAuth v4 (auth), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (New York) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
+
+### 2.2 Stack Local
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -37,7 +58,7 @@
 └──────────┘ └──────────┘ └──────────┘
 ```
 
-### 2.2 Comandos de Desenvolvimento
+### 2.3 Comandos de Desenvolvimento
 
 ```bash
 # Instalar dependências
@@ -62,7 +83,7 @@ bun run dev:ws       # Socket.io na porta 3003
 bun run dev:all
 ```
 
-### 2.3 Variáveis de Ambiente (`.env.local`)
+### 2.4 Variáveis de Ambiente (`.env.local`)
 
 ```env
 # App
@@ -81,7 +102,7 @@ FACEBOOK_CLIENT_ID=dev-fb-id
 FACEBOOK_CLIENT_SECRET=dev-fb-secret
 
 # IA
-Z_AI_API_KEY=dev-ai-key
+AI_PRIMARY_API_KEY=dev-ai-key
 
 # Mercado Pago (sandbox)
 MP_ACCESS_TOKEN=TEST-xxxxx
@@ -133,7 +154,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 ```
                     ┌─────────────────────────────┐
                     │     Cloudflare CDN           │
-                    │  akashaverso.com.br          │
+                    │  arkanaagora.com.br          │
                     │  Cache estático, DDoS, WAF   │
                     └──────────┬──────────────────┘
                                │
@@ -174,10 +195,10 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 ### 4.3 Domínios e DNS
 
 ```
-akashaverso.com.br          → Vercel (web app)
-api.akashaverso.com.br     → Vercel (API routes) — alias para o mesmo deploy
-ws.akashaverso.com.br      → Railway (Socket.io service)
-assets.akashaverso.com.br  → Cloudflare R2 (imagens)
+arkanaagora.com.br          → Vercel (web app)
+api.arkanaagora.com.br     → Vercel (API routes) — alias para o mesmo deploy
+ws.arkanaagora.com.br      → Railway (Socket.io service)
+assets.arkanaagora.com.br  → Cloudflare R2 (imagens)
 ```
 
 **Configuração Cloudflare**:
@@ -249,7 +270,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://akasha:senha@postgres:5432/akasha_verso
+      - DATABASE_URL=postgresql://arkana:senha@postgres:5432/akasha_verso
       - REDIS_URL=redis://redis:6379
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
     depends_on:
@@ -271,7 +292,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: akasha
+      POSTGRES_USER: arkana
       POSTGRES_PASSWORD: senha
       POSTGRES_DB: akasha_verso
     volumes:
@@ -279,7 +300,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U akasha"]
+      test: ["CMD-SHELL", "pg_isready -U arkana"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -418,7 +439,7 @@ PR para main
   └─ Code Review → Merge
        │
        └─ Deploy Produção (Vercel --prod)
-            └── URL: akashaverso.com.br
+            └── URL: arkanaagora.com.br
 ```
 
 ---

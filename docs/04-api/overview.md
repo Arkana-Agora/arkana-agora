@@ -26,8 +26,8 @@ https://{dominio}/api/v1/{recurso}
 
 | Ambiente | Base URL |
 |----------|----------|
-| Produção | `https://akashaverso.com.br/api/v1` |
-| Staging | `https://staging.akashaverso.com.br/api/v1` |
+| Produção | `https://arkanaagora.com.br/api/v1` |
+| Staging | `https://staging.arkanaagora.com.br/api/v1` |
 | Desenvolvimento | `http://localhost:3000/api/v1` |
 
 > **Estratégia**: URI versioning (`/api/v1/`, `/api/v2/`). Versões antigas são mantidas por 6 meses após descontinuação, com header `Deprecation` e `Sunset`.
@@ -265,14 +265,14 @@ info:
   version: 1.0.0
   contact:
     name: Equipe Arkana Agora
-    email: api@akashaverso.com.br
+    email: api@arkanaagora.com.br
   license:
     name: Proprietário
 
 servers:
-  - url: https://akashaverso.com.br/api/v1
+  - url: https://arkanaagora.com.br/api/v1
     description: Produção
-  - url: https://staging.akashaverso.com.br/api/v1
+  - url: https://staging.arkanaagora.com.br/api/v1
     description: Staging
   - url: http://localhost:3000/api/v1
     description: Desenvolvimento

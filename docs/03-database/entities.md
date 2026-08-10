@@ -304,7 +304,7 @@ Postagem do feed social, opcionalmente vinculada a uma leitura.
 
 **Exemplo de `images`**:
 ```json
-["https://assets.akashaverso.com.br/posts/img_abc123.webp"]
+["https://assets.arkanaagora.com.br/posts/img_abc123.webp"]
 ```
 
 ---
@@ -438,7 +438,7 @@ Notificação para o usuário.
 {
   "postId": "post_abc123",
   "likerName": "Maria",
-  "likerAvatar": "https://assets.akashaverso.com.br/avatars/maria.webp"
+  "likerAvatar": "https://assets.arkanaagora.com.br/avatars/maria.webp"
 }
 ```
 

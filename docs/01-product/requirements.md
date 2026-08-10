@@ -76,8 +76,8 @@ Documentacao de requisitos funcionais e nao funcionais do projeto `arkana-agora`
 
 | ID | Requisito | Prioridade | Versao |
 |----|-----------|------------|--------|
-| RF-032 | O sistema deve oferecer plano Akasha Plus por R$19,90/mes e R$179,90/ano | Critico | V1 |
-| RF-033 | O sistema deve oferecer trial de 7 dias para Akasha Plus com cancelamento facilitado | Alto | V1 |
+| RF-032 | O sistema deve oferecer plano Arkana Plus por R$19,90/mes e R$179,90/ano | Critico | V1 |
+| RF-033 | O sistema deve oferecer trial de 7 dias para Arkana Plus com cancelamento facilitado | Alto | V1 |
 | RF-034 | O sistema deve manter o acesso Plus ate o fim do periodo pago apos cancelamento | Critico | V1 |
 
 ### Administracao (RF-035 a RF-037)

@@ -22,7 +22,7 @@ O **arkana-agora** é uma plataforma brasileira de Tarot, Cartas Ciganas (Lenorm
           ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        API GATEWAY (Caddy)                              │
-│            api.akashaverso.com.br / akashaverso.com.br                  │
+│            api.arkanaagora.com.br / arkanaagora.com.br                  │
 │         SSL, Rate Limiting, Static Assets (Cloudflare CDN)               │
 └────────┬──────────────────┬──────────────────┬──────────────────────────┘
          │ REST/SSR         │ SSE              │ WebSocket
@@ -413,7 +413,7 @@ export class InMemoryCache {
 
 - **Protocolo**: `text/event-stream`
 - **Uso**: Streaming de interpretações de IA em tempo real
-- **Rota**: `GET /api/readings/[id]/stream`
+- **Rota**: `POST /api/v1/ai/reading/stream`
 - **Formato**:
 
 ```

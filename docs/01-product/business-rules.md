@@ -9,7 +9,7 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 ### BR-TIR-001: Limite Diario de Tiragens
 
 - Usuarios **gratuitos** possuem limite de **3 tiragens por dia** (contando qualquer espalhamento, exceto Tarot do Dia).
-- Usuarios **Akasha Plus** possuem limite de **10 tiragens por dia**.
+- Usuarios **Arkana Plus** possuem limite de **10 tiragens por dia**.
 - O contador e reiniciado a meia-noite (horario de Brasilia, UTC-3).
 - O Tarot do Dia **nao** consome cota de tiragem.
 
@@ -181,7 +181,7 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 
 ## Regras de Pagamentos
 
-### BR-PAG-001: Planos Akasha Plus
+### BR-PAG-001: Planos Arkana Plus
 
 | Plano | Preco | Economia |
 |-------|-------|----------|
@@ -190,7 +190,7 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 
 ### BR-PAG-002: Trial
 
-- Novos usuarios recebem **7 dias gratuitos** de Akasha Plus ao se cadastrar.
+- Novos usuarios recebem **7 dias gratuitos** de Arkana Plus ao se cadastrar.
 - O trial inicia automaticamente no primeiro acesso a uma feature Plus.
 - O usuario pode cancelar o trial a qualquer momento sem cobranca.
 - Se nao cancelar, a assinatura mensal e cobrada ao fim dos 7 dias.

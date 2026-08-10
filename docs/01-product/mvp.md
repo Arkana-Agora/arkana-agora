@@ -188,7 +188,7 @@ Este documento define o escopo do Minimum Viable Product (MVP) e as features pla
 | **Descricao** | Manifest, service worker, instalacao no home screen, cache basico |
 | **Estimativa** | 2 dias |
 
-### V1-010: Akasha Plus
+### V1-010: Arkana Plus
 
 | Campo | Detalhe |
 |-------|---------|

@@ -407,7 +407,7 @@ async function seedTarotDeck() {
           meaning_upright: card.upright,
           meaning_reversed: card.reversed,
           keywords: card.keywords,
-          imageUrl: `https://assets.akashaverso.com.br/cards/rws/${card.number}.webp`,
+          imageUrl: `https://assets.arkanaagora.com.br/cards/rws/${card.number}.webp`,
         })),
       },
     },

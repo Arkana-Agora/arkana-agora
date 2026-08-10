@@ -435,7 +435,7 @@ AI Provider Health — Últimas 24h
 ### Caddyfile (resumo)
 
 ```caddyfile
-akashaverso.com.br {
+arkanaagora.com.br {
     # API routes
     handle /api/* {
         reverse_proxy localhost:3000

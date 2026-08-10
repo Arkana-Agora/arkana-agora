@@ -290,7 +290,7 @@ async function interpretWithFallback(cards: Card[], context: ReadingContext) {
 ### 6.1 Estratégia de Assets
 
 ```
-akashaverso.com.br
+arkanaagora.com.br
   ├── /_next/static/*          → Cache eterno (hash no nome do arquivo)
   ├── /images/cards/*.webp    → Cache 30 dias, lazy loading
   ├── /images/decks/*.webp    → Cache 30 dias, variantes responsivas

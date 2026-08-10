@@ -90,7 +90,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 7. **Interagir** com a Autoridade Nacional de Proteção de Dados (ANPD)
 8. **Revisar** periodicamente as políticas de privacidade e segurança
 
-> **Canal do DPO**: dpo@akashaverso.com.br
+> **Canal do DPO**: dpo@arkanaagora.com.br
 
 ---
 

@@ -80,7 +80,7 @@
 |----|-----------|-----------|-----------|--------|
 | B-030 | Marketplace: listar produtos | Alta | 3d | V1 |
 | B-031 | Mercado Pago: PIX + cartão | Crítica | 5d | V1 |
-| B-032 | Assinatura Akasha Plus | Alta | 4d | V1 |
+| B-032 | Assinatura Arkana Plus | Alta | 4d | V1 |
 | B-033 | Perfil profissional | Média | 3d | V1 |
 | B-034 | Sistema de avaliações | Média | 2d | V1 |
 | B-035 | Admin dashboard | Média | 5d | V1 |

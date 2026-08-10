@@ -17,7 +17,7 @@ O modelo de permissões é implementado como um middleware no nível da API, ver
 | Role | Descrição | Como Obtém |
 |---|---|---|
 | `FREE_USER` | Usuário gratuito com acesso básico | Cadastro padrão |
-| `PLUS_USER` | Assinante do plano Akasha Plus | Assinatura ativa (R$ 19,90/mês) |
+| `PLUS_USER` | Assinante do plano Arkana Plus | Assinatura ativa (R$ 19,90/mês) |
 | `PROFESSIONAL` | Profissional verificado (tarólogo, numerólogo, etc.) | Verificação aprovada + `PLUS_USER` |
 | `ADMIN` | Administrador da plataforma | Designado internamente |
 | `SUPER_ADMIN` | Administrador supremo, acesso total | Fundador/CTO |
@@ -110,7 +110,7 @@ FREE_USER
 | Requisito | Descrição |
 |---|---|
 | Conta ativa | Mínimo 30 dias desde o cadastro |
-| Plano Plus | Assinatura Akasha Plus ativa |
+| Plano Plus | Assinatura Arkana Plus ativa |
 | Perfil completo | Nome, bio, foto, data de nascimento preenchidos |
 | Documentação | CPF e comprovante de experiência/certificação |
 | Especialidades | Pelo menos 1 especialidade declarada |

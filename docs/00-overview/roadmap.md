@@ -150,7 +150,7 @@ Adicionar camada social basica: feed, seguimento, compartilhamento e sistema de 
 > "Sustentabilidade para que a plataforma cresca."
 
 ### Objetivo
-Implementar marketplace para profissionais, sistema de pagamentos e assinatura Akasha Plus.
+Implementar marketplace para profissionais, sistema de pagamentos e assinatura Arkana Plus.
 
 ### Entregaveis
 
@@ -162,7 +162,7 @@ Implementar marketplace para profissionais, sistema de pagamentos e assinatura A
 | 3.4 | Integracao com Mercado Pago (sandbox) | 15 | -- |
 | 3.5 | Fluxo de compra de servico (checkout) | 16 | 3.3, 3.4 |
 | 3.6 | Sistema de avaliacoes pos-compra | 16 | 3.5 |
-| 3.7 | Plano Akasha Plus (R$19,90/mes, R$179,90/ano) | 17 | 3.4 |
+| 3.7 | Plano Arkana Plus (R$19,90/mes, R$179,90/ano) | 17 | 3.4 |
 | 3.8 | Trial de 7 dias com cancelamento facilitado | 17 | 3.7 |
 | 3.9 | Tela de checkout de assinatura | 17 | 3.7 |
 | 3.10 | Beneficios Plus: tiragens ilimitadas, espalhamentos exclusivos | 18 | 3.7 |
@@ -176,7 +176,7 @@ Implementar marketplace para profissionais, sistema de pagamentos e assinatura A
 ### Milestones
 
 - **M3.1** (Semana 16): Marketplace funcional com primeira compra
-- **M3.2** (Semana 18): Akasha Plus com trial ativo
+- **M3.2** (Semana 18): Arkana Plus com trial ativo
 - **M3.3** (Semana 20): Baralho Cigano + Kin Maya + Horoscopo Chines -- conteudo expandido
 
 ### Riscos da Fase
