@@ -1,0 +1,7 @@
+{
+  "folders": [
+    { "name": "Workspace", "path": "." },
+    { "name": "Frontend", "path": "../arkana-agora/frontend" },
+    { "name": "Backend", "path": "../arkana-agora/backend" }
+  ]
+}
