@@ -1,0 +1,270 @@
+# Segurança — Arkana Agora
+
+> **Identificador**: `arkana-agora` | **Módulo**: Segurança | **Versão**: MVP
+
+---
+
+## Descrição
+
+O módulo de Segurança do **Arkana Agora** define as medidas técnicas e organizacionais para proteger a plataforma, os dados dos usuários e a infraestrutura contra ameaças cibernéticas. A segurança é tratada em camadas: autenticação forte, proteção da API, transporte seguro, gestão de segredos, segurança de dependências e resposta a incidentes. Todas as medidas seguem as melhores práticas da OWASP e são alinhadas aos requisitos da LGPD para proteção de dados pessoais.
+
+Este documento serve como referência para desenvolvedores e equipe de infraestrutura, estabelecendo padrões obrigatórios para toda a base de código. A conformidade com estas diretrizes é verificada em code review, CI/CD pipelines e auditorias de segurança periódicas.
+
+---
+
+## Autenticação
+
+### Hash de Senhas
+
+| Parâmetro | Valor | Justificativa |
+|---|---|---|
+| Algoritmo | `bcrypt` | Padrão da indústria, resistente a brute-force |
+| Salt rounds | 12 | Equilíbrio entre segurança e performance (~250ms por hash) |
+| Tamanho mínimo da senha | 8 caracteres | Conformidade OWASP |
+| Validação de força | `zxcvbn` (score ≥ 3) | Detecção de senhas fracas |
+
+```typescript
+// Exemplo de hash
+const saltRounds = 12;
+const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+// Exemplo de verificação
+const isValid = await bcrypt.compare(inputPassword, hashedPassword);
+```
+
+### JWT (JSON Web Tokens)
+
+| Parâmetro | Access Token | Refresh Token |
+|---|---|---|
+| Algoritmo | RS256 | RS256 |
+| Chave | Par RSA (2048 bits) | Par RSA (2048 bits) |
+| Expiração | 15 minutos | 7 dias |
+| Armazenamento | Memória do cliente | Cookie httpOnly, Secure, SameSite=Strict |
+| Rotação | Não | Sim (a cada uso, o anterior é invalidado) |
+
+```typescript
+// Payload do access token
+interface JWTPayload {
+  sub: string;          // userId
+  email: string;
+  role: UserRole;
+  iat: number;          // issued at
+  exp: number;          // expiration
+  jti: string;          // unique token ID
+}
+```
+
+### Refresh Token Rotation
+
+1. O cliente envia o refresh token via cookie httpOnly
+2. O servidor valida o refresh token
+3. O servidor invalida o refresh token anterior (revogação)
+4. O servidor gera um novo par (access + refresh)
+5. O novo refresh token é enviado em cookie
+6. Se um refresh token já usado for reenviado, todos os tokens da sessão são revogados (detecção de roubo)
+
+---
+
+## Segurança da API
+
+### Rate Limiting
+
+| Endpoint | Limite | Janela | Usuários Autenticados |
+|---|---|---|---|
+| `POST /auth/login` | 5 req | 15 min | Não se aplica |
+| `POST /auth/register` | 3 req | 15 min | Não se aplica |
+| `POST /auth/forgot-password` | 3 req | 1 hora | Não se aplica |
+| `GET /api/*` | 100 req | 1 min | 300 req / 1 min |
+| `POST /api/*` | 50 req | 1 min | 150 req / 1 min |
+| `POST /api/readings` | 10 req | 1 min | Ilimitado (Plus) |
+
+### CORS (Cross-Origin Resource Sharing)
+
+```typescript
+const corsOptions = {
+  origin: process.env.ALLOWED_ORIGINS.split(','),
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 86400, // 24h preflight cache
+};
+```
+
+### Helmet Middleware
+
+```typescript
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "https://cdn.akashaverso.com.br"],
+      connectSrc: ["'self'", "https://api.mercadopago.com"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
+```
+
+### Validação de Input (Zod)
+
+Todos os inputs da API são validados com **Zod** antes do processamento:
+
+```typescript
+import { z } from 'zod';
+
+const registerSchema = z.object({
+  email: z.string().email('E-mail inválido'),
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  displayName: z.string().min(2).max(50),
+});
+```
+
+### Prevenção de Injeção SQL
+
+O **Prisma ORM** utiliza query parameterization nativamente, eliminando o risco de injeção SQL:
+
+```typescript
+// ✅ Seguro — Prisma parameteriza automaticamente
+const user = await prisma.user.findUnique({
+  where: { email: userEmail },
+});
+
+// ❌ Nunca fazer — concatenação de strings
+// const user = await prisma.$queryRaw(`SELECT * FROM users WHERE email = '${userEmail}'`);
+```
+
+### Prevenção de XSS
+
+- **Servidor**: Sanitização com `DOMPurify` em todos os inputs de usuário antes do armazenamento
+- **Cliente**: React/Next.js sanitiza automaticamente por padrão (JSX escaping)
+- **Headers CSP**: Restringe fontes de scripts, estilos e imagens
+
+```typescript
+import DOMPurify from 'isomorphic-dompurify';
+
+const cleanInput = DOMPurify.sanitize(userInput, {
+  ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'br'],
+  ALLOWED_ATTR: ['href', 'target', 'rel'],
+});
+```
+
+---
+
+## Segurança de Transporte
+
+| Medida | Configuração | Justificativa |
+|---|---|---|
+| TLS | Versão 1.3 (mínimo 1.2) | Criptografia em trânsito |
+| HSTS | `max-age=31536000; includeSubDomains; preload` | Força HTTPS |
+| CSP | Restrito ao domínio próprio | Prevenção de XSS |
+| Certificate | Let's Encrypt (auto-renewal) | Certificado válido e atualizado |
+
+---
+
+## Gestão de Segredos
+
+### Princípios
+
+1. **Nenhum segredo no código-fonte** — use variáveis de ambiente
+2. **`.env.example`** — arquivo de template com nomes das variáveis, sem valores
+3. **`.gitignore`** — `.env` sempre ignorado no versionamento
+4. **Segredos em produção** — usar secret manager (ex.: AWS Secrets Manager, Vault)
+5. **Rotação de chaves** — chaves JWT rotacionadas a cada 90 dias
+
+### Variáveis de Ambiente Críticas
+
+```bash
+# .env.example — NÃO incluir valores reais
+DATABASE_URL=
+JWT_PRIVATE_KEY=
+JWT_PUBLIC_KEY=
+MERCADO_PAGO_ACCESS_TOKEN=
+FCM_SERVER_KEY=
+SMTP_HOST=
+SMTP_USER=
+SMTP_PASS=
+REDIS_URL=
+S3_BUCKET=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+```
+
+### Verificação em CI/CD
+
+- Pipeline CI verifica se `.env` foi adicionado ao commit (falha o build)
+- Scanner de segredos (`git-secrets` ou `trufflehog`) executado em cada PR
+- Alerta automático se segredos forem detectados no histórico do Git
+
+---
+
+## Segurança de Dependências
+
+| Ferramenta | Frequência | Ação |
+|---|---|---|
+| `npm audit` | A cada commit (CI) | Falha o build se encontrar vulnerabilidades críticas/alta |
+| Dependabot | Diário | Abre PRs automáticas com atualizações de segurança |
+| Snyk | Semanal | Scan completo de vulnerabilidades com relatório |
+| Lockfile | Sempre | `package-lock.json` obrigatório, sem alterações manuais |
+
+### Política de Atualização
+
+- **Vulnerabilidades críticas**: Corrigida em até 24 horas
+- **Vulnerabilidades altas**: Corrigida em até 7 dias
+- **Vulnerabilidades médias**: Corrigida no próximo sprint
+- **Vulnerabilidades baixas**: Avaliada e corrigida conforme disponibilidade
+
+---
+
+## Testes de Penetração (Pentest)
+
+| Atividade | Frequência | Responsável |
+|---|---|---|
+| Pentest anual completo | Anual | Empresa terceirizada certificada |
+| Pentest de nova feature | Antes de lançamento V2+ | Equipe de segurança interna |
+| Bug bounty program | Contínuo | Comunidade (HackerOne/Bugcrowd) |
+| Scan de vulnerabilidades automático | Semanal | Snyk + OWASP ZAP |
+
+### Escopo do Pentest
+
+- Autenticação e autorização
+- API REST (todos os endpoints)
+- Upload de arquivos
+- Pagamentos e checkout
+- Gestão de sessões
+- Proteção contra OWASP Top 10
+
+---
+
+## Resposta a Incidentes
+
+### Runbook de Incidente
+
+1. **Detecção** — alertas de monitoramento (Sentry, Datadog, logs)
+2. **Triagem** — classificar severidade (P1 a P4)
+3. **Contenção** — isolar sistemas afetados, bloquear IPs maliciosos
+4. **Comunicação** — notificar equipe, stakeholders e (se LGPD) titulares e ANPD
+5. **Erradicação** — remover a causa raiz
+6. **Recuperação** — restaurar serviços com monitoramento intensivo
+7. **Post-mortem** — documento de lições aprendidas em até 5 dias úteis
+
+### Escalonamento
+
+| Severidade | Tempo de resposta | Escala para |
+|---|---|---|
+| P1 (crítico) | 15 minutos | CTO, DPO, equipe completa |
+| P2 (alto) | 1 hora | Tech Lead, equipe de segurança |
+| P3 (médio) | 4 horas | Equipe responsável |
+| P4 (baixo) | Próximo dia útil | Equipe responsável |
+
+---
+
+## Critérios de Aceite
+
+- **CA-01**: Todas as senhas devem ser armazenadas com bcrypt (12 rounds) — nenhuma senha em texto puro, em logs ou em banco
+- **CA-02**: Todos os endpoints da API devem possuir rate limiting configurado e testado
+- **CA-03**: O scanner de segredos deve ser executado em 100% dos pull requests antes do merge
+- **CA-04**: O certificado TLS deve ser renovado automaticamente e possuir validade mínima de 90 dias
+- **CA-05**: O tempo médio de detecção (MTTD) de incidentes críticos deve ser inferior a 15 minutos

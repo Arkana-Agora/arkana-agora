@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkana Agora — Documentação Técnica Completa (Parte 1)</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@page { size: A4; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #08080e;
+  color: #e4e4e7;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+.container {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 60px 50px;
+}
+h2 {
+  color: #c9a84c;
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 20px;
+  letter-spacing: 0.5px;
+}
+h3 {
+  color: #c9a84c;
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 14px;
+}
+p {
+  color: #a1a1aa;
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0 0 14px 0;
+}
+ul, ol {
+  color: #a1a1aa;
+  font-size: 14px;
+  line-height: 1.8;
+  padding-left: 24px;
+  margin: 0 0 14px 0;
+}
+li {
+  margin-bottom: 6px;
+}
+strong {
+  color: #e4e4e7;
+  font-weight: 600;
+}
+em {
+  color: #c9a84c;
+  font-style: italic;
+}
+code {
+  background: #1a1a2e;
+  color: #10b981;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+pre {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 8px;
+  padding: 20px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+pre code {
+  background: transparent;
+  padding: 0;
+  color: #a1a1aa;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+hr.section-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c9a84c40, transparent);
+  margin: 40px 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+th {
+  color: #c9a84c;
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #c9a84c30;
+  font-size: 13px;
+}
+td {
+  color: #a1a1aa;
+  padding: 10px 14px;
+  border-bottom: 1px solid #ffffff08;
+}
+tr:hover td {
+  background: #ffffff05;
+}
+.badge {
+  display: inline-block;
+  background: #c9a84c18;
+  color: #c9a84c;
+  border: 1px solid #c9a84c30;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-emerald {
+  background: #10b98118;
+  color: #10b981;
+  border-color: #10b98130;
+}
+.toc-link {
+  color: #a1a1aa;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 2.2;
+  transition: color 0.2s;
+}
+.toc-link:hover {
+  color: #c9a84c;
+}
+.toc-number {
+  color: #c9a84c;
+  font-weight: 600;
+  display: inline-block;
+  width: 36px;
+  text-align: right;
+  margin-right: 12px;
+  font-size: 13px;
+}
+.toc-columns {
+  column-count: 2;
+  column-gap: 30px;
+}
+.toc-columns .toc-item {
+  break-inside: avoid;
+}
+.page-break {
+  page-break-after: always;
+ }
+.cover-stars {
+  position: relative;
+  text-align: center;
+  padding: 100px 0 60px 0;
+}
+.cover-symbol {
+  font-size: 64px;
+  color: #c9a84c;
+  opacity: 0.15;
+  letter-spacing: 20px;
+  margin-bottom: 40px;
+  font-family: 'Playfair Display', serif;
+}
+.cover-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 48px;
+  font-weight: 800;
+  color: #c9a84c;
+  margin: 0 0 8px 0;
+  letter-spacing: 2px;
+  line-height: 1.2;
+}
+.cover-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: #a1a1aa;
+  margin: 0 0 50px 0;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+  font-weight: 300;
+}
+.cover-meta {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 40px 0;
+  flex-wrap: wrap;
+}
+.cover-meta-item {
+  text-align: center;
+}
+.cover-meta-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #c9a84c80;
+  margin-bottom: 6px;
+}
+.cover-meta-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  color: #e4e4e7;
+  font-weight: 600;
+}
+.cover-tagline {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 20px;
+  color: #10b981;
+  margin-top: 60px;
+  opacity: 0.8;
+}
+.cover-line {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c9a84c, transparent);
+  margin: 40px auto;
+}
+.toc-header {
+  text-align: center;
+  padding-top: 60px;
+  margin-bottom: 40px;
+}
+.toc-header h2 {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.toc-header p {
+  color: #a1a1aa80;
+  font-size: 13px;
+}
+.callout {
+  background: #c9a84c08;
+  border-left: 3px solid #c9a84c40;
+  padding: 16px 20px;
+  border-radius: 0 8px 8px 0;
+  margin: 20px 0;
+}
+.callout-emerald {
+  background: #10b98108;
+  border-left-color: #10b98140;
+}
+.callout p {
+  margin: 0;
+  font-size: 13.5px;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+.kpi-card {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.kpi-card .kpi-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  color: #c9a84c;
+  font-weight: 700;
+}
+.kpi-card .kpi-label {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 4px;
+}
+.user-story {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin: 16px 0;
+}
+.user-story-title {
+  font-family: 'Playfair Display', serif;
+   color: #e4e4e7;
+  font-size: 16px;
+  margin: 0 0 10px 0;
+}
+.user-story-as {
+  color: #10b981;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.user-story-criteria {
+  font-size: 13px;
+  margin: 0;
+}
+.schema-block {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #a1a1aa;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.endpoint-block {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+.endpoint-method {
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 8px;
+}
+.method-get { color: #10b981; }
+.method-post { color: #c9a84c; }
+.method-put { color: #818cf8; }
+.endpoint-path {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #e4e4e7;
+  font-size: 13px;
+}
+.endpoint-desc {
+  color: #a1a1aa;
+  font-size: 13px;
+  margin-top: 6px;
+}
+.part-label {
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: #c9a84c60;
+  margin-bottom: 10px;
+}
+</style>
+</head>
+<body>
+
+<!-- ======================== COVER PAGE ======================== -->
+<div class="container cover-stars page-break">
+  <div class="cover-symbol">☽ ☀ ✦ ☽ ☀ ✦</div>
+  <div class="part-label">Parte 1 de 3 — Seções 1 a 20</div>
+  <h1 class="cover-title">Arkana Agora</h1>
+  <p class="cover-subtitle">
+    Documentação Técnica Completa<br>
+    Plataforma Web/Mobile de Tarot, Baralho Cigano,<br>
+    Rede Social e Cálculos Esotéricos
+  </p>
+  <div class="cover-line"></div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Versão</div>
+      <div class="cover-meta-value">v1.0</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Data</div>
+      <div class="cover-meta-value">Julho 2025</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Classificação</div>
+      <div class="cover-meta-value">Interno</div>
+    </div>
+  </div>
+  <div class="cover-line"></div>
+  <p class="cover-tagline">"Onde a intuição encontra a tecnologia"</p>
+</div>
+
+<!-- ======================== TABLE OF CONTENTS ======================== -->
+<div class="container page-break">
+  <div class="toc-header">
+    <h2>Sumário</h2>
+    <p>Índice completo — 60 seções distribuídas em 3 partes</p>
+  </div>
+  <div class="toc-columns">
+    <div class="toc-item"><a class="toc-link" href="#s1"><span class="toc-number">01.</span> Visão Geral do Projeto</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s2"><span class="toc-number">02.</span> Problema e Oportunidade</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s3"><span class="toc-number">03.</span> Objetivos Estratégicos</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s4"><span class="toc-number">04.</span> Público-Alvo</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s5"><span class="toc-number">05.</span> Histórias de Usuário</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s6"><span class="toc-number">06.</span> Arquitetura do Sistema</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s7"><span class="toc-number">07.</span> Stack Tecnológico</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s8"><span class="toc-number">08.</span> Design System</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s9"><span class="toc-number">09.</span> Modelo de Dados — Parte 1</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s10"><span class="toc-number">10.</span> Modelo de Dados — Parte 2</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s11"><span class="toc-number">11.</span> Modelo de Dados — Parte 3</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s12"><span class="toc-number">12.</span> API — Endpoints de Autenticação</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s13"><span class="toc-number">13.</span> API — Motor de Tiragens</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s14"><span class="toc-number">14.</span> API — Baralho Cigano</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s15"><span class="toc-number">15.</span> API — Perfil e Configurações</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s16"><span class="toc-number">16.</span> API — Rede Social</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s17"><span class="toc-number">17.</span> API — Marketplace</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s18"><span class="toc-number">18.</span> API — Profissionais</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s19"><span class="toc-number">19.</span> Motor de IA — Visão Geral</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s20"><span class="toc-number">20.</span> Motor de IA — Tiragens com Streaming</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s21"><span class="toc-number">21.</span> Cálculo do Arcano Pessoal</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s22"><span class="toc-number">22.</span> Cálculo do Kin Maya</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s23"><span class="toc-number">23.</span> Numerologia e Caminho de Vida</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s24"><span class="toc-number">24.</span> Páginas — Landing Page</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s25"><span class="toc-number">25.</span> Páginas — Dashboard</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s26"><span class="toc-number">26.</span> Páginas — Tiragem de Tarot</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s27"><span class="toc-number">27.</span> Páginas — Baralho Cigano</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s28"><span class="toc-number">28.</span> Páginas — Perfil do Usuário</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s29"><span class="toc-number">29.</span> Páginas — Feed Social</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s30"><span class="toc-number">30.</span> Páginas — Marketplace</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s31"><span class="toc-number">31.</span> Páginas — Profissionais</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s32"><span class="toc-number">32.</span> Componentes — Navegação</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s33"><span class="toc-number">33.</span> Componentes — Cards</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s34"><span class="toc-number">34.</span> Componentes — Chat e Mensagens</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s35"><span class="toc-number">35.</span> Componentes — Formulários</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s36"><span class="toc-number">36.</span> Autenticação e Autorização</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s37"><span class="toc-number">37.</span> Segurança e Proteção de Dados</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s38"><span class="toc-number">38.</span> Rate Limiting e Anti-Abuso</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s39"><span class="toc-number">39.</span> Testes — Estratégia e Cobertura</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s40"><span class="toc-number">40.</span> Testes — E2E com Playwright</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s41"><span class="toc-number">41.</span> Deploy e CI/CD</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s42"><span class="toc-number">42.</span> Monitoramento e Observabilidade</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s43"><span class="toc-number">43.</span> Performance e Otimização</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s44"><span class="toc-number">44.</span> SEO e Meta Dados</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s45"><span class="toc-number">45.</span> Acessibilidade (WCAG 2.1)</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s46"><span class="toc-number">46.</span> Internacionalização (i18n)</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s47"><span class="toc-number">47.</span> Modelo de Negócio e Monetização</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s48"><span class="toc-number">48.</span> Integração de Pagamentos</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s49"><span class="toc-number">49.</span> Notificações Push e Email</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s50"><span class="toc-number">50.</span> Analytics e Métricas</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s51"><span class="toc-number">51.</span> Roadmap e Cronograma</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s52"><span class="toc-number">52.</span> Estrutura de Equipe</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s53"><span class="toc-number">53.</span> Riscos e Mitigações</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s54"><span class="toc-number">54.</span> Apêndice A — Cartas do Tarot</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s55"><span class="toc-number">55.</span> Apêndice B — Cartas Ciganas</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s56"><span class="toc-number">56.</span> Apêndice C — Tabela de Arcanos</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s57"><span class="toc-number">57.</span> Apêndice D — Tzolkin Maya</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s58"><span class="toc-number">58.</span> Apêndice E — Glossário Esotérico</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s59"><span class="toc-number">59.</span> Apêndice F — Referências e Fontes</a></div>
+    <div class="toc-item"><a class="toc-link" href="#s60"><span class="toc-number">60.</span> Histórico de Versões</a></div>
+  </div>
+</div>
+
+<!-- ======================== SECTION 1 ======================== -->
+<div class="container page-break">
+  <section id="s1">
+    <h2>1. Visão Geral do Projeto</h2>
+    <p>
+      O <strong>Arkana Agora</strong> é uma plataforma digital abrangente que combina leituras de Tarot e Baralho Cigano impulsionadas por inteligência artificial, cálculos esotéricos personalizados (arcano pessoal, kin maya, numerologia), uma rede social temática, marketplace de arte esotérica e serviços profissionais verificados. Todo o conteúdo e a interface são desenvolvidos em <strong>português brasileiro</strong>, atendendo diretamente ao mercado nacional de esoterismo e autoconhecimento.
+    </p>
+    <p>
+      A plataforma nasce da constatação de que o mercado esotérico brasileiro, estimado em mais de 30 milhões de pessoas interessadas em práticas divinatórias e holísticas, carece de uma solução digital unificada que integre experiências de leitura, comunidade e comércio. Atualmente, os usuários precisam recorrer a múltiplos aplicativos fragmentados — um para horóscopo, outro para tarot, outro para comunidade — sem nenhuma integração significativa entre eles.
+    </p>
+    <p>
+      O Arkana Agora resolve esse problema ao oferecer um ecossistema completo em uma única plataforma. As leituras de tarot são geradas por um motor de IA baseado no modelo GPT-4o, integrado via <code>z-ai-web-dev-sdk</code>, que interpreta as cartas selecionadas com profundidade e sensibilidade, considerando o contexto emocional do usuário e seu histórico de leituras anteriores. O Baralho Cigano, tradição profundamente enraizada na cultura brasileira, recebe tratamento equivalente com suas 36 cartas categorizadas e interpretadas por IA.
+    </p>
+    <p>
+      Os cálculos esotéricos — arcano pessoal derivado do nome de nascimento e data de nascimento, kin maya do calendário Tzolkin e numerologia do caminho de vida — são calculados automaticamente no cadastro do usuário e ficam disponíveis em seu perfil, criando uma experiência personalizada desde o primeiro acesso. A rede social permite que os usuários compartilhem leituras, debatam interpretações e conectem-se com praticantes, enquanto o marketplace viabiliza a compra de cartas personalizadas e arte esotérica.
+    </p>
+    <div class="callout">
+      <p><strong>Proposta de valor:</strong> O Arkana Agora é a primeira plataforma brasileira a unificar leituras esotéricas com IA, comunidade social e marketplace em um único ecossistema, com foco total na experiência do usuário e na autenticidade cultural das práticas divinatórias.</p>
+    </div>
+  </section>
+  <hr class="section-divider">
+
+  <!-- ======================== SECTION 2 ======================== -->
+  <section id="s2">
+    <h2>2. Problema e Oportunidade</h2>
+    <p>
+      O mercado esotérico brasileiro apresenta uma contradição flagrante: é um dos maiores do mundo — estimado em R$ 12 bilhões anuais segundo pesquisas do setor — mas permanece profundamente fragmentado no ambiente digital. Não existe, atualmente, uma plataforma unificada que combine leituras de tarot confiáveis, ferramentas de autoconhecimento esotérico, funcionalidades sociais e serviços profissionais de qualidade verificada.
+    </p>
+    <p>
+      O cenário atual é composto por aplicativos isolados que oferecem funcionalidades pontuais: apps de horóscopo diário com conteúdo genérico e frequentemente traduzido mecanicamente do inglês, sites de tarot com interpretações estáticas e sem personalização, grupos de redes sociais desorganizados onde profissionais não têm ferramentas adequadas para oferecer seus serviços, e plataformas de pagamento genéricas que não entendem as necessidades específicas do mercado esotérico. Essa fragmentação resulta em uma experiência de usuário insatisfatória e em oportunidades perdidas de engajamento e monetização.
+    </p>
+    <p>
+      Simultaneamente, observa-se um crescimento exponencial na demanda por orientação espiritual assistida por IA. Pesquisas indicam que mais de 60% dos brasileiros entre 18 e 45 anos já consultaram algum tipo de oráculo digital, e a taxa de adoção de assistentes de IA para autoconhecimento cresce 35% ao ano. A pandemia acelerou essa tendência, consolidando o interesse por práticas de bem-estar e autoconhecimento digital.
+    </p>
+    <p>
+      A oportunidade de mercado é substancial. Com uma população de aproximadamente 215 milhões de habitantes e uma penetração de internet superior a 84%, o Brasil possui um público potencial de <strong>~30 milhões de usuários</strong> interessados em esoterismo digital. A projeção conservadora aponta para uma captura de 0,3% a 1% desse mercado nos primeiros dois anos, representando entre 90 mil e 300 mil usuários ativos mensais. O modelo de receita diversificado — assinatura premium, marketplace, comissão sobre serviços profissionais e anúncios segmentados — permite múltiplas fontes de receita com margens atrativas.
+    </p>
+    <div class="callout callout-emerald">
+      <p><strong>Oportunidade-chave:</strong> O Arkana Agora preenche um gap no mercado ao ser a primeira plataforma nativamente brasileira, em português, que combina IA avançada com conhecimento esotérico autêntico, comunidade engajada e ecossistema de monetização integrado.</p>
+    </div>
+  </section>
+  <hr class="section-divider">
+
+  <!-- ======================== SECTION 3 ======================== -->
+  <section id="s3">
+    <h2>3. Objetivos Estratégicos</h2>
+    <p>
+      Os objetivos estratégicos do Arkana Agora estão organizados em três níveis hierárquicos, cada um com métricas claras de sucesso e prazos definidos para avaliação de progresso. Essa estrutura permite que a equipe de desenvolvimento priorize entregas de forma alinhada com o impacto no negócio.
+    </p>
+    <h3>Objetivo Primário</h3>
+    <p>
+      <strong>Criar a plataforma digital líder do mercado esotérico brasileiro.</strong> Isso significa desenvolver e lançar um produto mínimo viável (MVP) em até 4 meses, com as funcionalidades essenciais de leitura de tarot por IA, cálculos esotéricos e registro de usuário. O objetivo é estabelecer presença de marca e base de usuários inicial que valide a proposta de valor. A meta é alcançar as primeiras 10 mil cadastros nos primeiros 60 dias pós-lançamento.
+    </p>
+    <h3>Objetivo Secundário</h3>
+    <p>
+      <strong>Estabelecer o motor de leituras por IA como diferencial competitivo insuperável.</strong> O motor deve oferecer interpretações com profundidade, sensibilidade e consistência que superem significativamente os concorrentes existentes. A qualidade será medida por taxas de satisfação do usuário (NPS > 60), taxa de reutilização do serviço de leitura (> 40% dos usuários ativos semanais) e métricas de engajamento com as interpretações geradas.
+    </p>
+    <h3>Objetivo Terciário</h3>
+    <p>
+      <strong>Construir uma comunidade social vibrante em torno de práticas esotéricas.</strong> A rede social deve fomentar conexões autênticas entre praticantes, permitir compartilhamento de experiências e criar um ciclo de engajamento orgânico que reduza os custos de aquisição de usuários. A meta é que pelo menos 25% dos usuários ativos interajam com funcionalidades sociais semanais.
+    </p>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value">100K</div>
+        <div class="kpi-label">MAU — Ano 1</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">500K</div>
+        <div class="kpi-label">MAU — Ano 2</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">60+</div>
+        <div class="kpi-label">NPS Target</div>
+      </div>
+    </div>
+    <p>
+      Os KPIs secundários incluem: tempo médio de sessão (> 8 minutos), taxa de retenção D7 (> 35%), taxa de conversão free-to-premium (> 5%), e número médio de leituras por usuário ativo mensal (> 6). Todos os KPIs são monitorados via dashboard analítico em tempo real.
+    </p>
+  </section>
+  <hr class="section-divider">
+
+  <!-- ======================== SECTION 4 ======================== -->
+  <section id="s4">
+    <h2>4. Público-Alvo</h2>
+    <p>
+      A estratégia de produto do Arkana Agora é fundamentada na compreensão detalhada de três segmentos de público-alvo, cada um com necessidades, comportamentos e jornadas distintas. A definição precisa desses segmentos direciona decisões de UX, priorização de funcionalidades e estratégias de aquisição.
+    </p>
+    <h3>Público Primário — Entusiastas Esotéricas (25–45 anos, feminino)</h3>
+    <p>
+      Mulheres entre 25 e 45 anos, majoritariamente da classe C e B, com interesse ativo em tarot, astrologia e práticas de autoconhecimento. Representam aproximadamente <strong>65% do público-alvo</strong>. Caracterizam-se por consumir conteúdo esotérico em redes sociais (Instagram, TikTok), já terem experiência com apps de horóscopo ou consultas presenciais, e buscam uma experiência digital mais rica e personalizada. Seu comportamento típico inclui: consultar horóscopo diário, compartilhar resultados em stories, participar de comunidades online de esoterismo e gastar entre R$ 30 e R$ 150 mensais em serviços esotéricos. A jornada ideal no Arkana Agora começa com uma leitura gratuita, evolui para a descoberta do arcano pessoal e kin maya, e culmina na assinatura premium e no engajamento com a comunidade.
+    </p>
+    <h3>Público Secundário — Profissionais de Tarot e Esoterismo</h3>
+    <p>
+      Leitores de tarot, cartomantes e consultores esotéricos que buscam ferramentas digitais para expandir sua prática. Representam <strong>20% do público-alvo</strong>. Necessitam de um perfil profissional verificável, agenda de atendimentos online, portfólio de leituras e ferramentas de comunicação com clientes. O valor percebido está na capacidade de alcançar novos clientes através da plataforma e na redução da fricção operacional de agendamento e pagamento.
+    </p>
+    <h3>Público Terciário — Entusiastas de Bem-Estar Holístico</h3>
+    <p>
+      Pessoas de ambos os gêneros, 20–50 anos, interessadas em meditação, cristais, yoga e outras práticas holísticas, que veem o esoterismo como extensão natural de seu estilo de vida. Representam <strong>15% do público-alvo</strong>. São atraídos pelas funcionalidades de autoconhecimento (nume<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkana Agora — Documentação Técnica — Parte 2 (Seções 21–40)</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #08080e; color: #e4e4e7; font-family: 'Inter', sans-serif; }
+  .container { max-width: 210mm; margin: 0 auto; padding: 60px 50px; }
+  section { page-break-after: always; margin-bottom: 40px; }
+  section:last-child { page-break-after: auto; }
+  h2 { color: #c9a84c; font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; margin-top: 0; margin-bottom: 12px; letter-spacing: 0.5px; }
+  h2 .sec-num { color: #10b981; font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; display: block; margin-bottom: 4px; letter-spacing: 2px; text-transform: uppercase; }
+  p, li { color: #a1a1aa; font-size: 14px; line-height: 1.8; }
+  ul, ol { padding-left: 20px; margin: 10px 0; }
+  li { margin-bottom: 4px; }
+  code { background: #1a1a2e; color: #c9a84c; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace; }
+  pre { background: #111120; border: 1px solid #2a2a3e; border-radius: 8px; padding: 16px; overflow-x: auto; margin: 14px 0; }
+  pre code { background: none; padding: 0; color: #e4e4e7; font-size: 12.5px; line-height: 1.6; }
+  .gold-line { border: none; border-top: 1px solid #c9a84c33; margin: 36px 0; }
+  .gold-line-glow { border: none; height: 2px; background: linear-gradient(90deg, transparent, #c9a84c88, transparent); margin: 36px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+  th { background: #1a1a2e; color: #c9a84c; font-family: 'Playfair Display', serif; font-weight: 600; padding: 10px 12px; text-align: left; border-bottom: 2px solid #c9a84c44; }
+  td { color: #a1a1aa; padding: 8px 12px; border-bottom: 1px solid #ffffff0a; }
+  tr:hover td { background: #ffffff06; }
+  .emerald { color: #10b981; }
+  .gold { color: #c9a84c; }
+  strong { color: #e4e4e7; }
+  .subtitle { color: #c9a84c; font-size: 15px; font-weight: 600; margin: 16px 0 8px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ================================================================== -->
+<section id="s21">
+  <h2><span class="sec-num">Seção 21</span>Motor de IA — Interpretação Contextualizada</h2>
+  <p>
+    O coração interpretativo do Arkana Agora é o motor de inteligência artificial baseado no modelo <strong>GPT-4o</strong> da OpenAI, projetado especificamente para gerar leituras de tarot e cartas ciganas com profundidade, coerência e sensibilidade contextual. Diferentemente de integrações genéricas de chatbots, o sistema foi arquitetado com um <strong>prompt de sistema altamente especializado</strong> que incorpora múltiplas camadas de contexto antes de cada geração de resposta.
+  </p>
+  <p>
+    O prompt de sistema inclui as seguintes camadas de informação: (1) <strong>significados das cartas</strong> — cada carta possui um dicionário de significados positivos, negativos, invertidos e situacionais, extraídos de tradições como Rider-Waite-Smith, Marselha e cartas ciganas; (2) <strong>posições da tiragem</strong> — o spread selecionado pelo usuário (Cruz Celta, Tiragem de 3 Cartas, Tiragem Simples, etc.) define o significado posicional de cada carta (passado, presente, futuro, conselho, obstáculo); (3) <strong>humor e intenção do usuário</strong> — o sistema captura o tema da consulta (amor, carreira, saúde, espiritualidade) e o tom emocional detectado na mensagem; (4) <strong>tipo de leitura</strong> — general, perguntas específicas, leitura diária ou leitura profunda.
+  </p>
+  <p>
+    O motor suporta <strong>conversas multi-turno</strong> (múltiplas trocas de mensagens dentro da mesma sessão de leitura), mantendo o histórico completo como contexto para respostas progressivamente mais aprofundadas. A <strong>injeção de contexto dinâmico</strong> é realizada antes de cada chamada à API, incluindo: signo zodiacal do usuário (extraído do perfil), leituras anteriores do mesmo usuário (resumo das últimas 5 sessões), fase lunar atual (calculada em tempo real) e o <strong>Arcano Pessoal</strong> calculado a partir da data de nascimento e nome completo.
+  </p>
+  <p>
+    A arquitetura utiliza <strong>temperature entre 0.7 e 0.85</strong> para equilibrar criatividade e consistência. O token de resposta máxima é configurado em 2.000 tokens para leituras padrão e 4.000 para leituras profundas. O sistema implementa <strong>fallbacks em cadeia</strong>: GPT-4o → GPT-4o-mini → resposta pré-cadastrada, garantindo disponibilidade mesmo em picos de demanda. Todas as respostas passam por um filtro de conteúdo que remove orientações médicas, legais ou financeiras inadequadas, mantendo o foco exclusivo no entretenimento e autoconhecimento esotérico.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s22">
+  <h2><span class="sec-num">Seção 22</span>Cálculo do Arcano Pessoal — Visão Geral</h2>
+  <p>
+    O <strong>Arcano Pessoal</strong> é um recurso inovador do Arkana Agora que revela a carta do Tarot que rege a essência espiritual e o propósito de vida de cada usuário. Este cálculo é derivado de dois pilares fundamentais: a <strong>data de nascimento</strong> e o <strong>nome completo</strong> do indivíduo, seguindo tradições da numerologia esotérica e da cabala aplicada ao tarot.
+  </p>
+  <p>
+    O sistema realiza <strong>dois cálculos independentes</strong> que devem ser analisados em conjunto. O primeiro cálculo parte da <strong>data de nascimento</strong>: todos os dígitos do dia, mês e ano são somados e progressivamente reduzidos até resultar em um número entre 1 e 22, correspondente aos 22 Arcanos Maiores do Tarot. Este número representa a <strong>energia temporal</strong> — a força cósmica que influenciou o momento do nascimento.
+  </p>
+  <p>
+    O segundo cálculo utiliza o <strong>nome completo</strong> (todos os nomes próprios e sobrenomes conforme registrado) convertido através da <strong>tabela numerológica pitagórica</strong>, onde cada letra recebe um valor numérico de 1 a 9. A soma de todos os valores é reduzida ao intervalo 1-22, representando a <strong>energia nominal</strong> — a vibração do nome que a pessoa carrega ao longo da vida.
+  </p>
+  <p>
+    Quando ambos os resultados coincidem, indica uma <strong>forte harmonia interior</strong> entre o propósito temporal e a expressão nominal. Quando diferem, os dois arcanos formam um <strong>par complementar</strong> que revela tensões criativas e oportunidades de crescimento. O sistema gera uma interpretação integrada que analisa a relação entre os dois arcanos, oferecendo orientação personalizada sobre como harmonizar essas energias na vida prática do usuário.
+  </p>
+  <p>
+    O Arcano Pessoal é calculado automaticamente no momento do cadastro (quando o usuário informa data de nascimento e nome completo) e fica disponível no perfil, sendo também utilizado pelo motor de IA para contextualizar todas as leituras futuras, adicionando uma camada pessoal única a cada interpretação.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s23">
+  <h2><span class="sec-num">Seção 23</span>Cálculo do Arcano Pessoal — Data de Nascimento</h2>
+  <p>
+    O algoritmo de cálculo do Arcano Pessoal pela data de nascimento segue um processo de <strong>redução numerológica sistemática</strong>. O procedimento é direto: somam-se todos os dígitos componentes da data de nascimento completa no formato DD/MM/AAAA, e o resultado é progressivamente reduzido até obter um valor dentro do intervalo de 1 a 22, que corresponde aos Arcanos Maiores do Tarot.
+  </p>
+  <p>
+    <strong>Algoritmo passo a passo:</strong> (1) Extrair todos os dígitos individuais da data; (2) Somar todos os dígitos; (3) Se o resultado for maior que 22, somar os dígitos do resultado; (4) Repetir até obter valor entre 1 e 22. <strong>Exceção importante:</strong> se durante a redução o resultado for exatamente 22, ele é mantido (não reduzido para 4), pois o Arcano 22 representa "O Louco" e possui significado próprio distinto.
+  </p>
+  <p>
+    <strong>Exemplo detalhado:</strong> Para a data 15/03/1990: 1+5+0+3+1+9+9+0 = 28 → 2+8 = 10 → <strong>Arcano 10 — A Roda da Fortuna</strong>. Para a data 29/12/1985: 2+9+1+2+1+9+8+5 = 37 → 3+7 = 10 → <strong>Arcano 10 — A Roda da Fortuna</strong>. Para a data 31/12/1999: 3+1+1+2+1+9+9+9 = 35 → 3+5 = 8 → <strong>Arcano 8 — A Justiça</strong>.
+  </p>
+  <p class="subtitle">Tabela Completa de Mapeamento — Arcanos Maiores</p>
+  <table>
+    <tr><th>Arcano</th><th>Carta</th><th>Arcano</th><th>Carta</th></tr>
+    <tr><td>1</td><td>O Mago</td><td>12</td><td>O Enforcado</td></tr>
+    <tr><td>2</td><td>A Sacerdotisa</td><td>13</td><td>A Morte</td></tr>
+    <tr><td>3</td><td>A Imperatriz</td><td>14</td><td>Temperança</td></tr>
+    <tr><td>4</td><td>O Imperador</td><td>15</td><td>O Diabo</td></tr>
+    <tr><td>5</td><td>O Hierofante</td><td>16</td><td>A Torre</td></tr>
+    <tr><td>6</td><td>O Enamorado</td><td>17</td><td>A Estrela</td></tr>
+    <tr><td>7</td><td>O Carro</td><td>18</td><td>A Lua</td></tr>
+    <tr><td>8</td><td>A Justiça</td><td>19</td><td>O Sol</td></tr>
+    <tr><td>9</td><td>O Eremita</td><td>20</td><td>O Julgamento</td></tr>
+    <tr><td>10</td><td>A Roda da Fortuna</td><td>21</td><td>O Mundo</td></tr>
+    <tr><td>11</td><td>A Força</td><td>22</td><td>O Louco</td></tr>
+  </table>
+  <p>
+    O cálculo é implementado como uma função pura no backend (Node.js/TypeScript), sem dependências externas, garantindo determinismo — a mesma data sempre produz o mesmo arcano. A função é exposta via API REST no endpoint <code>GET /api/numerology/arcano-pessoal/data?nascimento=DD-MM-AAAA</code> e também é utilizada internamente pelo serviço de perfil do usuário.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s24">
+  <h2><span class="sec-num">Seção 24</span>Cálculo do Arcano Pessoal — Nome Completo</h2>
+  <p>
+    O cálculo do Arcano Pessoal pelo nome completo utiliza a <strong>tabela numerológica pitagórica</strong>, um sistema milenar que atribui valores numéricos a cada letra do alfabeto latino. Esta tabela é a base da numerologia ocidental e estabelece correspondências vibracionais entre letras e números de 1 a 9.
+  </p>
+  <p class="subtitle">Tabela Numerológica Pitagórica</p>
+  <table>
+    <tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th></tr>
+    <tr>
+      <td>A J S</td><td>B K T</td><td>C L U</td><td>D M V</td><td>E N W</td><td>F O X</td><td>G P Y</td><td>H Q Z</td><td>I R</td>
+    </tr>
+  </table>
+  <p>
+    <strong>Algoritmo de cálculo:</strong> (1) Converter o nome completo para MAIÚSCULAS; (2) Remover acentos e caracteres especiais (cedilhas, til, etc.); (3) Para cada letra, buscar seu valor na tabela pitagórica; (4) Somar todos os valores obtidos; (5) Reduzir o resultado somando seus dígitos até obter um valor entre 1 e 22; (6) Mapear para o Arcano Maior correspondente.
+  </p>
+  <p>
+    <strong>Exemplo completo — "MARIA SILVA SANTOS":</strong><br>
+    M(4) + A(1) + R(9) + I(9) + A(1) + S(1) + I(9) + L(3) + V(4) + A(1) + S(1) + A(1) + N(5) + T(2) + O(6) + S(1) = <strong>67</strong><br>
+    Redução: 6 + 7 = <strong>13</strong> → <strong>Arcano 13 — A Morte</strong> (transformação, renovação, ciclos).
+  </p>
+  <p>
+    O sistema trata nomes compostos com todos os nomes e sobrenomes registrados. Espaços e hífens são ignorados no cálculo. A normalização de caracteres segue o padrão <strong>NFD (Normalization Form Decomposition)</strong> do Unicode, onde "Ã" é decomposto em "A" + "~", e apenas a letra base é utilizada. A implementação em TypeScript utiliza <code>String.prototype.normalize('NFD').replace(/[\u0300-\u036f]/g, '')</code> para a remoção de diacríticos. O resultado é armazenado no perfil do usuário e recalculado automaticamente caso o nome seja atualizado.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s25">
+  <h2><span class="sec-num">Seção 25</span>Cálculo do Arcano Pessoal — Interpretação</h2>
+  <p>
+    Cada um dos 22 Arcanos Maiores possui uma interpretação completa e detalhada no Arkana Agora, incluindo nome, palavras-chave, traços positivos, desafios, lição de vida e orientação espiritual. A tabela a seguir apresenta a síntese interpretativa de cada arcano utilizada pelo sistema para gerar o perfil pessoal do usuário.
+  </p>
+  <table>
+    <tr><th>Ar.</th><th>Nome</th><th>Palavras-chave</th><th>Lição de Vida</th></tr>
+    <tr><td>0</td><td>O Louco</td><td>Liberdade, spontaneidade, novo início</td><td>Abraçar o desconhecido com confiança</td></tr>
+    <tr><td>1</td><td>O Mago</td><td>Manifestação, habilidade, concentração</td><td>Transformar intenção em realidade</td></tr>
+    <tr><td>2</td><td>A Sacerdotisa</td><td>Intuição, mistério, sabedoria interior</td><td>Confiar na voz interior silenciosa</td></tr>
+    <tr><td>3</td><td>A Imperatriz</td><td>Fertilidade, abundância, natureza</td><td>Cultivar a criatividade e o cuidado</td></tr>
+    <tr><td>4</td><td>O Imperador</td><td>Autoridade, estrutura, estabilidade</td><td>Liderar com sabedoria e justiça</td></tr>
+    <tr><td>5</td><td>O Hierofante</td><td>Tradição, ensino, conformidade</td><td>Honrar o conhecimento ancestral</td></tr>
+    <tr><td>6</td><td>O Enamorado</td><td>Escolha, harmonia, conexão</td><td>Seguir o coração com sabedoria</td></tr>
+    <tr><td>7</td><td>O Carro</td><td>Determinação, vitória, controle</td><td>Manter o foco apesar dos obstáculos</td></tr>
+    <tr><td>8</td><td>A Justiça</td><td>Equilíbrio, verdade, karma</td><td>Agir com integridade e responsabilidade</td></tr>
+    <tr><td>9</td><td>O Eremita</td><td>Introspecção, solidão, busca</td><td>Encontrar luz na jornada interior</td></tr>
+    <tr><td>10</td><td>A Roda da Fortuna</td><td>Ciclos, mudança, destino</td><td>Aceitar as reviravoltas da vida</td></tr>
+    <tr><td>11</td><td>A Força</td><td>Coragem interior, domínio, paciência</td><td>Domar os instintos com compaixão</td></tr>
+    <tr><td>12</td><td>O Enforcado</td><td>Sacrifício, nova perspectiva, pausa</td><td>Entregar-se para ganhar uma nova visão</td></tr>
+    <tr><td>13</td><td>A Morte</td><td>Transformação, fim, renascimento</td><td>Soltar o antigo para abrir caminho ao novo</td></tr>
+    <tr><td>14</td><td>Temperança</td><td>Equilíbrio, moderação, alquimia</td><td>Encontrar o meio-termo harmonioso</td></tr>
+    <tr><td>15</td><td>O Diabo</td><td>Ilusão, apego, sombra</td><td>Libertar-se das correntes autoimpostas</td></tr>
+    <tr><td>16</td><td>A Torre</td><td>Ruptura, revelação, reconstrução</td><td>Enxergar a destruição como oportunidade</td></tr>
+    <tr><td>17</td><td>A Estrela</td><td>Esperança, inspiração, renovação</td><td>Manter a fé após a tempestade</td></tr>
+    <tr><td>18</td><td>A Lua</td><td>Ilusão, inconsciente, mistério</td><td>Navegar o desconhecido com intuição</td></tr>
+    <tr><td>19</td><td>O Sol</td><td>Alegria, sucesso, vitalidade</td><td>Brilhar com autenticidade e generosidade</td></tr>
+    <tr><td>20</td><td>O Julgamento</td><td>Renascimento, chamado, avaliação</td><td>Responder ao chamado da própria verdade</td></tr>
+    <tr><td>21</td><td>O Mundo</td><td>Conclusão, totalidade, realização</td><td>Celebrar a jornada e integrar os aprendizados</td></tr>
+  </table>
+  <p>
+    Cada interpretação é armazenada como um objeto JSON estruturado no banco de dados, permitindo que o motor de IA acesse os dados programaticamente e os combine com o contexto do usuário para gerar análises profundamente personalizadas. O sistema também identifica <strong>arcanos complementares</strong> (ex: O Mago + A Sacerdotisa = equilíbrio ação/intuição) e <strong>arcanos de tensão</strong> (ex: O Diabo + A Estrela = conflito entre apego e libertação).
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s26">
+  <h2><span class="sec-num">Seção 26</span>Cálculo do Kin Maya — Visão Geral</h2>
+  <p>
+    O <strong>Kin Maya</strong> é um recurso esotérico recém-implementado no Arkana Agora que calcula a assinatura energética pessoal de cada usuário segundo o calendário sagrado <strong>Tzolkin</strong> da civilização maia. O Tzolkin é um ciclo de 260 dias que combina 20 Selos Solares com 13 Tons Galácticos, criando uma matriz de energia única para cada dia deste ciclo perpétuo.
+  </p>
+  <p>
+    O conceito fundamental é que cada pessoa nasce em um <strong>Kin específico</strong> (numerado de 1 a 260) que revela sua essência energética, propósito cósmico e talentos inatos. O Kin é composto por dois elementos: o <strong>Selo Solar</strong> (que representa a energia essencial, a "cor" da alma) e o <strong>Tom Galáctico</strong> (que representa a frequência, o "tom" vibracional dessa energia).
+  </p>
+  <p>
+    O algoritmo de cálculo converte uma data gregoriana qualquer no número Kin correspondente do Tzolkin. O processo envolve: (1) converter a data para o <strong>Número de Dia Juliano (JDN)</strong>; (2) aplicar um offset conhecido que correlaciona o JDN com o início da contagem do Tzolkin; (3) calcular o dia Tzolkin como <code>(JDN - offset) mod 260</code>; (4) derivar o Selo Solar como <code>(diaTzolkin mod 20) + 1</code>; (5) derivar o Tom Galáctico como <code>(diaTzolkin mod 13) + 1</code>; (6) combinar ambos para obter o número Kin final.
+  </p>
+  <p>
+    A referência principal para a correlação entre o calendário gregoriano e o Tzolkin utilizada no Arkana Agora é baseada nos dados do <strong>sincronariodapaz.org</strong>, que mantém a contagem oficial do Calendário da Paz according à tradição de José Argüelles. O offset utilizado é <strong>JDN 584283</strong>, que corresponde à data de correlação padrão entre o calendário maia e o juliano. O Kin Maya é calculado automaticamente com base na data de nascimento do usuário e integrado ao perfil esotérico, alimentando tanto o painel pessoal quanto o motor de IA para leituras contextualizadas.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s27">
+  <h2><span class="sec-num">Seção 27</span>Cálculo do Kin Maya — Algoritmo</h2>
+  <p>
+    O algoritmo completo para o cálculo do Kin Maya é implementado em TypeScript no backend do Arkana Agora e segue seis etapas precisas. Abaixo está a implementação completa com documentação detalhada de cada passo.
+  </p>
+  <pre><code>/**
+ * Cálculo do Kin Maya — Implementação completa
+ * Baseado no Calendário Tzolkin (260 dias)
+ * Referência: sincronariodapaz.org
+ */
+
+// Offset de correlação: JDN do início da contagem Tzolkin
+const MAYAN_EPOCH_JDN = 584283;
+
+/**
+ * Passo 1: Converter data gregoriana para Número de Dia Juliano (JDN)
+ * Fórmula padrão de conversão Gregoriana → Juliana
+ */
+function gregorianToJDN(day: number, month: number, year: number): number {
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
+  return day + Math.floor((153 * m + 2) / 5) + 365 * y
+    + Math.floor(y / 4) - Math.floor(y / 100)
+    + Math.floor(y / 400) - 32045;
+}
+
+/**
+ * Passo 2-6: Calcular Kin completo a partir do JDN
+ */
+function calculateMayanKin(day: number, month: number, year: number) {
+  // Passo 1: Número de Dia Juliano
+  const jdn = gregorianToJDN(day, month, year);
+
+  // Passo 2: Offset a partir da época maia
+  // Passo 3: Dia Tzolkin (0-259)
+  const tzolkinDay = ((jdn - MAYAN_EPOCH_JDN) % 260 + 260) % 260;
+
+  // Passo 4: Tom Galáctico (1-13)
+  const tone = (tzolkinDay % 13) + 1;
+
+  // Passo 5: Selo Solar (1-20)
+  const seal = (tzolkinDay % 20) + 1;
+
+  // Passo 6: Número Kin (1-260)
+  const kinNumber = ((tone - 1) * 20) + seal;
+
+  return { kinNumber, tone, seal, tzolkinDay, jdn };
+}</code></pre>
+  <p>
+    <strong>Detalhamento de cada etapa:</strong> O <strong>Passo 1</strong> utiliza a fórmula matemática padrão de conversão gregoriana para Dia Juliano, que conta dias consecutivos desde 1 de janeiro de 4713 a.C. (início do período juliano). O <strong>Passo 2</strong> subtrai o offset da época maia (JDN 584283) para obter a posição relativa dentro do ciclo Tzolkin. O <strong>Passo 3</strong> aplica o módulo 260 para obter o dia específico dentro do ciclo de 260 dias. Os <strong>Passos 4 e 5</strong> extraem respectivamente o Tom Galáctico (módulo 13) e o Selo Solar (módulo 20). O <strong>Passo 6</strong> combina Tom e Selo para gerar o número Kin final, que identifica unicamente a energia do dia. O operador <code>+ 260) % 260</code> garante que resultados negativos sejam tratados corretamente para datas anteriores ao offset.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s28">
+  <h2><span class="sec-num">Seção 28</span>Cálculo do Kin Maya — 20 Selos Solares</h2>
+  <p>
+    Os <strong>20 Selos Solares</strong> são as energias arquetípicas fundamentais do calendário Tzolkin maia. Cada selo representa uma força cósmica distinta com suas qualidades, sombras e poderes. O Arkana Agora armazena a interpretação completa de cada selo em português brasileiro para gerar perfis personalizados.
+  </p>
+  <table>
+    <tr><th>#</th><th>Selo Solar</th><th>Energia Principal</th><th>Cor</th></tr>
+    <tr><td>1</td><td>Dragão Vermelho</td><td>Criação, nascimento, nutrição, origem</td><td class="emerald">Vermelho</td></tr>
+    <tr><td>2</td><td>Vento Branco</td><td>Espírito, comunicação, respiração, verdade</td><td>Branco</td></tr>
+    <tr><td>3</td><td>Noite Azul</td><td>Abundância, sonhos, intuição, profundidade</td><td>Azul</td></tr>
+    <tr><td>4</td><td>Semente Amarela</td><td>Florescimento, potencial, crescimento, plantio</td><td class="gold">Amarelo</td></tr>
+    <tr><td>5</td><td>Serpente Vermelha</td><td>Vitalidade, instinto, sobrevivência, kundalini</td><td class="emerald">Vermelho</td></tr>
+    <tr><td>6</td><td>Enlaçador de Mundos Branco</td><td>Morte, transformação, igualdade, portais</td><td>Branco</td></tr>
+    <tr><td>7</td><td>Mão Azul</td><td>Cura, realização, conhecimento, toque</td><td>Azul</td></tr>
+    <tr><td>8</td><td>Estrela Amarela</td><td>Beleza, arte, elegância, harmonia estética</td><td class="gold">Amarelo</td></tr>
+    <tr><td>9</td><td>Lua Vermelha</td><td>Água, emoção, purificação, fluxo</td><td class="emerald">Vermelho</td></tr>
+    <tr><td>10</td><td>Cachorro Branco</td><td>Amor, lealdade, coração, fidelidade</td><td>Branco</td></tr>
+    <tr><td>11</td><td>Macaco Azul</td><td>Magia, ilusão, jogo, humor criativo</td><td>Azul</td></tr>
+    <tr><td>12</td><td>Humano Amarelo</td><td>Sabedoria, livre-arbítrio, influência</td><td class="gold">Amarelo</td></tr>
+    <tr><td>13</td><td>Caminhante do Céu Vermelho</td><td>Prosperidade, espaço, exploração, oportunidade</td><td class="emerald">Vermelho</td></tr>
+    <tr><td>14</td><td>Coruja Branca (Mago)</td><td>Intuição, atemporalidade, visão aguda</td><td>Branco</td></tr>
+    <tr><td>15</td><td>Guerreiro Amarelo</td><td>Coragem, questionamento, intrepidez</td><td class="gold">Amarelo</td></tr>
+    <tr><td>16</td><td>Águia Azul</td><td>Visão, criação, mente, perspectiva ampla</td><td>Azul</td></tr>
+    <tr><td>17</td><td>Terra Vermelha</td><td>Navegação, sincronicidade, evolução</td><td class="emerald">Vermelho</td></tr>
+    <tr><td>18</td><td>Espelho Branco</td><td>Verdade, reflexão, ordem, infinitude</td><td>Branco</td></tr>
+    <tr><td>19</td><td>Tormenta Azul</td><td>Transformação, catálise, energia, tempestade</td><td>Azul</td></tr>
+    <tr><td>20</td><td>Sol Amarelo</td><td>Iluminação, vida, fogo universal, consciência</td><td class="gold">Amarelo</td></tr>
+  </table>
+  <p>
+    A sequência de cores segue o padrão maia: <strong>Vermelho → Branco → Azul → Amarelo</strong>, repetindo ciclicamente. Cada cor representa uma direção cardeal e um elemento: Vermelho (Leste/Terra), Branco (Norte/Air), Azul (Oeste/Água), Amarelo (Sul/Fogo). Esta informação é utilizada pelo sistema para gerar visualizações ricas no perfil do usuário e nas interpretações do motor de IA, criando uma experiência imersiva e culturalmente autêntica.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s29">
+  <h2><span class="sec-num">Seção 29</span>Cálculo do Kin Maya — 13 Tons Galácticos</h2>
+  <p>
+    Os <strong>13 Tons Galácticos</strong> representam as frequências vibracionais que modulam a energia dos Selos Solares. Enquanto o Selo define <em>qual</em> energia está presente, o Tom define <em>como</em> essa energia se manifesta — sua intensidade, propósito e qualidade de expressão. Cada Tom possui um poder, uma ação e uma essência específicos.
+  </p>
+  <table>
+    <tr><th>Tom</th><th>Nome</th><th>Propósito / Ação</th><th>Poder</th></tr>
+    <tr><td>1</td><td>Magnético</td><td>Propósito: Unificar</td><td>Atrair</td></tr>
+    <tr><td>2</td><td>Lunar</td><td>Desafio: Polarizar</td><td>Estabilizar</td></tr>
+    <tr><td>3</td><td>Elétrico</td><td>Serviço: Ativar</td><td>Vincular</td></tr>
+    <tr><td>4</td><td>Auto-existente</td><td>Forma: Definir</td><td>Medir</td></tr>
+    <tr><td>5</td><td>Ondulatório</td><td>Comando: Empoderar</td><td>Comandar</td></tr>
+    <tr><td>6</td><td>Rítmico</td><td>Igualdade: Organizar</td><td>Equilibrar</td></tr>
+    <tr><td>7</td><td>Ressonante</td><td>Harmonia: Inspiralizar</td><td>Inspirar</td></tr>
+    <tr><td>8</td><td>Galáctico</td><td>Integridade: Modelar</td><td>Harmonizar</td></tr>
+    <tr><td>9</td><td>Solar</td><td>Intenção: Pulsar</td><td>Realizar</td></tr>
+    <tr><td>10</td><td>Planetário</td><td>Manifestação: Perfurar</td><td>Produzir</td></tr>
+    <tr><td>11</td><td>Espectral</td><td>Liberação: Dissolver</td><td>Despedaçar</td></tr>
+    <tr><td>12</td><td>Cristal</td><td>Cooperação: Dedicar</td><td>Universalizar</td></tr>
+    <tr><td>13</td><td>Cósmico</td><td>Presença: Endurecer</td><td>Transcender</td></tr>
+  </table>
+  <p>
+    A progressão dos tons segue uma jornada arquetípica: do Tom 1 (Magnético — o início, o propósito inicial) até o Tom 13 (Cósmico — a transcendência, a presença plena). Esta jornada é conhecida como a <strong>"Onda Encantada"</strong> e descreve o processo de manifestação de qualquer energia. Os tons ímpares (1, 3, 5, 7, 9, 11, 13) representam forças <strong>expansivas e criativas</strong>, enquanto os tons pares (2, 4, 6, 8, 10, 12) representam forças <strong>estabilizadoras e formativas</strong>.
+  </p>
+  <p>
+    No Arkana Agora, a combinação do Selo Solar com o Tom Galáctico gera uma interpretação única. Por exemplo, "Semente Amarela Tom Magnético" descreve alguém cujo propósito de vida é <strong>unificar o potencial criativo</strong>, enquanto "Semente Amarela Tom Cósmico" descreve alguém que <strong>transcende através do florescimento</strong>. O motor de IA utiliza ambas as dimensões para gerar perfis Kin Maya detalhados e leituras personalizadas que conectam a energia maia com o cotidiano do usuário.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s30">
+  <h2><span class="sec-num">Seção 30</span>Horóscopo Chinês — Visão Geral</h2>
+  <p>
+    O <strong>Horóscopo Chinês</strong> é um sistema astrológico milenar baseado em um ciclo de 60 anos que combina 12 animais zodiacais com 5 elementos fundamentais (Metal, Madeira, Água, Fogo, Terra). Diferentemente do zodíaco ocidental, que se baseia em meses, o zodíaco chinês é determinado pelo <strong>ano de nascimento</strong>, com cada ano regido por um animal e um elemento específicos.
+  </p>
+  <p>
+    Os 12 animais do zodíaco chinês, em ordem cíclica, são: <strong>Rato, Boi, Tigre, Coelho, Dragão, Serpente, Cavalo, Cabra, Macaco, Galo, Cachorro e Porco</strong>. Segundo a lenda, Buda convocou todos os animais para uma corrida, e a ordem de chegada determinou a sequência zodiacal. Cada animal possui características de personalidade distintas, pontos fortes e fracos, e compatibilidades específicas com os demais animais.
+  </p>
+  <p>
+    <strong>Descrição dos 12 Animais:</strong>
+  </p>
+  <ul>
+    <li><strong>Rato (鼠):</strong> Inteligente, adaptável, perspicaz. Excelente em negócios e estratégias. Naturalmente sociável, porém pode ser excessivamente ambicioso.</li>
+    <li><strong>Boi (牛):</strong> Trabalhador, confiável, determinado. Valoriza a estabilidade e a tradição. Pode ser teimoso e resistente a mudanças.</li>
+    <li><strong>Tigre (虎):</strong> Corajoso, competitivo, carismático. Líder nato com energia intensa. Precisa aprender a controlar a impulsividade.</li>
+    <li><strong>Coelho (兔):</strong> Diplomático, elegante, compassivo. Busca a paz e a harmonia. Pode ser excessivamente cauteloso e reservado.</li>
+    <li><strong>Dragão (龙):</strong> Poderoso, confiante, visionary. O animal mais auspicioso do zodíaco chinês. Pode ser arrogante e irrealista.</li>
+    <li><strong>Serpente (蛇):</strong> Sábia, intuitiva, enigmática. Profunda compreensão da natureza humana. Pode ser desconfiada e possessiva.</li>
+    <li><strong>Cavalo (马):</strong> Energético, independente, aventuroso. Ama a liberdade e a ação. Pode ser impaciente e inconsistente.</li>
+    <li><strong>Cabra/Cabra (羊):</strong> Criativa, gentil, compassiva. Artista nata com sensibilidade apurada. Pode ser indecisa e excessivamente pessimista.</li>
+    <li><strong>Macaco (猴):</strong> Esperto, versátil, brincalhão. Resolva problemas com criatividade. Pode ser irresponsável e superficial.</li>
+    <li><strong>Galo (鸡):</strong> Observador, honesto, hardworking. Perfeccionista com forte senso de dever. Pode ser crítico e arrogante.</li>
+    <li><strong>Cachorro (狗):</strong> Leal, honesto, protetor. Amigo fiel e conselheiro confiável. Pode ser ansioso e pessimista.</li>
+    <li><strong>Porco (猪):</strong> Generoso, compassivo, diligente. Busca prazer e conforto com sabedoria. Pode ser ingênuo e excessivamente indulgente.</li>
+  </ul>
+  <p>
+    O Arkana Agora calcula automaticamente o animal zodiacal chinês do usuário com base no ano de nascimento e apresenta uma interpretação detalhada em português, incluindo características de personalidade, compatibilidades e influências do elemento dominante do ano.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s31">
+  <h2><span class="sec-num">Seção 31</span>Horóscopo Chinês — Cálculo</h2>
+  <p>
+    O cálculo do animal zodiacal chinês segue uma fórmula matemática simples baseada no ano de nascimento. O ciclo de 12 anos se repete indefinidamente, e a posição de cada ano dentro do ciclo determina o animal correspondente. Além disso, cada ano possui um elemento associado, formando o ciclo completo de 60 anos (12 animais × 5 elementos).
+  </p>
+  <p class="subtitle">Algoritmo do Animal</p>
+  <pre><code>function getChineseZodiac(year: number): string {
+  const animals = [
+    'Rato', 'Boi', 'Tigre', 'Coelho', 'Dragão', 'Serpente',
+    'Cavalo', 'Cabra', 'Macaco', 'Galo', 'Cachorro', 'Porco'
+  ];
+  const index = ((year - 4) % 12 + 12) % 12;
+  return animals[index];
+}
+
+// Mapeamento: (ano - 4) mod 12
+// 0=Rato, 1=Boi, 2=Tigre, 3=Coelho, 4=Dragão,
+// 5=Serpente, 6=Cavalo, 7=Cabra, 8=Macaco,
+// 9=Galo, 10=Cachorro, 11=Porco</code></pre>
+  <p class="subtitle">Algoritmo do Elemento</p>
+  <pre><code>function getChineseElement(year: number): string {
+  const elements = ['Madeira', 'Fogo', 'Terra', 'Metal', 'Água'];
+  const index = Math.floor(((year - 4) % 10 + 10) % 10 / 2);
+  return elements[index];
+}
+
+// Mapeamento: ((ano - 4) mod 10) / 2 (divisão inteira)
+// 0,1 → Madeira | 2,3 → Fogo | 4,5 → Terra
+// 6,7 → Metal | 8,9 → Água
+
+// Combinação completa
+function getChineseZodiacFull(year: number) {
+  return {
+    animal: getChineseZodiac(year),
+    element: getChineseElement(year),
+    yinYang: (year % 2 === 0) ? 'Yang' : 'Yin'
+  };
+}</code></pre>
+  <p>
+    <strong>Nota importante sobre datas:</strong> O ano chinês não coincide exatamente com o calendário gregoriano. O Ano Novo Chinês ocorre entre 21 de janeiro e 20 de fevereiro. Para usuários nascidos em janeiro ou fevereiro, o sistema verifica se a data de nascimento é anterior ao Ano Novo Chinês daquele ano e, se sim, utiliza o ano anterior para o cálculo. A data do Ano Novo Chinês para cada ano é armazenada em uma tabela de referência no banco de dados, cobrindo os anos de 1900 a 2100. O módulo <code>+ 12) % 12</code> e <code>+ 10) % 10</code> garantem que anos antes de 4 d.C. sejam calculados corretamente, embora na prática o sistema foque em anos de nascimento realistas (1900–presente).
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s32">
+  <h2><span class="sec-num">Seção 32</span>Horóscopo Chinês — Compatibilidade</h2>
+  <p>
+    O sistema de compatibilidade do zodíaco chinês do Arkana Agora utiliza uma <strong>matriz de afinidade</strong> baseada nos princípios tradicionais da astrologia chinesa, combinando a trigonometria do ciclo de 12 animais com as interações elementares. A compatibilidade é classificada em três níveis: <strong>Melhor Combinção</strong> (afinidade alta), <strong>Combinção Neutra</strong> (compatibilidade moderada) e <strong>Desafio</strong> (tensão potencial).
+  </p>
+  <p class="subtitle">Matriz de Compatibilidade — Melhores Combinações</p>
+  <table>
+    <tr><th>Animal</th><th>Melhores Parceiros</th><th>Desafios</th></tr>
+    <tr><td>Rato</td><td>Dragão, Macaco, Boi</td><td>Cavalo, Galo, Cabra</td></tr>
+    <tr><td>Boi</td><td>Rato, Serpente, Galo</td><td>Tigre, Cavalo, Cabra</td></tr>
+    <tr><td>Tigre</td><td>Cavalo, Cachorro, Porco</td><td>Serpente, Macaco</td></tr>
+    <tr><td>Coelho</td><td>Cabra, Macaco, Cachorro, Porco</td><td>Galo, Dragão, Rato</td></tr>
+    <tr><td>Dragão</td><td>Rato, Macaco, Galo</td><td>Cachorro, Coelho, Dragão</td></tr>
+    <tr><td>Serpente</td><td>Boi, Galo</td><td>Tigre, Porco</td></tr>
+    <tr><td>Cavalo</td><td>Tigre, Cabra, Coelho</td><td>Rato, Boi, Galo</td></tr>
+    <tr><td>Cabra</td><td>Coelho, Cavalo, Porco</td><td>Boi, Tigre, Cachorro</td></tr>
+    <tr><td>Macaco</td><td>Rato, Dragão</td><td>Tigre, Porco</td></tr>
+    <tr><td>Galo</td><td>Boi, Serpente, Dragão</td><td>Coelho, Cavalo, Macaco</td></tr>
+    <tr><td>Cachorro</td><td>Tigre, Coelho, Cavalo</td><td>Dragão, Cabra, Galo</td></tr>
+    <tr><td>Porco</td><td>Tigre, Coelho, Cabra</td><td>Serpente, Macaco</td></tr>
+  </table>
+  <p>
+    Além da compatibilidade animal, o sistema considera a <strong>interação dos elementos</strong>. O ciclo de geração (Madeira → Fogo → Terra → Metal → Água → Madeira) indica afinidade natural, enquanto o ciclo de destruição (Madeira → Terra → Água → Fogo → Metal → Madeira) indica tensão. A combinação de ambas as análises (animal + elemento) gera um <strong>score de compatibilidade de 0 a 100</strong>, onde valores acima de 75 indicam alta afinidade, entre 50-75 compatibilidade moderada, e abaixo de 50 desafios significativos. O motor de IA utiliza estes scores para gerar interpretações detalhadas sobre a dinâmica relacional entre dois perfis de usuários.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s33">
+  <h2><span class="sec-num">Seção 33</span>Horóscopo Maia — Visão Geral</h2>
+  <p>
+    O <strong>Horóscopo Maia</strong> implementado no Arkana Agora difere fundamentalmente da astrologia ocidental tradicional. Enquanto o zodíaco ocidental se baseia na posição dos planetas em relação às constelações eclípticas e utiliza um ciclo de 12 meses, o horóscopo maia se fundamenta exclusivamente no <strong>calendário sagrado Tzolkin</strong> — um ciclo de 260 dias que combina 20 Selos Solares com 13 Tons Galácticos.
+  </p>
+  <p>
+    A astrologia maia não utiliza planetas, casas astrológicas ou aspectos angulares. Sua abordagem é baseada na premissa de que <strong>cada dia possui uma energia única e imutável</strong>, determinada pela combinação específica de Selo Solar e Tom Galáctico. Esta energia é representada por um glifo maia tradicional e por um nome composto, como "Semente Amarela Solar" ou "Dragão Vermelho Magnético".
+  </p>
+  <p>
+    A <strong>assinatura energética pessoal</strong> de cada usuário é determinada pelo seu Kin de nascimento — o dia específico do ciclo Tzolkin em que nasceu. Este Kin revela: (1) a <strong>essência espiritual</strong> da pessoa (Selo Solar); (2) a <strong>frequência vibracional</strong> com que essa essência se manifesta (Tom Galáctico); (3) os <strong>poderes ocultos</strong> — selos que complementam ou desafiam o selo principal; (4) a <strong>Onda Encantada</strong> à qual a pessoa pertence, que revela o propósito evolutivo de sua vida; (5) a <strong>família terrestre</strong> (grupo de 5 selos relacionados) que indica afinidades naturais.
+  </p>
+  <p>
+    O sistema do Arkana Agora apresenta o horóscopo maia como um <strong>painel visual interativo</strong> que inclui: o glifo do Kin pessoal, o nome completo do Kin, a Onda Encantada com os 13 pontos de energia, a família terrestre, os antípodes (energias complementares), os análogos (energias semelhantes) e os guias ocultos. Todas as interpretações são geradas em português brasileiro e podem ser compartilhadas na rede social interna da plataforma.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s34">
+  <h2><span class="sec-num">Seção 34</span>Horóscopo Maia — Ondas Encantadas</h2>
+  <p>
+    As <strong>Ondas Encantadas</strong> (ou "Encantadas Waves") são um conceito central do calendário maia Tzolkin e do Calendário das 13 Luas. Cada Onda Encantada é um ciclo de 13 dias que começa com um Selo Solar específico e percorre todos os 13 Tons Galácticos, criando uma <strong>jornada arquetípica completa</strong> de manifestação energética. Existem 20 Ondas Encantadas possíveis (uma para cada Selo Solar), e cada pessoa pertence à Onda Encantada do seu Kin de nascimento.
+  </p>
+  <p>
+    O <strong>Calendário das 13 Luas</strong> divide o ano solar em 13 meses de 28 dias cada, totalizando 364 dias, mais um <strong>"Dia Fora do Tempo"</strong> (25 de julho) — um dia sagrado dedicado à meditação e à paz. Este calendário foi proposto por José Argüelles e é utilizado como referência pelo sistema do Arkana Agora para determinar o posicionamento energético atual do usuário dentro do ciclo anual.
+  </p>
+  <p>
+    A <strong>estrutura da Onda Encantada</strong> segue 13 posições, cada uma com um significado arquetípico: (1) <strong>Propósito Magnético</strong> — o que inicia a onda, a intenção original; (2) <strong>Desafio Lunar</strong> — o que polariza e testa a intenção; (3) <strong>Serviço Elétrico</strong> — como a energia começa a se ativar no mundo; (4) <strong>Forma Auto-existente</strong> — a definição e estrutura da energia; (5) <strong>Comando Ondulatório</strong> — o empoderamento e a radiância; (6) <strong>Igualdade Rítmica</strong> — a organização e equilíbrio; (7) <strong>Harmonia Ressonante</strong> — a inspiração e sintonização; (8) <strong>Integridade Galáctica</strong> — a modelagem e harmonização; (9) <strong>Intenção Solar</strong> — a pulsação e realização; (10) <strong>Manifestação Planetária</strong> — a materialização; (11) <strong>Liberação Espectral</strong> — a dissolução do que não serve; (12) <strong>Cooperação Cristal</strong> — a dedicação e universalização; (13) <strong>Presença Cósmica</strong> — a transcendência e retorno ao início.
+  </p>
+  <p>
+    No Arkana Agora, o sistema calcula a Onda Encantada do usuário, apresenta uma visualização gráfica dos 13 tons com o selo de cada posição, e gera uma interpretação detalhada de como essa jornada se manifesta na personalidade e no propósito de vida. A posição do Kin do usuário dentro de sua própria Onda (por exemplo, se é o Tom 5 de sua onda) revela a <strong>fase de vida</strong> predominante e o desafio evolutivo atual.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s35">
+  <h2><span class="sec-num">Seção 35</span>Calculadora de Numerologia</h2>
+  <p>
+    A <strong>Calculadora de Numerologia</strong> do Arkana Agora é um módulo abrangente que calcula quatro números numerológicos fundamentais para cada usuário, todos baseados na tabela pitagórica. Cada número revela uma dimensão diferente da personalidade e do destino, proporcionando uma visão holística do perfil numerológico.
+  </p>
+  <p>
+    <strong>1. Número de Caminho de Vida (Life Path Number):</strong> Calculado a partir da data de nascimento. Somam-se todos os dígitos do dia, mês e ano, reduzindo progressivamente até obter um único dígito (1-9) ou um número mestre (11, 22, 33). Exemplo: 15/03/1990 → 1+5+0+3+1+9+9+0 = 28 → 2+8 = 10 → 1+0 = <strong>1</strong>. O Caminho de Vida revela a jornada evolutiva principal, os talentos naturais e os desafios centrais da pessoa.
+  </p>
+  <p>
+    <strong>2. Número de Expressão (Expression Number):</strong> Calculado a partir do nome completo, somando os valores pitagóricos de todas as letras (incluindo vogais e consoantes) e reduzindo ao intervalo 1-9 ou número mestre. O Número de Expressão revela os talentos, habilidades e aptidões naturais, indicando como a pessoa se expressa no mundo e qual é sua vocação mais autêntica.
+  </p>
+  <p>
+    <strong>3. Número de Impulso da Alma (Soul Urge Number):</strong> Calculado a partir <strong>apenas das vogais</strong> do nome completo. As vogais representam a essência interior, os desejos mais profundos e a motivação oculta. Este número revela o que verdadeiramente move a pessoa em nível emocional e espiritual, independentemente das aparências externas.
+  </p>
+  <p>
+    <strong>4. Número de Personalidade (Personality Number):</strong> Calculado a partir <strong>apenas das consoantes</strong> do nome completo. As consoantes representam a "máscara social" — a imagem que a pessoa projeta para o mundo exterior, a primeira impressão que causa nos outros e como é percebida socialmente.
+  </p>
+  <p>
+    O sistema implementa todas as reduções com tratamento especial para <strong>Números Mestres</strong> (11, 22 e 33): quando estes números aparecem durante a redução, eles são preservados (não reduzidos para 2, 4 ou 6) e recebem interpretações ampliadas e especiais. A calculadora também identifica <strong>Pinos de Desafio</strong> (períodos de 1-4 anos cada ao longo da vida), <strong>Ciclos de Vida</strong> (três períodos principais) e <strong>Ano Pessoal</strong> (energia predominante do ano atual).
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s36">
+  <h2><span class="sec-num">Seção 36</span>Fase Lunar — Cálculo e Integração</h2>
+  <p>
+    O cálculo da <strong>Fase Lunar</strong> é um componente integrado ao ecossistema do Arkana Agora que influencia tanto as leituras de tarot quanto o humor interpretativo do motor de IA. O algoritmo utiliza o <strong>Número de Dia Juliano (JDN)</strong> para determinar com precisão a posição da Lua em seu ciclo sinódico de aproximadamente 29,53 dias.
+  </p>
+  <pre><code>function getMoonPhase(day: number, month: number, year: number): {
+  phase: string; illumination: number; emoji: string;
+} {
+  // Calcular JDN
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
+  const jdn = day + Math.floor((153*m+2)/5)
+    + 365*y + Math.floor(y/4)
+    - Math.floor(y/100) + Math.floor(y/400) - 32045;
+
+  // Calcular idade da lua (dias desde a última Nova)
+  // Lua Nova de referência: 6 de janeiro de 2000 (JDN 2451550.1)
+  const lunarCycle = 29.53058770576;
+  const phaseAge = ((jdn - 2451550.1) % lunarCycle + lunarCycle) % lunarCycle;
+  const illumination = phaseAge / lunarCycle;
+
+  // Determinar fase (8 fases)
+  const phases = [
+    { name: 'Nova',          min: 0,     max: 0.0625 },
+    { name: 'Crescente',     min: 0.0625, max: 0.1875 },
+    { name: 'Quarto Crescente', min: 0.1875, max: 0.3125 },
+    { name: 'Gibosa Crescente',  min: 0.3125, max: 0.4375 },
+    { name: 'Cheia',         min: 0.4375, max: 0.5625 },
+    { name: 'Gibosa Minguante', min: 0.5625, max: 0.6875 },
+    { name: 'Quarto Minguante', min: 0.6875, max: 0.8125 },
+    { name: 'Minguante',     min: 0.8125, max: 0.9375 },
+  ];
+  // ... mapeamento completo
+}</code></pre>
+  <p>
+    As <strong>8 fases lunares</strong> reconhecidas pelo sistema são: Nova (início, semente, intenções), Crescente (crescimento, ação inicial), Quarto Crescente (decisão, desafio), Gibosa Crescente (refinamento, ajuste), Cheia (plenitude, realização, clareza), Gibosa Minguante (gratidão, partilha), Quarto Minguante (liberação, perdão) e Minguante (descanso, recolhimento, introspecção).
+  </p>
+  <p>
+    A <strong>integração da fase lunar</strong> ocorre em três pontos do sistema: (1) <strong>Carta do Dia</strong> — a interpretação diária é modulada pela energia lunar (ex: na Lua Nova, foco em novos começos; na Lua Cheia, foco em revelações); (2) <strong>Motor de IA</strong> — a fase atual é injetada no prompt de sistema como contexto adicional, influenciando o tom e as sugestões da leitura; (3) <strong>Dashboard do usuário</strong> — um widget visual mostra a fase lunar atual com ícone animado e uma breve mensagem energética do dia.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s37">
+  <h2><span class="sec-num">Seção 37</span>Horóscopo Zodiacal Tradicional</h2>
+  <p>
+    O <strong>Horóscopo Zodiacal Tradicional</strong> do Arkana Agora implementa o sistema astrológico ocidental completo com os 12 signos do zodíaco, suas características elementais, planetas regentes e um sistema de compatibilidade baseado na interação dos elementos.
+  </p>
+  <p class="subtitle">Os 12 Signos — Resumo Completo</p>
+  <table>
+    <tr><th>Signo</th><th>Período</th><th>Elemento</th><th>Planeta Regente</th><th>Qualidade</th></tr>
+    <tr><td>Áries</td><td>21/03 – 19/04</td><td>Fogo</td><td>Marte</td><td>Cardinal</td></tr>
+    <tr><td>Touro</td><td>20/04 – 20/05</td><td>Terra</td><td>Vênus</td><td>Fixo</td></tr>
+    <tr><td>Gêmeos</td><td>21/05 – 20/06</td><td>Ar</td><td>Mercúrio</td><td>Mutável</td></tr>
+    <tr><td>Câncer</td><td>21/06 – 22/07</td><td>Água</td><td>Lua</td><td>Cardinal</td></tr>
+    <tr><td>Leão</td><td>23/07 – 22/08</td><td>Fogo</td><td>Sol</td><td>Fixo</td></tr>
+    <tr><td>Virgem</td><td>23/08 – 22/09</td><td>Terra</td><td>Mercúrio</td><td>Mutável</td></tr>
+    <tr><td>Libra</td><td>23/09 – 22/10</td><td>Ar</td><td>Vênus</td><td>Cardinal</td></tr>
+    <tr><td>Escorpião</td><td>23/10 – 21/11</td><td>Água</td><td>Plutão</td><td>Fixo</td></tr>
+    <tr><td>Sagitário</td><td>22/11 – 21/12</td><td>Fogo</td><td>Júpiter</td><td>Mutável</td></tr>
+    <tr><td>Capricórnio</td><td>22/12 – 19/01</td><td>Terra</td><td>Saturno</td><td>Cardinal</td></tr>
+    <tr><td>Aquário</td><td>20/01 – 18/02</td><td>Ar</td><td>Urano</td><td>Fixo</td></tr>
+    <tr><td>Peixes</td><td>19/02 – 20/03</td><td>Água</td><td>Netuno</td><td>Mutável</td></tr>
+  </table>
+  <p>
+    Cada signo possui uma descrição detalhada em português que abrange: características de personalidade, pontos fortes e fracos, estilo de comunicação, abordagem amorosa, carreira e finanças, saúde e bem-estar. O sistema também identifica a <strong>qualidade astrológica</strong> (Cardinal, Fixo ou Mutável) que indica o modo de ação predominante do signo.
+  </p>
+  <p>
+    O <strong>sistema de compatibilidade</strong> entre signos utiliza uma matriz baseada na interação elementar: signos do <strong>mesmo elemento</strong> (Fogo+Fogo, Terra+Terra, Ar+Ar, Água+Água) possuem afinidade natural e compreensão mútua; signos de <strong>elementos complementares</strong> (Fogo+Ar, Terra+Água) são altamente compatíveis; signos de <strong>elementos opostos</strong> (Fogo+Água, Terra+Ar) geram atração magnética mas exigem trabalho; signos de <strong>elementos adjacentes</strong> (Fogo+Terra, Terra+Ar, etc.) oferecem crescimento mútuo através do desafio. O score de compatibilidade varia de 0 a 100, considerando também a qualidade (Cardinal, Fixo, Mutável) e a relação entre os planetas regentes.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s38">
+  <h2><span class="sec-num">Seção 38</span>Sistema de Horóscopos Unificado</h2>
+  <p>
+    O <strong>Sistema de Horóscopos Unificado</strong> é a integração central de todos os sistemas astrológicos e numerológicos do Arkana Agora em uma experiência coesa e personalizada. Em vez de apresentar cada sistema isoladamente, a plataforma combina as informações do <strong>Zodíaco Ocidental</strong>, <strong>Zodíaco Chinês</strong>, <strong>Kin Maya</strong>, <strong>Fase Lunar</strong> e <strong>Numerologia</strong> em um <strong>dashboard pessoal unificado</strong> que revela a multiplicidade de influências energéticas que atuam sobre cada usuário.
+  </p>
+  <p>
+    O dashboard unificado apresenta os seguintes widgets interativos: (1) <strong>Cartão de Identidade Cósmica</strong> — um card visual que exibe o signo ocidental, o animal chinês, o Kin Maya, o Arcano Pessoal e o Número de Caminho de Vida em um design cohesivo; (2) <strong>Radar de Energias</strong> — um gráfico polar que mostra a intensidade relativa de cada sistema na vida do usuário; (3) <strong>Mapa de Convergências</strong> — quando múltiplos sistemas apontam para a mesma qualidade (ex: signo de Fogo + elemento Fogo chinês + Kin de Tom Solar), o sistema destaca essa convergência como uma influência amplificada; (4) <strong>Tensões e Contradições</strong> — quando sistemas divergem (ex: signo de Terra com Kin de Tom Espectral), o sistema identifica a tensão e oferece orientação sobre como harmonizá-la.
+  </p>
+  <p>
+    O <strong>motor de interpretação cruzada</strong> utiliza regras configuráveis para gerar insights quando os sinais se sobrepõem. Por exemplo: se o Arcano Pessoal é "O Imperador" (estrutura, autoridade) e o signo é Capricórnio (também estrutura e autoridade), o sistema gera uma interpretação reforçada sobre liderança e disciplina. Se o Kin Maya é "Serpente Branca" (transformação, sabedoria) e o Número de Expressão é 9 (humanitarismo, sabedoria), a interpretação destaca a vocação para orientação e transformação positiva.
+  </p>
+  <p>
+    O sistema unificado também alimenta o <strong>algoritmo de matching social</strong>: quando dois usuários são compatíveis em múltiplos sistemas simultaneamente (ex: signos ocidentais compatíveis + animais chineses compatíveis + Kins complementares), o score de afinidade social é significativamente amplificado, criando conexões mais significativas na rede social da plataforma. Todas as interpretações são geradas em português brasileiro e podem ser compartilhadas no feed de atividades.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s39">
+  <h2><span class="sec-num">Seção 39</span>Tempo Real — Socket.io</h2>
+  <p>
+    A arquitetura de <strong>tempo real</strong> do Arkana Agora é implementada como um <strong>mini-serviço dedicado</strong> executando na porta 3003, utilizando a biblioteca <strong>Socket.io</strong> para comunicação bidirecional em tempo real entre o servidor e os clientes (web e mobile). Este serviço opera de forma independente do servidor de API REST principal, permitindo escalabilidade horizontal dedicada para funcionalidades síncronas.
+  </p>
+  <p>
+    O serviço Socket.io gerencia as seguintes funcionalidades em tempo real: (1) <strong>Chat ao vivo</strong> — mensagens instantâneas entre usuários com latência inferior a 100ms; (2) <strong>Indicadores de digitação</strong> — notificação em tempo real quando o interlocutor está digitando ("digitando..."), com debounce de 500ms para evitar flickering; (3) <strong>Receipts de mensagens</strong> — confirmação de entrega (ícone de check simples) e confirmação de leitura (ícone de check duplo), similar ao WhatsApp; (4) <strong>Status online/offline</strong> — presença em tempo real com indicadores visuais (bolinha verde/vermelha) e timestamp de último acesso; (5) <strong>Atualizações de sessões de leitura</strong> — quando um usuário está recebendo uma leitura de IA, os espectadores autorizados veem a leitura sendo gerada em tempo real; (6) <strong>Feed de atividades</strong> — notificações push em tempo real sobre curtidas, comentários, novos seguidores e compartilhamentos de leituras.
+  </p>
+  <p>
+    A arquitetura utiliza o conceito de <strong>salas (rooms)</strong> do Socket.io para organização eficiente das conexões. Cada usuário se conecta automaticamente a três tipos de sala: (a) sala pessoal <code>user:{userId}</code> para notificações individuais; (b) salas de conversa <code>chat:{conversationId}</code> para cada conversa ativa; (c) salas de leitura <code>reading:{sessionId}</code> para sessões de leitura compartilhadas. A <strong>autenticação</strong> é realizada via handshake JWT — o cliente envia o token na conexão inicial, o servidor valida e associa o socket ao ID do usuário autenticado. Conexões sem token válido são rejeitadas com código de erro 4001.
+  </p>
+  <p>
+    O serviço implementa <strong>reconexão automática com exponential backoff</strong> (início em 1s, máximo de 30s), <strong>heartbeat a cada 25 segundos</strong> para detectar conexões mortas, e <strong>Redis Adapter</strong> para sincronização entre múltiplas instâncias do serviço, permitindo escalabilidade horizontal com balanceamento de carga. O sistema suporta até <strong>10.000 conexões simultâneas por instância</strong> com consumo de memória inferior a 512MB.
+  </p>
+</section>
+
+<hr class="gold-line-glow">
+
+<!-- ================================================================== -->
+<section id="s40">
+  <h2><span class="sec-num">Seção 40</span>Tempo Real — Chat e Mensagens</h2>
+  <p>
+    O <strong>sistema de mensagens</strong> do Arkana Agora suporta comunicação <strong>1:1 (privada)</strong> e <strong>em grupo</strong>, com uma arquitetura robusta de persistência e entrega. As mensagens são transmitidas via WebSocket para entrega instantânea e simultaneamente persistidas no banco de dados (SQLite para desenvolvimento/local, PostgreSQL para produção) para garantir durabilidade e histórico acessível.
+  </p>
+  <p>
+    <strong>Tipos de mensagem suportados:</strong> (1) <strong>Texto</strong> — mensagens de texto com suporte a emojis, negrito, itálico e markdown básico. Comprimento máximo de 4.000 caracteres. (2) <strong>Imagem</strong> — envio de fotos e imagens com upload via presigned URL para S3/Cloudflare R2. Compressão automática para webP com qualidade 80%. Resolução máxima de 2048px no lado maior. (3) <strong>Compartilhamento de carta de leitura</strong> — tipo especial de mensagem que incorpora um card visual interativo com a carta tirada, sua interpretação resumida e um link profundo (deep link) para a leitura completa. Este tipo de mensagem é exclusivo do Arkana Agora e permite que usuários compartilhem suas leituras de forma visualmente atraente dentro de conversas.
+  </p>
+  <p>
+    O <strong>protocolo de eventos WebSocket</strong> define a seguinte estrutura de comunicação:
+  </p>
+  <pre><code>// Eventos do cliente → servidor
+'chat:join'       // Entrar em uma conversa
+'chat:leave'      // Sair de uma conversa
+'chat:message'    // Enviar mensagem
+'chat:typing'     // Indicador de digitação
+'chat:read'       // Marcar mensagens como lidas
+
+// Eventos do servidor → cliente
+'chat:message'    // Nova mensagem recebida
+'chat:typing'     // Interlocutor está digitando
+'chat:read'       // Mensagens foram lidas
+'chat:online'     // Status de presença atualizado
+'chat:history'    // Histórico de mensagens (paginado)</code></pre>
+  <p>
+    Cada mensagem possui um <strong>ID único UUID v4</strong>, timestamp de criação em UTC, status de entrega (<code>sent</code>, <code>delivered</code>, <code>read</code>) e opcionalmente uma referência à mensagem original (para replies). O <strong>read receipt</strong> é implementado com um cursor: quando um usuário abre uma conversa, o servidor envia o evento <code>chat:read</code> com o ID da última mensagem vista, e o remetente recebe a confirmação. Mensagens não entregues (offline) são armazenadas e entregues na próxima conexão do destinatário.
+  </p>
+  <p>
+    O sistema implementa <strong>rate limiting</strong> para prevenir abuso: máximo de 30 mensagens por minuto por usuário, 5 mensagens por segundo em burst. Usuários que violam os limites recebem um cooldown temporário (5 segundos) e, em violações repetidas, podem ser temporariamente silenciados. Um <strong>filtro de conteúdo</strong> baseado em regex e lista de palavras bloqueadas é aplicado a todas as mensagens de texto, com detecção de spam por similaridade (mensagens duplicadas em sequência são bloqueadas). O sistema também suporta <strong>exclusão de mensagens</strong> (soft delete — marcada como deletada, mas visível como "mensagem removida" para manter a integridade da conversa) e <strong>denúncias</strong> de mensagens inadequadas para moderação.
+  </p>
+</section>
+
+</div>
+</body>
+</html><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkana Agora — Documentação Técnica (Parte 3: Seções 41–60)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #08080e; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: #e4e4e7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 60px 50px;
+  }
+  section { page-break-after: always; padding-bottom: 40px; }
+  section:last-of-type { page-break-after: auto; }
+  h2 {
+    color: #c9a84c;
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .section-number {
+    color: #10b981;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+  p {
+    color: #a1a1aa;
+    font-size: 14px;
+    line-height: 1.8;
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+  .separator {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #c9a84c 30%, #c9a84c 70%, transparent 100%);
+    margin: 40px 0;
+    opacity: 0.4;
+  }
+  .ending-page {
+    page-break-after: auto;
+    text-align: center;
+    padding: 120px 50px;
+  }
+  .ending-page h2 {
+    font-size: 32px;
+    margin-bottom: 24px;
+  }
+  .ending-page .tagline {
+    color: #c9a84c;
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-style: italic;
+    margin-top: 32px;
+    margin-bottom: 40px;
+  }
+  .ending-page .closing {
+    color: #a1a1aa;
+    font-size: 14px;
+    line-height: 2;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .gold-ornament {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #c9a84c, transparent);
+    margin: 40px auto;
+  }
+  .ending-page .fim {
+    color: #c9a84c;
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-top: 60px;
+  }
+  ul {
+    color: #a1a1aa;
+    font-size: 14px;
+    line-height: 1.8;
+    padding-left: 20px;
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+  li { margin-bottom: 4px; }
+  strong { color: #e4e4e7; }
+  code {
+    background: #1a1a2e;
+    color: #c9a84c;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- ===================== SEÇÃO 41 ===================== -->
+<section id="s41">
+  <div class="section-number">Seção 41</div>
+  <h2>Sistema de Créditos</h2>
+  <p>
+    O sistema de créditos constitui a moeda virtual interna da plataforma Arkana Agora, projetado para oferecer flexibilidade e acessibilidade aos usuários que desejam realizar leituras com inteligência artificial e consultas esotéricas avançadas. A estrutura de pacotes foi calibrada para atender diferentes perfis de uso, desde o usuário casual até o entusiasta dedicado das artes divinatórias. Os pacotes disponíveis são: <strong>10 créditos por R$ 5,90</strong>, ideal para quem deseja experimentar a plataforma; <strong>30 créditos por R$ 14,90</strong>, com desconto progressivo para uso regular; e <strong>100 créditos por R$ 39,90</strong>, voltado para usuários intensivos com a melhor relação custo-benefício.
+  </p>
+  <p>
+    O consumo de créditos segue uma tabela clara e transparente: cada leitura simples com IA consome <strong>1 crédito</strong>, enquanto tiragens complexas como o <strong>Cruz Celta</strong> (10 cartas com interpretação aprofundada) consomem <strong>3 créditos</strong>. Cálculos esotéricos como o Arcano Pessoal e o Cálculo de Quinário são gratuitos, servindo como porta de entrada para atrair novos usuários à plataforma. Todos os créditos possuem <strong>validade de 365 dias</strong> a partir da data de compra, incentivando o uso recorrente sem pressionar o usuário.
+  </p>
+  <p>
+    O saldo de créditos é exibido de forma proeminente no header da aplicação, com atualização em tempo real via WebSocket. O histórico completo de transações — compras, consumos e recebimentos — fica disponível na área do usuário, com filtros por período e tipo de operação. Além disso, o sistema suporta <strong>créditos-presente</strong>, permitindo que usuários comprem pacotes para outros membros da comunidade, fortalecendo os laços sociais dentro da plataforma. O backend gerencia toda a lógica de débito em transações atômicas para evitar inconsistências, com regras de validação que impedem consumos simultâneos que excedam o saldo disponível.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 42 ===================== -->
+<section id="s42">
+  <div class="section-number">Seção 42</div>
+  <h2>Pagamentos — Mercado Pago</h2>
+  <p>
+    A integração com o <strong>Mercado Pago</strong> é a espinha dorsal do sistema de pagamentos da Arkana Agora, selecionada pela sua ampla adoção no mercado brasileiro e pelo suporte nativo a <strong>PIX</strong>, método de pagamento instantâneo que domina as transações digitais no país. A arquitetura de pagamento segue o fluxo: o frontend inicia uma preferência de pagamento via API server-side, o Mercado Pago retorna um ponto de checkout (QR Code PIX ou formulário de cartão), e o usuário completa a transação. Após a confirmação, um <strong>webhook</strong> recebe a notificação de pagamento aprovado, acionando a creditação automática na conta do usuário.
+  </p>
+  <p>
+    O tratamento de webhooks é implementado com validação de assinatura (<strong>signature verification</strong>) para garantir que as notificações provêm efetivamente do Mercado Pago, impedindo ataques de replay. Cada webhook é processado de forma idempotente, utilizando o ID da transação como chave de deduplicação. O sistema suporta <strong>cartão de crédito</strong> com parcelamento em até 6 vezes para pacotes acima de R$ 30,00, automaticamente calculado pela API do gateway.
+  </p>
+  <p>
+    A <strong>política de reembolso</strong> prevê devolução integral dentro de 7 dias corridos para créditos não utilizados, processada automaticamente via API do Mercado Pago. Para o marketplace de profissionais e artistas, a plataforma implementa <strong>split payment</strong>: 85% do valor é direcionado ao prestador de serviço e 15% é retido como comissão da plataforma. Toda a infraestrutura de pagamento está em conformidade com os padrões <strong>PCI-DSS</strong>, uma vez que os dados sensíveis do cartão são processados exclusivamente pelo Mercado Pago, sem jamais trafegar pelos servidores da Arkana Agora. A integração utiliza a SDK oficial do Mercado Pago para Node.js, com fallback automático em caso de indisponibilidade temporária do serviço.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 43 ===================== -->
+<section id="s43">
+  <div class="section-number">Seção 43</div>
+  <h2>Assinatura Plus</h2>
+  <p>
+    A <strong>Assinatura Plus</strong> representa o modelo de subscrição premium da Arkana Agora, projetada para os usuários mais engajados que buscam uma experiência completa e ilimitada na plataforma. Disponível nos planos <strong>R$ 19,90/mês</strong> ou <strong>R$ 179,90/ano</strong> (com desconto de 25% equivalente a dois meses gratuitos), a assinatura oferece um conjunto abrangente de benefícios exclusivos que transformam significativamente a experiência do usuário.
+  </p>
+  <p>
+    Os benefícios principais incluem: <strong>leituras ilimitadas</strong> com IA — o assinante não consome créditos para tiragens padrão, podendo realizar quantas quiser; <strong>fila prioritária</strong> no processamento de IA, garantindo tempos de resposta reduzidos durante picos de demanda; <strong>costas de cartas exclusivas</strong> desbloqueadas apenas para assinantes, com designs artísticos especiais criados por artistas parceiros; <strong>painel avançado de horóscopo</strong> com mapas astrais completos, trânsitos planetários e previsões estendidas; <strong>descontos no marketplace profissional</strong> de 15% em todas as consultas pagas; e <strong>experiência sem anúncios</strong>, eliminando qualquer interrupção publicitária durante a navegação.
+  </p>
+  <p>
+    O gerenciamento de cobrança é realizado via APIs de assinatura do <strong>Stripe</strong> e do <strong>Mercado Pago</strong>, com suporte a ciclos de renovação automática, cancelamento imediato com acesso até o fim do período já pago, e reativação simplificada. O sistema implementa grace period de 3 dias para falhas temporárias de cobrança, enviando notificações de aviso ao usuário antes de suspender os benefícios. A tela de upgrade é estrategicamente posicionada nos momentos de conversão naturais — quando o usuário atinge o limite de créditos gratuitos ou ao tentar acessar um recurso exclusivo. Métricas como trial-to-paid conversion rate e churn mensal são monitoradas continuamente para otimização da estratégia de precificação e benefícios.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 44 ===================== -->
+<section id="s44">
+  <div class="section-number">Seção 44</div>
+  <h2>Monetização Multilateral</h2>
+  <p>
+    A estratégia de monetização da Arkana Agora é deliberadamente <strong>multilateral</strong>, estruturada sobre quatro fontes de receita complementares que reduzem a dependência de um único modelo e maximizam o valor extraído de cada usuário. A primeira fonte são os <strong>créditos virtuais</strong> (Seção 41), que geram receita recorrente conforme os usuários consomem leituras com IA. A segunda é a <strong>Assinatura Plus</strong> (Seção 43), proporcionando receita previsível via MRR (Monthly Recurring Revenue). A terceira fonte é a <strong>comissão do marketplace</strong> de 15% sobre cada transação entre usuários e profissionais verificadas. A quarta e última é a <strong>comissão de agendamento profissional</strong> de 20% sobre consultas síncronas e assíncronas realizadas por leitores credenciados.
+  </p>
+  <p>
+    As projeções de receita para os três primeiros anos consideram crescimento orgânico combinado com campanhas de marketing digital. No <strong>Ano 1</strong>, com foco no MVP e aquisição inicial, projeta-se 5.000 MAU com receita mensal de R$ 15.000 a R$ 25.000, concentrada em créditos e assinaturas. No <strong>Ano 2</strong>, com o marketplace ativo e base de usuários expandida para 25.000 MAU, a receita projeta-se entre R$ 80.000 e R$ 150.000 mensais. No <strong>Ano 3</strong>, com a maturidade da plataforma e 80.000+ MAU, a receita alvo é de R$ 300.000 a R$ 500.000 mensais, com diversificação equilibrada entre as quatro fontes.
+  </p>
+  <p>
+    A análise de <strong>unit economics</strong> é fundamental para a sustentabilidade: o <strong>CAC (Customer Acquisition Cost)</strong> alvo é de R$ 8,00 a R$ 12,00 via marketing digital orgânico e pago, enquanto o <strong>LTV (Lifetime Value)</strong> estimado é de R$ 85,00 a R$ 120,00 por usuário no primeiro ano, resultando em uma razão LTV/CAC superior a 7x — bem acima do mínimo saudável de 3x. Esses números são revisados trimestralmente com base em dados reais de cohorts de usuários, permitindo ajustes ágeis na estratégia de aquisição e retenção.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 45 ===================== -->
+<section id="s45">
+  <div class="section-number">Seção 45</div>
+  <h2>Segurança — OWASP Top 10</h2>
+  <p>
+    A segurança da Arkana Agora é fundamentada na mitigação proativa de todas as dez vulnerabilidades do <strong>OWASP Top 10 (2021)</strong>, garantindo que a plataforma esteja protegida contra os vetores de ataque mais comuns e críticos da indústria. A arquitetura de segurança é implementada em múltiplas camadas, desde o frontend até a infraestrutura de banco de dados, com defesas em profundidade que asseguram a proteção dos dados dos usuários e a integridade da plataforma.
+  </p>
+  <p>
+    As medidas específicas incluem: <strong>validação rigorosa de entrada</strong> com schemas Zod em todas as rotas de API, rejeitando dados malformados antes mesmo de atingirem a lógica de negócio; <strong>consultas parametrizadas</strong> garantidas automaticamente pelo Prisma ORM, eliminando completamente o risco de injeção SQL; <strong>proteção CSRF</strong> via tokens synchronizer token pattern para todas as mutações de estado; <strong>headers de segurança</strong> configurados pelo Helmet.js, incluindo Content-Security-Policy, X-Frame-Options e Strict-Transport-Security; <strong>rate limiting</strong> progressivo com limites diferenciados por endpoint (ex.: 5 requisições/minuto para login, 100/minuto para leituras); e <strong>prevenção de XSS</strong> garantida pelo auto-escaping nativo do React.
+  </p>
+  <p>
+    Adicionalmente, a plataforma implementa proteção contra <strong>autenticação quebrada</strong> com bloqueio de conta após 5 tentativas falhas consecutivas, senhas hashadas com bcrypt (cost factor 12) e verificação de força de senha. A <strong>exposição de dados sensíveis</strong> é mitigada com criptografia AES-256 para dados em repouso, TLS 1.3 para dados em trânsito e mascaramento de dados pessoais nos logs. A proteção contra <strong>entidades externas XML</strong> é assegurada pela proibição de parsers XML inseguros, utilizando exclusivamente JSON para serialização de dados. Auditorias de segurança trimestrais e testes de penetração anuais completam o programa de segurança da plataforma.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 46 ===================== -->
+<section id="s46">
+  <div class="section-number">Seção 46</div>
+  <h2>Segurança — LGPD Compliance</h2>
+  <p>
+    A conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)</strong> é um pilar não negociável da Arkana Agora, dado que a plataforma coleta dados pessoais sensíveis — incluindo datas de nascimento, preferências espirituais e histórico de leituras. A estratégia de privacidade é implementada por design (<strong>Privacy by Design</strong>) e por padrão (<strong>Privacy by Default</strong>), incorporando princípios de proteção de dados em cada etapa do ciclo de desenvolvimento.
+  </p>
+  <p>
+    Os mecanismos de conformidade incluem: <strong>coleta de consentimento explícito</strong> com granularidade por finalidade (ex.: o usuário pode consentir com leituras de IA mas recusar comunicações de marketing); <strong>minimização de dados</strong>, coletando apenas o estritamente necessário para cada funcionalidade; <strong>direitos do titular</strong> implementados via painel de privacidade acessível, permitindo acesso, correção, eliminação e portabilidade dos dados pessoais; <strong>designação de um Encarregado (DPO)</strong> responsável pela supervisão do programa de privacidade; e <strong>políticas de retenção</strong> com eliminação automática de dados após o período necessário.
+  </p>
+  <p>
+    O <strong>banner de consentimento de cookies</strong> é exibido na primeira visita, com opções granulares para cookies essenciais, analíticos e de marketing. A <strong>Avaliação de Impacto na Proteção de Dados (AIPD/RIA)</strong> foi conduzida para as funcionalidades de maior risco, como o processamento de dados de leituras por IA e o armazenamento de informações de pagamento. Para fins de analytics, os dados de leitura são <strong>anônimos por padrão</strong>, utilizando técnicas de hash unidirecional que impossibilitam a identificação reversa do usuário. O registro de tratamentos de dados é mantido atualizado e disponível para consulta pela Autoridade Nacional de Proteção de Dados (ANPD) quando solicitado.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 47 ===================== -->
+<section id="s47">
+  <div class="section-number">Seção 47</div>
+  <h2>Autenticação — NextAuth.js</h2>
+  <p>
+    O sistema de autenticação da Arkana Agora é implementado com base no <strong>NextAuth.js (Auth.js v5)</strong>, uma solução madura e flexível que se integra nativamente ao ecossistema Next.js. O fluxo de autenticação suporta múltiplos métodos de entrada para maximizar a conveniência do usuário sem comprometer a segurança: <strong>registro por e-mail/senha</strong> com validação de força e confirmação via e-mail; <strong>magic link</strong> para login sem senha, enviando um token de uso único com validade de 10 minutos; e <strong>OAuth</strong> com provedores Google e Facebook para registro rápido com um clique.
+  </p>
+  <p>
+    O gerenciamento de sessão adota uma arquitetura de <strong>double-token</strong>: um <strong>JWT access token</strong> com validade de 15 minutos para autenticação em cada requisição, armazenado em memória HTTP-only cookie; e um <strong>refresh token</strong> com validade de 7 dias, utilizado para renovar automaticamente o access token expirado sem exigir novo login do usuário. Essa estratégia equilibra segurança (tokens curtos reduzem a janela de exploração) com usabilidade (o usuário permanece logado por dias). Todos os tokens são assinados com HMAC-SHA256 utilizando uma chave secreta rotacionada mensalmente.
+  </p>
+  <p>
+    O controle de acesso baseado em funções (<strong>Role-Based Access Control</strong>) é integrado diretamente no JWT, contendo o campo <code>role</code> com os valores <code>user</code>, <code>professional</code> e <code>admin</code>. O fluxo de <strong>recuperação de conta</strong> permite ao usuário redefinir sua senha via link seguro enviado ao e-mail cadastrado, com validade de 1 hora e invalidação imediata após uso. A verificação de e-mail é obrigatória antes de acessar funcionalidades que consomem créditos, prevenindo abuso de contas não verificadas. O middleware do Next.js intercepta todas as rotas protegidas, redirecionando usuários não autenticados para a página de login com preservação da URL original para redirecionamento pós-login.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 48 ===================== -->
+<section id="s48">
+  <div class="section-number">Seção 48</div>
+  <h2>RBAC — Controle de Acesso</h2>
+  <p>
+    O <strong>Role-Based Access Control (RBAC)</strong> da Arkana Agora define três papéis fundamentais que determinam o escopo de acesso e as permissões de cada usuário dentro da plataforma. Essa arquitetura de controle de acesso é implementada em camadas: no nível de sessão (JWT), no middleware de rotas (Next.js) e no nível de serviço (validação explícita em cada operação sensível), garantindo defesa em profundidade contra acesso não autorizado.
+  </p>
+  <p>
+    O papel <strong>User</strong> (usuário padrão) possui acesso básico: realizar leituras gratuitas e com créditos, visualizar e criar posts sociais, seguir outros usuários, agendar consultas com profissionais e gerenciar seu próprio perfil. O papel <strong>Professional</strong> (profissional verificado) herda todas as permissões de User e adiciona: listagem de serviços no marketplace, recebimento de solicitações de leitura, acesso ao painel profissional com métricas de desempenho, customização de perfil com selo de verificação, e participação no programa de split payment. A verificação do profissional inclui validação documental e avaliação de competência pelo time da plataforma.
+  </p>
+  <p>
+  O papel <strong>Admin</strong> possui acesso total à plataforma: gerenciamento de usuários (bloqueio, suspensão, promoção a profissional), moderação de conteúdo social, configuração de preços e pacotes de créditos, acesso ao dashboard analítico completo, gestão de artistas do marketplace e emissão de créditos manuais para ações promocionais. A <strong>matriz de permissões</strong> é definida como um objeto TypeScript centralizado (<code>permissions.ts</code>), consultado tanto pelo middleware de API quanto pelos componentes de UI para renderização condicional de funcionalidades. Cada rota de API é protegida por um decorator de permissão que verifica o role do usuário antes de executar qualquer lógica de negócio, retornando status HTTP 403 para acessos negados com mensagem genérica que não revela a existência do recurso.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 49 ===================== -->
+<section id="s49">
+  <div class="section-number">Seção 49</div>
+  <h2>Notificações e Email</h2>
+  <p>
+    O sistema de notificações da Arkana Agora opera em dois canais principais — <strong>in-app</strong> e <strong>e-mail</strong> — com uma arquitetura baseada em filas que garante entrega confiável e desacoplamento entre a geração e o envio de notificações. As notificações in-app cobrem eventos em tempo real: novos seguidores, solicitações de leitura, confirmações de agendamento, atualizações de chat e o horóscopo diário personalizado. Cada notificação é exibida como um card no centro de notificações com ícone contextual, timestamp relativo e ação rápida associada.
+  </p>
+  <p>
+    As notificações por e-mail são segmentadas por frequência e tipo: <strong>resumo semanal</strong> com as principais atividade da comunidade e do perfil do usuário; <strong>recibos de pagamento</strong> após cada transação de créditos ou assinatura; <strong>redefinição de senha</strong> sob demanda; e <strong>notificações de segurança</strong> como login em novo dispositivo. O sistema de <strong>filas</strong> é implementado com BullMQ (Redis-backed), permitindo processamento assíncrono, retry automático com backoff exponencial e dead-letter queue para notificações com falha permanente. Os e-mails são renderizados com templates React Email, garantindo consistência visual com a plataforma.
+  </p>
+  <p>
+    As <strong>preferências de notificação</strong> são granulares e configuráveis pelo usuário em um painel dedicado, podendo ativar/desativar individualmente cada tipo de notificação por canal. A plataforma está preparada para <strong>push notifications</strong> via Web Push API, com service worker registrado e sistema de assinatura implementado — aguardando apenas a configuração do Firebase Cloud Messaging para ativação em produção. O badge de notificações não lidas é sincronizado em tempo real via WebSocket, atualizando instantaneamente em todos os dispositivos conectados do mesmo usuário.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 50 ===================== -->
+<section id="s50">
+  <div class="section-number">Seção 50</div>
+  <h2>Analytics e Telemetria</h2>
+  <p>
+    O sistema de analytics da Arkana Agora é projetado com <strong>preservação de privacidade</strong> como princípio fundamental, capturando dados de uso essenciais para a tomada de decisões de produto sem coletar informações pessoais identificáveis. A telemetria é implementada com eventos estruturados que registram interações-chave sem associá-las a identidades individuais — utilizam-se identificadores anônimos com hash unidirecional quando necessário correlacionar sessões.
+  </p>
+  <p>
+    Os eventos rastreados incluem: <strong>conclusão de leitura</strong> (tipo de tiragem, número de cartas, tempo de sessão), <strong>uso de funcionalidades</strong> (navegação entre seções, cálculos esotéricos realizados, interações sociais), <strong>funil de conversão</strong> (registro → primeira leitura → primeira compra → assinatura Plus), e <strong>cohorts de retenção</strong> (D1, D7, D30, D60) segmentados por canal de aquisição. Cada evento segue um schema padronizado com timestamp, categoria, ação e propriedades contextuais, validado pelo mesmo sistema Zod utilizado nas APIs para garantir consistência.
+  </p>
+  <p>
+  O <strong>dashboard administrativo</strong> agrega as métricas em visualizações acionáveis: <strong>MAU/DAU</strong> (Monthly/Daily Active Users) com tendências de crescimento, <strong>receita</strong> por fonte (créditos, assinatura, marketplace), <strong>funcionalidades mais populares</strong> por frequência de uso, <strong>tempos de resposta da IA</strong> com percentis (P50, P95, P99), e <strong>taxas de conversão</strong> em cada etapa do funil. A infraestrutura de analytics utiliza PostHog como ferramenta principal, com exportação periódica para um data warehouse (BigQuery) para análises ad-hoc mais complexas. Todas as configurações de rastreamento respeitam o consentimento do usuário definido no banner LGPD, desabilitando automaticamente a coleta para usuários que recusaram cookies analíticos.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 51 ===================== -->
+<section id="s51">
+  <div class="section-number">Seção 51</div>
+  <h2>Testes — Estratégia</h2>
+  <p>
+    A estratégia de testes da Arkana Agora segue a <strong>pirâmide de testes</strong> clássica, com uma base sólida de testes unitários, uma camada intermediária de testes de integração e um topo enxuto de testes ponta-a-ponta. Essa abordagem equilibra cobertura, velocidade de execução e manutenibilidade, garantindo que bugs sejam detectados o mais cedo possível no ciclo de desenvolvimento. A meta de cobertura de código é de <strong>80%</strong>, medida pela ferramenta c8 (nativa do Vite), com enforcement obrigatório no pipeline de CI/CD para pull requests.
+  </p>
+  <p>
+    Os <strong>testes unitários</strong> são executados com <strong>Vitest</strong>, cobrindo funções puras, utilitários de cálculo esotérico, validadores de schema e lógica de negócio isolada. Cada teste unitário deve ser independente, determinístico e executar em menos de 50ms. Os <strong>testes de integração</strong> utilizam Vitest em conjunto com <strong>MSW (Mock Service Worker)</strong> para simular respostas de API, e um banco de dados de teste em memória (SQLite) para validar interações com o Prisma ORM sem dependência de infraestrutura externa. Os <strong>testes E2E</strong> são implementados com <strong>Playwright</strong>, simulando fluxos reais do usuário em navegadores Chromium, Firefox e WebKit.
+  </p>
+  <p>
+  O <strong>pipeline de CI/CD</strong> no GitHub Actions executa as seguintes etapas sequenciais: <strong>lint</strong> (ESLint + Prettier), <strong>testes unitários e de integração</strong> com geração de relatório de cobertura, <strong>build</strong> de produção do Next.js, e <strong>deploy</strong> automático para Vercel em caso de merge na branch <code>main</code>. Os caminhos críticos testados incluem: <strong>fluxo de autenticação</strong> (registro, login, logout, recuperação de senha), <strong>fluxo de leitura</strong> (seleção de cartas, processamento de IA, exibição de resultados, salvamento no histórico), e <strong>fluxo de pagamento</strong> (seleção de pacote, init de pagamento, confirmação via webhook, creditação). Testes de smoke são executados a cada deploy para produção, validando as funcionalidades essenciais em menos de 2 minutos.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 52 ===================== -->
+<section id="s52">
+  <div class="section-number">Seção 52</div>
+  <h2>Testes — Casos de Uso</h2>
+  <p>
+    Os <strong>10 casos de teste críticos</strong> da Arkana Agora foram definidos para cobrir os fluxos de maior impacto no usuário e no negócio, servindo como guardian tests que devem passar obrigatoriamente em qualquer versão candidate a release. Cada caso de teste possui pré-condições, passos executáveis, resultados esperados e critérios de aceitação claramente definidos.
+  </p>
+  <p>
+    <strong>TC-01: Registro de Usuário</strong> — Valida o cadastro com e-mail/senha, incluindo verificação de campos obrigatórios, validação de formato de e-mail, força mínima de senha, duplicidade de e-mail e envio de e-mail de confirmação. <strong>TC-02: Login/Logout</strong> — Testa autenticação com credenciais válidas, tratamento de credenciais inválidas, persistência de sessão e encerramento correto. <strong>TC-03: Leitura com IA (Streaming)</strong> — Verifica a seleção de cartas, inicialização da conexão SSE, recebimento progressivo do texto interpretativo, exibição em tempo real e finalização correta do stream.
+  </p>
+  <p>
+    <strong>TC-04: Carta do Dia</strong> — Confirma a revelação diária com animação, verificação de que a mesma carta é exibida durante todo o dia para o mesmo usuário e que uma nova carta é gerada à meia-noite (fuso de Brasília). <strong>TC-05: Cálculo de Arcano Pessoal</strong> — Valida o cálculo numerológico com base na data de nascimento, exibição correta do arcano correspondente e link para interpretação detalhada. <strong>TC-06: Cálculo de Quinário</strong> — Testa a redução quinária de nomes completos, exibição dos arcanos resultantes e cálculo da soma harmônica.
+  </p>
+  <p>
+    <strong>TC-07: Compra de Créditos</strong> — Simula a seleção de pacote, inicialização do checkout PIX, simulação de confirmação de pagamento via webhook e creditação correta do saldo. <strong>TC-08: Criação de Post Social</strong> — Valida a criação de post com texto e imagem opcional, exibição no feed e contagem de interações. <strong>TC-09: Agendamento com Profissional</strong> — Testa a seleção de profissional, escolha de horário, confirmação e notificação de ambas as partes. <strong>TC-10: Consulta do Zodíaco Chinês</strong> — Verifica a exibição correta do signo chinês com base no ano de nascimento, incluindo anos bissextos e limites de transição.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 53 ===================== -->
+<section id="s53">
+  <div class="section-number">Seção 53</div>
+  <h2>Performance — Frontend</h2>
+  <p>
+    A estratégia de performance do frontend da Arkana Agora é orientada por métricas objetivas e orçamentos rigorosos que garantem uma experiência de usuário fluida mesmo em dispositivos de entrada. O <strong>code splitting</strong> é implementado nativamente pelo Next.js com <code>dynamic()</code> imports, carregando sob demanda componentes pesados como o motor de leitura, o editor de posts e os visualizadores 3D de cartas. O <strong>bundle size budget</strong> estabelece um limite de <strong>200KB de JavaScript inicial</strong> (gzipped), monitorado automaticamente no CI com falha do build caso o limite seja excedido.
+  </p>
+  <p>
+  A otimização de imagens utiliza o componente <code>next/image</code> com resize automático, formato WebP/AVIF prioritário, lazy loading nativo e placeholder blur para evitar layout shift. Os alvos de <strong>Lighthouse</strong> são: <strong>Performance 90+</strong>, <strong>Accessibility 95+</strong> e <strong>Best Practices 90+</strong>. Essas métricas são validadas automaticamente em cada pull request via Lighthouse CI, com regressões bloqueando o merge. O <strong>lazy loading</strong> é aplicado a todas as seções below-the-fold, utilizando Intersection Observer para carregar componentes apenas quando entram no viewport do usuário.
+  </p>
+  <p>
+  O <strong>Service Worker</strong> para PWA implementa estratégias de cache avançadas: Cache First para assets estáticos (fontes, imagens de cartas, ícones), Stale While Revalidate para dados dinâmicos (perfil do usuário, feed social) e Network First para transações críticas (pagamentos, leituras com IA). As fontes são carregadas com <code>font-display: swap</code> e pré-carregadas via <code>&lt;link rel="preload"&gt;</code> para eliminar Flash of Unstyled Text. O CSS é gerenciado pelo Tailwind com purging automático em produção, resultando em um stylesheet menor que 15KB gzipped. O hydration parcial do Next.js é utilizado para minimizar o JavaScript executado no cliente, priorizando interatividade nas áreas visíveis.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 54 ===================== -->
+<section id="s54">
+  <div class="section-number">Seção 54</div>
+  <h2>Performance — Backend</h2>
+  <p>
+    A performance do backend da Arkana Agora é definida por <strong>SLAs de tempo de resposta</strong> específicos para cada tipo de endpoint, monitorados continuamente e com alertas automáticos para degradação. Os alvos são: <strong>menos de 200ms</strong> para endpoints de dados (perfil, histórico, feed), <strong>menos de 100ms para o primeiro token SSE</strong> em leituras com IA, e <strong>menos de 500ms</strong> para operações de escrita (criação de posts, atualização de perfil). Esses tempos são medidos no percentil P95 para refletir a experiência real da maioria dos usuários.
+  </p>
+  <p>
+    A <strong>estratégia de indexação</strong> do PostgreSQL inclui índices compostos nas colunas mais consultadas: <code>(userId, createdAt)</code> para consultas de histórico, <code>(professionalId, status, scheduledAt)</code> para agendamentos, e índices GIN para busca textual em posts e interpretações de leitura. A <strong>otimização de queries</strong> é garantida pelo Prisma ORM com <code>select</code> explícito para evitar over-fetching, <code>include</code> para eager loading de relações necessárias e <code>cursor-based pagination</code> para feeds com performance consistente independente do tamanho do dataset.
+  </p>
+  <p>
+  O <strong>caching</strong> opera em múltiplos níveis: <strong>Redis</strong> em produção para sessões, rate limiting, cache de horóscopo diário e resultados de cálculos esotéricos (TTL de 24 horas); e cache em memória (<code>Map</code>) no ambiente de desenvolvimento para simplicidade. Um <strong>CDN</strong> (Vercel Edge Network) distribui todos os assets estáticos globalmente, com invalidação automática a cada deploy. A plataforma está preparada para <strong>escalabilidade horizontal</strong>: a arquitetura serverless da Vercel escala automaticamente conforme demanda, e a alternativa Docker (Seção 57) suporta réplicas adicionais via docker-compose scale. Connection pooling com PgBouncer gerencia o pool de conexões com o PostgreSQL, suportando até 100 conexões concorrentes por instância.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 55 ===================== -->
+<section id="s55">
+  <div class="section-number">Seção 55</div>
+  <h2>PWA — Progressive Web App</h2>
+  <p>
+    A Arkana Agora é implementada como uma <strong>Progressive Web App (PWA)</strong>, combinando o alcance da web com a experiência nativa de um aplicativo. Essa decisão estratégica permite que os usuários acessem a plataforma diretamente pelo navegador em qualquer dispositivo, com a possibilidade de instalá-la na tela inicial para acesso rápido — tudo sem a complexidade e o custo de manutenção de aplicativos nativos separados para cada plataforma.
+  </p>
+  <p>
+  O <strong>Service Worker</strong> é configurado com estratégias de cache diferenciadas por tipo de recurso: <strong>Cache First</strong> para as 78 imagens de cartas de tarot e 36 de cartas ciganas (assets imutáveis que raramente mudam), garantindo carregamento instantâneo mesmo offline; <strong>Stale While Revalidate</strong> para dados de perfil e configurações do usuário, servindo a versão em cache imediatamente enquanto atualiza em background; e <strong>Network First</strong> para transações críticas como pagamentos e leituras com IA, onde os dados mais recentes são essenciais. O <strong>suporte offline</strong> inclui: visualização das cartas em cache, acesso à última leitura realizada, revelação da carta do dia (se previamente carregada) e navegação pelo histórico local.
+  </p>
+  <p>
+  O <strong>manifest.json</strong> define a aplicação com: nome "Arkana Agora", ícones em múltiplos tamanhos (192x192 e 512x512), <code>theme_color: #08080e</code>, <code>background_color: #08080e</code>, <code>display: standalone</code> (eliminando a barra de navegação do navegador) e <code>start_url: /</code>. O <strong>fluxo de instalação</strong> é acionado pelo evento <code>beforeinstallprompt</code>, apresentando um modal estilizado que explica os benefícios da instalação — acesso rápido, funcionamento offline e notificações push. Os <strong>performance budgets</strong> da PWA exigem: Service Worker ativado em menos de 3 segundos, tempo para interação (TTI) inferior a 5 segundos em conexões 3G e tamanho total do cache estático inferior a 10MB.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 56 ===================== -->
+<section id="s56">
+  <div class="section-number">Seção 56</div>
+  <h2>Deploy — Vercel</h2>
+  <p>
+    O <strong>Vercel</strong> é a plataforma de deploy primária da Arkana Agora, selecionada por sua integração nativa com Next.js, deploy automático por Git e infraestrutura serverless com escala global. A configuração de deploy é minimalista: basta conectar o repositório GitHub ao projeto Vercel, e cada push para a branch <code>main</code> dispara automaticamente um deploy de produção. Os <strong>deployments de preview</strong> são gerados automaticamente para cada pull request, fornecendo URLs únicas para revisão e teste antes do merge, acelerando significativamente o ciclo de revisão de código.
+  </p>
+  <p>
+  O gerenciamento de <strong>variáveis de ambiente</strong> é centralizado no painel do Vercel com suporte a ambientes separados (Development, Preview, Production), criptografia em repouso e histórico de alterações. As variáveis sensíveis (API keys, secrets do NextAuth, credenciais do banco de dados) são configuradas exclusivamente via interface web, nunca comprometidas no repositório Git. A <strong>configuração de domínio</strong> suporta domínio customizado com SSL automático via Let's Encrypt, redirecionamento HTTP→HTTPS e CDN edge caching com purga sob demanda via API.
+  </p>
+  <p>
+  As <strong>Serverless Functions</strong> do Next.js (rotas de API) escalam automaticamente de zero a milhares de instâncias conforme a demanda, com cold start otimizado pelo runtime do Vercel. O <strong>Edge Network</strong> distribui o conteúdo estático em mais de 30 pontos de presença globalmente, garantindo latência inferior a 100ms para a maioria dos usuários no Brasil. O pipeline de deploy inclui automaticamente: instalação de dependências, build otimizado com trace analysis, execução de testes (se configurado) e deploy atômico com rollback instantâneo em caso de falha. O Vercel Analytics fornece insights de performance reais (Web Vitals) dos usuários em produção, complementando os dados de laboratório do Lighthouse.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 57 ===================== -->
+<section id="s57">
+  <div class="section-number">Seção 57</div>
+  <h2>Deploy — Docker Alternativo</h2>
+  <p>
+    Para organizações que requerem controle total sobre a infraestrutura ou cenários de deploy on-premise, a Arkana Agora oferece uma alternativa de deploy via <strong>Docker Compose</strong> que replica o ambiente completo da plataforma em qualquer servidor com Docker instalado. Essa modalidade é particularmente relevante para clientes corporativos que exigem dados em infraestrutura própria ou para regiões com restrições de conectividade com serviços cloud internacionais.
+  </p>
+  <p>
+  A arquitetura Docker Compose orquestra os seguintes <strong>serviços</strong>: <strong>web</strong> (Next.js em modo standalone com output exportado), <strong>api</strong> (servidor Bun para processamento pesado e WebSocket), <strong>db</strong> (PostgreSQL 16 com volumes persistentes para dados e WAL), <strong>redis</strong> (cache e filas BullMQ), e <strong>socket.io</strong> (servidor de tempo real dedicado). Cada serviço é definido em um Dockerfile otimizado com multi-stage builds, imagens base Alpine para minimizar o tamanho, e health checks configurados para automação de restart em caso de falha.
+  </p>
+  <p>
+  O <strong>Nginx</strong> atua como reverse proxy, terminando as conexões TLS, distribuindo requisições entre os serviços web e API, e servindo assets estáticos com cache agressivo. O SSL é provisionado automaticamente via <strong>Let's Encrypt</strong> com renovação automática pelo Certbot. Os <strong>endpoints de health check</strong> (<code>/api/health</code>) retornam o status de cada dependência (banco de dados, Redis, APIs externas) permitindo monitoramento proativo. A <strong>estratégia de backup</strong> inclui: backup diário automatizado do PostgreSQL via <code>pg_dump</code> com retenção de 30 dias, snapshots de volume Redis semanais e backup off-site opcional para S3-compatible storage. O <code>docker-compose.yml</code> inclui perfis de deploy (dev, staging, production) com ajustes automáticos de variáveis de ambiente e limits de recursos por perfil.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 58 ===================== -->
+<section id="s58">
+  <div class="section-number">Seção 58</div>
+  <h2>Monitoramento e Logs</h2>
+  <p>
+    O sistema de monitoramento da Arkana Agora combina quatro camadas complementares para garantir visibilidade total sobre a saúde da aplicação, detectar anomalias rapidamente e facilitar a resolução de incidentes. A <strong>primeira camada</strong> é o logging estruturado com <strong>Pino</strong>, um logger JSON de ultra-alta performance para Node.js que adiciona overhead mínimo (< 1ms por log). Todos os logs incluem timestamp ISO 8601, nível de severidade, correlation ID (para rastrear uma requisição através de múltiplos serviços), contexto da requisição e mensagem estruturada.
+  </p>
+  <p>
+  A <strong>segunda camada</strong> é o rastreamento de erros com <strong>Sentry</strong>, que captura automaticamente exceções não tratadas no frontend e backend, com stack traces completos, breadcrumbs de navegação, informações do dispositivo e releases marcados por versão. O Sentry está configurado com source maps上传 para desminificação automática em produção, permitindo que os desenvolvedores vejam o código original ao investigar erros. A <strong>terceira camada</strong> é o monitoramento de uptime com <strong>UptimeRobot</strong>, realizando verificações HTTP a cada 60 segundos a partir de múltiplas localizações geográficas, com alertas para o time de operações em caso de downtime.
+  </p>
+  <p>
+  A <strong>quarta camada</strong> é o APM (Application Performance Monitoring) via <strong>Vercel Analytics</strong> e métricas de Web Vitals reais (LCP, FID, CLS) coletadas dos usuários finais. Os <strong>níveis de log</strong> seguem a severidade padrão: <code>fatal</code> (processo não pode continuar), <code>error</code> (falha que requer intervenção), <code>warn</code> (situação anormal mas recuperável), <code>info</code> (eventos significativos de negócio) e <code>debug</code> (detalhes para desenvolvimento, desabilitado em produção). As <strong>regras de alerta</strong> incluem: taxa de erro > 5% em qualquer endpoint nos últimos 5 minutos, tempo de resposta P95 > 2 segundos por mais de 3 minutos consecutivos, downtime > 5 minutos com alerta escalonado para SMS após 10 minutos, e uso de CPU > 80% sustentado por mais de 15 minutos.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 59 ===================== -->
+<section id="s59">
+  <div class="section-number">Seção 59</div>
+  <h2>Roadmap — Fases de Desenvolvimento</h2>
+  <p>
+    O roadmap de desenvolvimento da Arkana Agora é estruturado em <strong>8 fases evolutivas</strong>, organizadas de forma a entregar valor incremental ao usuário a cada sprint, seguindo princípios de entrega contínua e validação de hipóteses com usuários reais. Cada fase possui deliverables claros, critérios de aceitação e métricas de sucesso que orientam a decisão de avanço para a próxima etapa.
+  </p>
+  <p>
+    O <strong>Sprint 0: Infraestrutura</strong> estabelece os alicerces técnicos — monorepo com Turborepo, pipeline CI/CD no GitHub Actions, schema do banco de dados PostgreSQL via Prisma, sistema de autenticação NextAuth.js e design system completo com componentes base. O <strong>Sprint 1-2: Motor de Leitura</strong> implementa o core do produto — sistema de tarot com 78 cartas, cartas ciganas com 36 cartas, integração com IA (OpenAI/Gemini) para interpretações via SSE, e a funcionalidade de Carta do Dia. O <strong>Sprint 3: Social e Perfil</strong> adiciona a dimensão comunitária — feed social, páginas de perfil, criação de posts e histórico de leituras.
+  </p>
+  <p>
+  O <strong>Sprint 4: Monetização</strong> ativa as fontes de receita — sistema de créditos, integração PIX via Mercado Pago, fluxo de checkout e webhooks de confirmação. Os <strong>Sprint 5-6: Social Completa</strong> expandem as interações — sistema de amizades, seguidores, comentários em posts, compartilhamento de leituras e chat em tempo real via Socket.IO. O <strong>Sprint 7-8: Profissionais e Admin</strong> profissionalizam a plataforma — cadastro de leitores verificados, serviços assíncronos, split payment, painel administrativo completo e conformidade LGPD.
+  </p>
+  <p>
+  A <strong>V2+: Marketplace e Mobile</strong> representa a visão de longo prazo — marketplace completo de costas de cartas com preview 3D, programa para artistas, assinatura Plus, otimização PWA avançada e desenvolvimento do aplicativo nativo com React Native para iOS e Android, com compartilhamento máximo de lógica de negócio via monorepo.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== SEÇÃO 60 ===================== -->
+<section id="s60">
+  <div class="section-number">Seção 60</div>
+  <h2>Cronograma e Métricas de Sucesso</h2>
+  <p>
+    O cronograma de execução da Arkana Agora é dividido em três marcos principais que orientam o planejamento de recursos e a comunicação com stakeholders. O <strong>MVP (6 meses)</strong> abrange do Sprint 0 ao Sprint 4, entregando uma plataforma funcional com leitura de tarot e cartas ciganas com IA, sistema de créditos, pagamentos via PIX, perfis de usuário e feed social básico. O objetivo do MVP é validar a proposta de valor com 1.000 usuários early adopters e atingir product-market fit preliminar.
+  </p>
+  <p>
+  A <strong>V1 (12 meses)</strong> estende a plataforma com a social completa (Sprint 5-8), profissionais verificados, marketplace inicial, painel administrativo, chat em tempo real e conformidade LGPD completa. A meta é atingir 10.000 MAU com receita mensal de R$ 30.000 a R$ 50.000. A <strong>V2 (18 meses)</strong> consolida a plataforma como referência no segmento, com marketplace maduro de artes, aplicativo mobile React Native, assinatura Plus otimizada e expansão para o mercado lusófono (Portugal). A meta é 50.000+ MAU com receita mensal de R$ 150.000+.
+  </p>
+  <p>
+  As <strong>métricas de sucesso</strong> são monitoradas em dashboards dedicados e divididas em cinco categorias: <strong>MAU/DAU</strong> para medição de alcance e engajamento; <strong>receita mensal</strong> por fonte para validação do modelo de negócio; <strong>retenção</strong> (D7 > 40%, D30 > 20%) para avaliar o valor percebido; <strong>NPS</strong> (Net Promoter Score > 50) para satisfação do usuário; <strong>avaliação média de leituras</strong> (> 4.2/5) para qualidade do serviço de IA; e <strong>quantidade de profissionais ativos</strong> para saúde do marketplace.
+  </p>
+  <p>
+    A estratégia de <strong>go-to-market</strong> combina três vetores de crescimento: <strong>parcerias com influenciadores</strong> do nicho esotérico e espiritual no Instagram e TikTok para geração de demanda inicial; <strong>marketing de conteúdo</strong> com blog sobre tarot, astrologia e autoconhecimento para SEO orgânico; e <strong>marketing social</strong> com compartilhamento viral de leituras personalizadas, criando loops de crescimento onde cada leitura compartilhada atrai novos usuários à plataforma.
+  </p>
+</section>
+
+<hr class="separator">
+
+<!-- ===================== PÁGINA FINAL ===================== -->
+<div class="ending-page">
+  <div class="gold-ornament"></div>
+  <h2>Fim do Documento</h2>
+  <p class="tagline">
+    “Onde a intuição encontra a tecnologia”
+  </p>
+  <p class="closing">
+    A Arkana Agora nasce da convicção de que a sabedoria ancestral dos oráculos
+    e a precisão da tecnologia moderna não são forças opostas, mas complementares.
+    Cada carta revelada, cada cálculo realizado, cada conexão estabelecida
+    nesta plataforma é um convite ao autoconhecimento — uma ponte entre
+    o mistério milenar e a inovação do presente.
+  </p>
+  <p class="closing">
+    Que as estrelas guiem o caminho e que o código ilumine a jornada.
+  </p>
+  <div class="gold-ornament"></div>
+  <p class="fim">✦ Arkana Agora ✦</p>
+</div>
+
+</div>
+
+</body>
+</html>
