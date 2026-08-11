@@ -1,0 +1,99 @@
+# Documentation Maintenance — Pattern Registry
+
+> **Date**: 2026-08-11
+> **Session**: Unplanned work to fix critical issues and document reusable patterns
+
+## Context
+
+This session addressed and documented multiple cross-cutting concerns:
+- GDPR/LGPD soft-delete implementation
+- Auth provider ID normalization conventions
+- Admin health endpoint rich metadata variant
+- Logger migration pattern (console.error → Pino)
+
+## Documentation Created
+
+### Security Patterns
+
+1. **`docs/solutions/patterns/security/soft-delete-gdpr-window.md`**
+   - Soft-delete with 30-day restoration window for GDPR/LGPD compliance
+   - Key pattern: `isActive = true AND deletedAt IS NULL` filtering
+   - Migration sequence for nullable → NOT NULL columns
+
+2. **`docs/solutions/patterns/security/providerid-normalization-convention.md`**
+   - Provider-specific normalization: EMAIL → lowercase email, OAuth → subject ID
+   - Aligns with `email @unique` constraint
+   - Uses `@@unique([provider, providerId])` composite constraint
+
+### Backend Patterns
+
+3. **`docs/solutions/patterns/backend/admin-health-rich-metadata.md`**
+   - Rich metadata variant of health envelope for admin dashboards
+   - Per-service metrics: latency, connection pool, SSL expiry, memory usage
+   - Distinguishes `/api/health` (simple) vs `/admin/system/health` (rich)
+
+### Observability Patterns
+
+4. **`docs/solutions/patterns/observability/logger-migration-stopgap.md`**
+   - Two-phase migration: console.error stopgap → Pino
+   - Migration checklist and examples
+   - Aligns with observability.md §2.1
+
+## Pattern Coverage
+
+| Pattern Category | Files Created | Key Learnings |
+|------------------|--------------|---------------|
+| Security | 2 | GDPR soft-delete, providerId normalization |
+| Backend | 1 | Admin health rich metadata |
+| Observability | 1 | Logger migration pattern |
+| **Total** | **4** | **4 reusable patterns** |
+
+## Related Changes
+
+### Schema Changes
+
+- `prisma/schema.prisma`: Added `deletedAt DateTime?` to User model
+- `prisma/schema.prisma`: Updated header with providerId and soft-delete conventions
+
+### Documentation Updates
+
+- `docs/08-sprints/sprint-0.clarifications.md`: Documented H-2 and H-3 resolutions
+- `docs/03-database/entities.md`: Added deletedAt field and providerId convention
+- `docs/04-api/authentication.md`: Added providerId normalization and LGPD soft-delete semantics
+- `docs/07-security/permissions.md`: Added providerId convention note
+- `docs/02-architecture/architecture.md`: Added versioned routes annotation
+- `docs/04-api/admin.md`: Clarified admin health contract
+- `docs/00-overview/roadmap.md`: Added concrete calendar dates
+
+## Pattern Reuse
+
+These patterns should be referenced in:
+- `docs/01-product/requirements.md` (RNF-005, RNF-006, LGPD)
+- `docs/02-architecture/architecture.md` (auth, security, observability sections)
+- `docs/07-security/permissions.md` (RBAC with soft-delete aware queries)
+- `docs/08-sprints/sprint-1.md` (auth implementation tasks)
+
+## Verification
+
+- ✅ TypeScript validation passed (0 errors)
+- ✅ Lint passed (0 errors)
+- ✅ All commits successful
+- ✅ Pattern files created with complete documentation
+
+## Next Steps
+
+1. **Run `/pwf-doc update`** to propagate learned patterns to stale docs
+2. **Integrate patterns into Sprint 1 auth implementation**:
+   - Use providerId normalization convention
+   - Implement soft-delete for account deletion
+   - Use admin health pattern for admin endpoints
+3. **Document ADR-005 migration path** for versioned routes
+
+## Sources
+
+- `docs/08-sprints/sprint-0.clarifications.md` (H-2 and H-3 resolutions)
+- `docs/07-security/permissions.md` (RBAC with plan dimension)
+- `docs/04-api/authentication.md` (auth providerId convention)
+- `docs/solutions/patterns/backend/health-check-envelope.md` (base envelope pattern)
+- `docs/02-architecture/observability.md` (Pino logger specification)
+- `docs/07-security/lgpd.md` (GDPR/LGPD compliance)
