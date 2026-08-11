@@ -104,6 +104,8 @@ Antes de aplicar qualquer migration em produção, seguir obrigatoriamente:
 
 **Migration**: `20250711000000_init`
 
+> ⚠️ **Ilustrativo, não copiar.** Este SQL é um rascunho (Postgres) para planejamento. O SQL gerado pelo `prisma migrate dev` usará tipos nativos do Prisma (enums para `role`/`plan`/`provider`) e difere deste rascunho (ex.: `TEXT`/`JSONB`/`TEXT[]` aqui). Regra da disciplina (§4.4): **nunca criar migration files manualmente** — gere com o Prisma CLI e revise o SQL gerado. A migration `init` deve ser gerada **depois** de trocar o datasource para `postgresql` (SQLite não gera SQL portável para Neon; ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3).
+
 ```sql
 -- Criar tabela User
 CREATE TABLE "User" (
@@ -209,12 +211,15 @@ O arkana-agora requer dados iniciais para funcionar. O seeding é feito via `pri
 
 ### 6.1 Comando
 
+> ⚠️ **Envs:** o Prisma CLI e `tsx` **não** carregam `.env.local` — use o arquivo `.env` na raiz (copie de `.env.example`). Sem ele, `db push`/`db seed` falham com `Environment variable not found: DATABASE_URL`.
+
 ```bash
 # Executar seed completo
 bunx prisma db seed
 
 # Configuração no package.json (já presente no esqueleto)
 # "prisma": { "seed": "bunx tsx prisma/seed.ts" }
+# scripts.seed usa o mesmo comando: "seed": "bunx tsx prisma/seed.ts"
 ```
 
 ### 6.2 Dados de Seed

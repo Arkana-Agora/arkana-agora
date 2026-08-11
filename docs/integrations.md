@@ -38,14 +38,14 @@
 
 **Rule:** no secrets in source control. `.env`/`.env*.local` gitignored; only `.env.example` committed (`docs/07-security/security.md` §Gestão de Segredos).
 
-**Inbound webhook auth:** Mercado Pago webhook (`POST /api/payments/webhook`) is authenticated with an **API key** (`X-API-Key` header) per `docs/04-api/overview.md`. Internal service-to-service calls (WebSocket) use `X-Internal-Token`; standard API calls use `Authorization: Bearer <JWT>`.
+**Inbound webhook auth:** Mercado Pago webhook (`POST /api/v1/webhooks/mercadopago`) is authenticated with an **API key** (`X-API-Key` header) per `docs/04-api/overview.md`. Internal service-to-service calls (WebSocket) use `X-Internal-Token`; standard API calls use `Authorization: Bearer <JWT>`.
 
 ## Contracts and Data Flows
 
 - **API**: REST + SSE, base URL `/api/v1`, JWT bearer sessions (NextAuth v4). Standard error envelope, cursor/offset pagination, per-plan rate limits. See `docs/04-api/overview.md` (OpenAPI 3.1.0 template embedded).
 - **Auth**: `POST /auth/register|login|social|magic-link|refresh|logout|forgot-password|reset-password`, `GET /auth/me`. Access token 15 min, refresh token 7 days, magic link 10 min. See `docs/04-api/authentication.md`.
 - **AI streaming (SSE)**: `POST /api/v1/ai/reading/stream` → `Content-Type: text/event-stream` with `{type: content|done}` payloads and `tokensUsed`. Fallback chain GPT-4o → GPT-4o-mini → generic cache → friendly error. See `docs/05-ai/architecture.md`, `docs/04-api/overview.md`.
-- **Payments**: `POST /api/payments/create` → Mercado Pago checkout → webhook `POST /api/payments/webhook` → order/payment status update; native split payment; PLUS subscription via recurring billing. Entities `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
+- **Payments**: `POST /api/v1/payments/create` → Mercado Pago checkout → webhook `POST /api/v1/webhooks/mercadopago` → order/payment status update; native split payment; PLUS subscription via recurring billing. Entities `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
 - **Real-time (Socket.io :3003)**: events `feed:new_post`, `notification:new`, `presence:update`, `reading:shared`, `chat:message` [planned]. Inter-service event bus: `user:registered`, `reading:created`, `payment:completed`, `post:liked` (EventEmitter dev / Redis Pub/Sub prod). See `docs/02-architecture/architecture.md` §6.
 - **Image storage**: R2 with WebP variants (3 sizes per card); served via `assets.arkanaagora.com.br`.
 - **Async jobs [planned]**: BullMQ worker (:3005) for daily horoscope, email notifications, image processing.

@@ -11,14 +11,13 @@
     "dev:all": "echo \"Run full local stack (Next.js + Socket.io + Caddy) — not scaffolded yet\"",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "bunx tsx prisma/seed.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
     "next": "^16.0.4",
-    "next-auth": "^4.24.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.2"

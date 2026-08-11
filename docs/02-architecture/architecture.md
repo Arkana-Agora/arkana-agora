@@ -120,8 +120,10 @@ As rotas de API seguem o padrão RESTful:
 | `POST` | `/api/posts` | Criar postagem |
 | `POST` | `/api/follows` | Seguir usuário |
 | `GET` | `/api/marketplace/products` | Listar produtos |
-| `POST` | `/api/payments/create` | Criar pagamento |
-| `POST` | `/api/payments/webhook` | Webhook Mercado Pago |
+| `POST` | `/api/v1/payments/create` | Criar pagamento |
+| `POST` | `/api/v1/webhooks/mercadopago` | Webhook Mercado Pago |
+
+> **Nota sobre versionamento:** ADR-005 (planned) will version all routes to `/api/v1/` when monorepo microservices switch. Current docs use `/api/` for non-versioned routes and `/api/v1/` for versioned routes (e.g., payments/webhooks). See `docs/02-architecture/architecture.md` §6.1.
 
 ### 2.3 Mini Services
 

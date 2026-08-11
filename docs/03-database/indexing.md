@@ -4,6 +4,10 @@
 
 ---
 
+> **Status:** **§1 User implementado** — outros 17 entidades estão **planejados** e não existem ainda no schema. Consulte `prisma/schema.prisma` para o que está realmente implementado.
+
+---
+
 ## 1. Visão Geral
 
 A estratégia de indexação do arkana-agora visa otimizar as consultas mais frequentes e críticas para a experiência do usuário, equilibrando performance de leitura com custo de escrita e armazenamento.

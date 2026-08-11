@@ -28,11 +28,11 @@ Semana  1───3───5──────8──────13────
 |-------|--------|
 | **Data alvo** | Semana 3 |
 | **Sprint** | Sprint 0 |
-| **Status** | Planejamento |
+| **Status** | Parcial (reescopo) — esqueleto monolítico entregue na raiz (`docs/08-sprints/sprint-0.md`); critérios abaixo refletem o plano original |
 
 ### Critérios de Conclusão
 
-- [ ] Monorepo Turborepo + pnpm buildando sem erros
+- [ ] Monorepo Turborepo + pnpm buildando sem erros — **reescopado**: monolito na raiz (ADR-005 adiado, ver `docs/08-sprints/sprint-0.md`)
 - [ ] `docker compose up` sobe toda a stack em < 60 segundos
 - [ ] CI/CD pipeline verde: lint → test → build → deploy
 - [ ] Deploy automático em staging (Vercel) a cada push na `main`
@@ -41,7 +41,7 @@ Semana  1───3───5──────8──────13────
 - [ ] PostgreSQL conectado via Prisma, migrations aplicadas
 - [ ] Tabelas `User`, `UserProfile`, `Subscription` criadas
 - [ ] Design system shadcn/ui renderizando em tema claro e escuro
-- [ ] Health check (`/api/health`) retornando 200 com status dos serviços
+- [x] Health check (`/api/health`) retornando 200 com status dos serviços — entregue no esqueleto (`src/app/api/health/route.ts`; contrato em `docs/02-architecture/observability.md` §6.3)
 - [ ] Sentry capturando erros de produção
 - [ ] Documentação de setup local completa e testada por terceiro
 

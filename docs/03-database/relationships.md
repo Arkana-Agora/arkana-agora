@@ -4,6 +4,10 @@
 
 ---
 
+> **Status:** **§1 User implementado** — outros 17 entidades estão **planejados** e não existem ainda no schema. Consulte `prisma/schema.prisma` para o que está realmente implementado.
+
+---
+
 ## 1. Visão Geral dos Relacionamentos
 
 O banco de dados possui **16 relacionamentos** entre 18 entidades, distribuídos entre relações **1:1**, **1:N** e **N:M** (via tabela juntura).

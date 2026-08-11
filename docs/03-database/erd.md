@@ -4,6 +4,10 @@
 
 ---
 
+> **Status:** **§1 User implementado** — outros 17 entidades estão **planejados** e não existem ainda no schema. Consulte `prisma/schema.prisma` para o que está realmente implementado.
+
+---
+
 ## 1. Visão Geral
 
 O banco de dados do arkana-agora possui **18 entidades** organizadas em **5 domínios**:

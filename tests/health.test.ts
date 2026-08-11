@@ -1,15 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { GET } from "@/app/api/health/route";
+import { APP_VERSION } from "@/lib/version";
+
+type HealthBody = {
+  status: "ok" | "degraded";
+  version: string;
+  services: {
+    database: { status: "ok" | "error" };
+  };
+};
 
 describe("GET /api/health", () => {
-  it("returns 503 while services are not configured", async () => {
+  it("returns a coherent envelope for the current DB state", async () => {
     const res = await GET();
-    expect(res.status).toBe(503);
+    const body = (await res.json()) as HealthBody;
 
-    const body = await res.json();
-    expect(body.status).toBe("ok");
-    expect(body.version).toBe("0.1.0");
-    expect(["ok", "error"]).toContain(body.services.database.status);
-    expect(body.services.redis).toEqual({ status: "not-configured" });
+    expect(body.version).toBe(APP_VERSION);
+    expect(body.services.database.status).toMatch(/^(ok|error)$/);
+
+    if (body.services.database.status === "ok") {
+      expect(res.status).toBe(200);
+      expect(body.status).toBe("ok");
+    } else {
+      expect(res.status).toBe(503);
+      expect(body.status).toBe("degraded");
+    }
   });
 });

@@ -49,8 +49,8 @@
 
 | Provedor | Modelo | Status | Uso | Prioridade |
 ----------|--------|--------|-----|------------|
-| OpenAI | GPT-4o | ✅ Ativo | Leituras, chat, arcanos | 1 (primário) |
-| OpenAI | GPT-4o-mini | ✅ Ativo | Horóscopos, respostas rápidas | 2 (fallback) |
+| OpenAI | GPT-4o | ✅ Selecionado (planejado) | Leituras, chat, arcanos | 1 (primário) |
+| OpenAI | GPT-4o-mini | ✅ Selecionado (planejado) | Horóscopos, respostas rápidas | 2 (fallback) |
 | Google | Gemini Pro | 🔮 Futuro | A/B testing | 3 |
 | Anthropic | Claude 3.5 Sonnet | 🔮 Futuro | Backup de alta qualidade | 4 |
 | Custom | Fine-tuned GPT-4o | 🔄 Roadmap | Leitura especializada pt-BR | 5 |

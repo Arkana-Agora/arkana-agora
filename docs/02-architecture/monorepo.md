@@ -12,9 +12,10 @@ O MVP do arkana-agora é uma aplicação **Next.js 16 monolítica** com toda a l
 arkana-agora/                   # Raiz do projeto (monolito)
 ├── src/
 │   ├── app/                   # App Router (páginas + API)
-│   │   └── api/health/        # GET /api/health (envelope; 503 até serviços configurados)
+│   │   └── api/health/        # GET /api/health (envelope; 200 quando DB ok, 503 em falha)
 │   ├── components/            # Componentes React (placeholder — vazio)
 │   ├── lib/                   # Utilitários, Prisma (src/lib/prisma.ts; auth/IA pendentes)
+│   │   └── version.ts         # APP_VERSION constant
 │   ├── services/              # Lógica de negócio (placeholder — vazio)
 │   ├── stores/                # Zustand stores (placeholder — vazio)
 │   └── types/                 # Tipos TypeScript (placeholder — vazio)

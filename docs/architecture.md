@@ -6,7 +6,7 @@
 
 ## Implementation status (read first)
 
-- **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database,redis,ai}}`, version from `package.json`, `database` probed via `SELECT 1`, 503 while `redis`/`ai` unconfigured, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (User stub + enums matching `docs/03-database/entities.md` §1), `prisma/seed.ts` (no-op), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db`). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
+- **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database,redis,ai}}`, version from `src/lib/version.ts` (`APP_VERSION`), `database` probed via `SELECT 1` with a 5s timeout, top-level `status` derived from checks (`ok`/`degraded`), Redis/AI are neutral `not-configured`, returns 200 when no check failed and 503 only on a hard failure, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (User stub + enums matching `docs/03-database/entities.md` §1), `prisma/seed.ts` (no-op), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db`). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
 - `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
 - **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. Auth, payments, AI, SSE, social, and admin are not implemented.
 - Items the docs themselves mark as future ("futuro", "planejado", "V1+") are additionally labeled **[planned]**.
@@ -69,7 +69,7 @@ src/
 └── types/          # domain contracts
 ```
 
-**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (NextAuth), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/payments/create`, `/api/payments/webhook`. AI streaming route: `POST /api/v1/ai/reading/stream` (`docs/05-ai/architecture.md`).
+**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (NextAuth), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming route: `POST /api/v1/ai/reading/stream` (`docs/05-ai/architecture.md`).
 
 ### Mini-services (separate ports)
 
@@ -95,7 +95,7 @@ ADR-005 + `docs/02-architecture/monorepo.md`: `apps/` (web, mobile, admin), `pac
 
 ### Authentication flow
 
-NextAuth.js v4 with JWT sessions (`docs/04-api/authentication.md`, `.specs/001-auth/design.md`): access token 15 min, refresh token 7 days (httpOnly cookie, rotation + theft detection), magic link 10 min; bcrypt (12 rounds); 5 failed attempts → 15 min lockout. Providers: credentials, Google, Facebook. RBAC roles `FREE_USER → PLUS_USER → PROFESSIONAL → ADMIN → SUPER_ADMIN` with permission matrix enforced by middleware (`docs/07-security/permissions.md`).
+NextAuth.js v4 with JWT sessions (`docs/04-api/authentication.md`, `.specs/001-auth/design.md`): access token 15 min, refresh token 7 days (httpOnly cookie, rotation + theft detection), magic link 10 min; bcrypt (12 rounds); 5 failed attempts → 15 min lockout. Providers: credentials, Google, Facebook. RBAC roles `USER → PROFESSIONAL → ADMIN` (implemented in `prisma/schema.prisma`) plus `SUPER_ADMIN` **[planned]**; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension from role. Permission matrix enforced by middleware (`docs/07-security/permissions.md`).
 
 ### AI reading flow (SSE)
 
@@ -107,7 +107,7 @@ Socket.io on :3003 with events `feed:new_post`, `notification:new`, `presence:up
 
 ### Payments flow
 
-Mercado Pago (ADR-008): `POST /api/payments/create` → checkout (PIX/card/boleto) → webhook `POST /api/payments/webhook` (API-key authenticated) → order/payment status update; native split payment (platform commission); PLUS subscription via recurring billing. Entities: `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
+Mercado Pago (ADR-008): `POST /api/v1/payments/create` → checkout (PIX/card/boleto) → webhook `POST /api/v1/webhooks/mercadopago` (API-key authenticated) → order/payment status update; native split payment (platform commission); PLUS subscription via recurring billing. Entities: `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
 
 ### Data layer
 

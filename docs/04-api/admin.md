@@ -2,6 +2,8 @@
 
 > **Módulo**: `src/app/api/v1/admin/` | **Autenticação**: JWT + role `admin` | **Auditoria**: Todas as ações logadas
 
+> **Health contract:** See `docs/solutions/patterns/backend/health-check-envelope.md` for the envelope pattern. Admin health endpoint (`GET /admin/system/health`) uses a richer variant with per-service metadata (latency, connectionPool, sslExpiry, memoryUsage, etc.) as documented in this endpoint. Both share the same `data` wrapper and status/until/uptime structure.
+
 ## Sumário
 
 - [Visão Geral](#visão-geral)
@@ -56,7 +58,7 @@ Lista todos os usuários com paginação e filtros.
 ### Requisição
 
 ```http
-GET /api/v1/admin/users?page=1&limit=20&role=free&plan=plus&search=maria&sortBy=createdAt&sortOrder=desc
+GET /api/v1/admin/users?page=1&limit=20&role=user&plan=plus&search=maria&sortBy=createdAt&sortOrder=desc
 ```
 
 ### Parâmetros de Query
@@ -65,7 +67,7 @@ GET /api/v1/admin/users?page=1&limit=20&role=free&plan=plus&search=maria&sortBy=
 |-----------|------|--------|-----------|
 | `page` | number | 1 | Página atual |
 | `limit` | number | 20 | Itens (máx 100) |
-| `role` | string | Todos | `user`, `seller`, `admin` |
+| `role` | string | Todos | `user`, `professional`, `admin` |
 | `plan` | string | Todos | `free`, `plus` |
 | `status` | string | Todos | `active`, `suspended`, `pending_deletion` |
 | `search` | string | — | Buscar por nome, email ou username |
@@ -180,7 +182,7 @@ Content-Type: application/json
 
 ```json
 {
-  "role": "seller",
+  "role": "professional",
   "reason": "Usuário solicitou venda de produtos esotéricos. Documentação verificada."
 }
 ```
@@ -190,14 +192,14 @@ Content-Type: application/json
 | Role | Descrição | Permissões |
 |------|-----------|------------|
 | `user` | Usuário comum | Acesso padrão |
-| `seller` | Vendedor marketplace | Criação de produtos + tudo de user |
+| `professional` | Profissional / vendedor marketplace | Criação de produtos + tudo de user |
 | `admin` | Administrador | Acesso total |
 
 ### Validação
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `role` | string | Sim | `user`, `seller`, `admin` |
+| `role` | string | Sim | `user`, `professional`, `admin` |
 | `reason` | string | Sim | Motivo da alteração (mín 10 chars) |
 
 ### Resposta — 200 OK
@@ -207,7 +209,7 @@ Content-Type: application/json
   "data": {
     "user": {
       "id": "usr_target123",
-      "role": "seller"
+      "role": "professional"
     },
     "auditId": "audit_002"
   }

@@ -382,24 +382,30 @@ export const metrics = {
 
 ```typescript
 // app/api/health/route.ts
-import pkg from '../../package.json';
+import { NextResponse } from 'next/server';
+import { APP_VERSION } from '@/lib/version';
 // ...
+
 export async function GET() {
-  const checks = {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    version: pkg.version,
-    services: {
-      database: await checkDatabase(),
-      redis: await checkRedis(),
-      ai: await checkAI(),
-    },
+  const services = {
+    database: await checkDatabase(), // SELECT 1, 5s timeout
+    redis: { status: 'not-configured' },
+    ai: { status: 'not-configured' },
   };
 
-  const isHealthy = Object.values(checks.services).every(s => s.status === 'ok');
-  return Response.json(checks, { status: isHealthy ? 200 : 503 });
+  const hasFailure = Object.values(services).some((s) => s.status === 'error');
+  const checks = {
+    status: hasFailure ? 'degraded' : 'ok', // derived from checks, never hardcoded
+    timestamp: new Date().toISOString(),
+    version: APP_VERSION,
+    services,
+  };
+
+  return NextResponse.json(checks, { status: hasFailure ? 503 : 200 });
 }
 ```
+
+> **Contrato (implementado no esqueleto):** `not-configured` é neutro — não derruba o endpoint. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura (ex.: banco fora do ar). `status` no corpo é derivado dos checks (`ok`/`degraded`) e nunca contradiz o código HTTP. Ao adicionar um serviço real (Redis, IA), implemente `checkRedis()`/`checkAI()` e remova os stubs `not-configured`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-10
+> Versão: 1.0 | Última atualização: 2026-08-11
 
 ---
 
@@ -87,7 +87,11 @@ bun run dev:all
 
 > **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados; `bunx prisma db push` cria `prisma/dev.db` (SQLite).
 
-### 2.4 Variáveis de Ambiente (`.env.local`)
+> **Logger note:** Until `src/lib/logger.ts` (Pino) is implemented, health-check pattern uses `console.error` with `[health]` prefix as a stopgap. See `docs/solutions/patterns/backend/health-check-envelope.md` for details.
+
+### 2.4 Variáveis de Ambiente (`.env`)
+
+> Copie `.env.example` → **`.env`** na raiz do repo. O Prisma CLI e os scripts `bun` carregam `.env` (não `.env.local`); o Next.js e o Bun também carregam `.env.local` com maior precedência. Nunca commite `.env`/`.env*.local`.
 
 ```env
 # App
@@ -107,10 +111,11 @@ FACEBOOK_CLIENT_SECRET=dev-fb-secret
 
 # IA
 AI_PRIMARY_API_KEY=dev-ai-key
+AI_FALLBACK_API_KEY=dev-ai-fallback-key
 
 # Mercado Pago (sandbox)
 MP_ACCESS_TOKEN=TEST-xxxxx
-MP_WEBHOOK_URL=http://localhost:3000/api/payments/webhook
+MP_WEBHOOK_URL=http://localhost:3000/api/v1/webhooks/mercadopago
 
 # Redis
 REDIS_URL=redis://localhost:6379

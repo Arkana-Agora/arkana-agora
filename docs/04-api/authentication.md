@@ -20,6 +20,8 @@
 
 ## Visão Geral
 
+> **providerId Convention (from sprint-0.clarifications.md):** For EMAIL provider, set `providerId = email` normalized to lowercase (e.g., "Maria@email.com" → "maria@email.com"). For OAuth providers (GOOGLE/FACEBOOK), set `providerId = OAuth subject ID`. This aligns with the `email @unique` constraint.
+
 ### Fluxo de Autenticação
 
 ```
@@ -247,6 +249,8 @@ Content-Type: application/json
 ```
 
 > **Nota**: Sempre retorna 200 para evitar enumeração de e-mails.
+
+> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration endpoint (future) sets `deletedAt = NULL` and `isActive = true` within 30-day window per sprint-0.clarifications.md.
 
 ### Erros
 

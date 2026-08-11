@@ -165,8 +165,8 @@ const MODEL_ROUTES: ModelRoute[] = [
 
 | Modelo | Status | Uso previsto |
 |--------|--------|-------------|
-| GPT-4o | ✅ Ativo | Leituras completas |
-| GPT-4o-mini | ✅ Ativo | Horóscopos, respostas rápidas |
+| GPT-4o | ✅ Selecionado (planejado) | Leituras completas |
+| GPT-4o-mini | ✅ Selecionado (planejado) | Horóscopos, respostas rápidas |
 | Fine-tuned GPT-4o | 🔄 Roadmap | Leitura especializada em tarot pt-BR |
 | Gemini Pro | 🔮 Futuro | Comparação de qualidade/custo |
 | Claude 3 | 🔮 Futuro | Alternativa de backup |

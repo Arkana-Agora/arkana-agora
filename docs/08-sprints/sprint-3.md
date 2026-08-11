@@ -125,6 +125,16 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 
 ---
 
+## Decisões rastreadas para esta sprint (contradições `.specs` vs modelo alinhado)
+
+> O modelo alinhado (fonte da verdade: `prisma/schema.prisma`, `docs/03-database/entities.md`, `docs/07-security/permissions.md`) separa **role** (`UserRole`: USER/PROFESSIONAL/ADMIN, SUPER_ADMIN planejado) de **plano** (`UserPlan`: FREE/PLUS). Os `.specs` abaixo ainda usam o modelo antigo e devem ser revisados no planejamento desta sprint:
+
+- `.specs/009-payments/design.md` + `tasks.md` — webhook de assinatura `atualiza User.role = 'plus'`: ativação deve setar `plan = PLUS` (UserPlan), não `role`.
+- `.specs/010-admin/design.md` — métrica `prisma.user.count({ where: { role: 'plus' } })`: filtrar por `plan = 'plus'`.
+- `.specs/009-payments/design.md` — rota do webhook Mercado Pago: **decidido** — adotar o caminho do `.specs` `/api/v1/webhooks/mercadopago` como canônico; `docs/` e `.env.example` já alinhados a este caminho.
+
+---
+
 ## Estimativa
 
 | Módulo | Horas | Dias Úteis |

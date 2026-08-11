@@ -3,8 +3,21 @@
 // ADR-002: Prisma only ORM; SQLite dev / PostgreSQL (Neon) prod.
 // This stub only bootstraps the ORM; extend models per docs/03-database/entities.md
 // and follow the migration discipline in docs/03-database/migrations.md.
-// Note: `provider @default(EMAIL)` is a sensible dev default; entities.md defines
-// provider as NOT NULL without a default — revisit when auth/registration lands.
+//
+// Conventions (from sprint-0.clarifications.md):
+// - providerId for EMAIL provider: set to email normalized to lowercase
+//   (e.g., "Maria@email.com" → "maria@email.com"). Aligns with email @unique constraint.
+// - providerId for OAuth providers (GOOGLE/FACEBOOK): OAuth subject ID.
+// - LGPD 30-day soft-delete: add deletedAt DateTime? to User model (see sprint-0.clarifications.md)
+//
+// GOTCHAS (tracked TODOs for Sprint 1):
+// - SQLite (dev) does NOT support scalar lists (String[]), which entities.md uses
+//   (e.g. UserProfile.skills/specialties/languages, Post.images). Decide before
+//   Sprint 1: Docker Postgres dev (docs/02-architecture/deployment.md §5.2) or
+//   model lists as Json. See docs/infrastructure.md → Known Constraints.
+// - The first versioned migration MUST be generated only after switching the
+//   datasource to `postgresql` (prisma migrate dev); SQLite-generated SQL is not
+//   portable to Neon, so never run `prisma migrate dev` while provider = "sqlite".
 
 generator client {
   provider = "prisma-client-js"
@@ -25,13 +38,14 @@ model User {
   role             UserRole     @default(USER)
   plan             UserPlan     @default(FREE)
   provider         AuthProvider @default(EMAIL)
-  providerId       String
+  providerId       String       // For EMAIL: email normalized to lowercase (convention, see sprint-0.clarifications.md)
   birthDate        DateTime?
   astrologicalSign String?
   mayanKin         String?
   personalArcana   Int?
   emailVerified    DateTime?
   isActive         Boolean      @default(true)
+  deletedAt        DateTime?    // Soft delete for LGPD 30-day restoration window (see sprint-0.clarifications.md)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 

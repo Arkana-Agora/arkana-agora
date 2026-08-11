@@ -4,6 +4,10 @@
 
 ---
 
+> **Status:** **§1 User implementado** — outros 17 entidades estão **planejados** e não existem ainda no schema. Consulte `prisma/schema.prisma` para o que está realmente implementado.
+
+---
+
 ## 1. User
 
 Entidade principal de autenticação e identidade do usuário.
@@ -23,9 +27,10 @@ Entidade principal de autenticação e identidade do usuário.
 | `mayanKin` | `String?` | nullable | Kin maia (Tzolkin) |
 | `personalArcana` | `Int?` | nullable | Número do arcano pessoal |
 | `provider` | `AuthProvider` | NOT NULL | Provedor de autenticação |
-| `providerId` | `String` | NOT NULL, **UQ comp.** com provider | ID do provedor OAuth |
+| `providerId` | `String` | NOT NULL, **UQ comp.** with provider | ID do provedor OAuth (convenção: EMAIL → email normalizado lowercase, GOOGLE/FACEBOOK → OAuth subject ID) |
 | `emailVerified` | `DateTime?` | nullable | Data de verificação do e-mail |
 | `isActive` | `Boolean` | NOT NULL, default `true` | Conta ativa |
+| `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window) |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data de criação |
 | `updatedAt` | `DateTime` | NOT NULL, `@updatedAt` | Data de atualização |
 

@@ -11,7 +11,7 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 ## Current Status
 
 - **Minimal skeleton implemented** at the repo root: a Next.js 16 (App Router) modular-monolith app per ADR-001/ADR-002 — `bun` toolchain (`package.json`), `src/app/` (layout/page/error/loading/not-found + `src/app/api/health/route.ts`), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (`User` stub matching `docs/03-database/entities.md` §1), `prisma/seed.ts`, `tests/health.test.ts` (vitest), `.env.example` (var names only, no secrets). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
-- **No business logic yet.** Auth, payments, AI, SSE, social, and admin are still **planned** — everything in `docs/` and `.specs/` describes the **documented design** (SDD, ADRs, specs). Nothing is provisioned or deployed; `/api/health` returns 503 until DB/Redis/AI are configured.
+- **No business logic yet.** Auth, payments, AI, SSE, social, and admin are still **planned** — everything in `docs/` and `.specs/` describes the **documented design** (SDD, ADRs, specs). Nothing is provisioned or deployed; `/api/health` returns 200 when the DB check passes and 503 only when the DB check fails (Redis/AI are neutral `not-configured` until wired; top-level `status` mirrors the HTTP code as `ok`/`degraded`).
 - `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
 - **No AWS usage is documented.** Planned providers are fully managed SaaS: Vercel, Railway, Neon, Upstash, Cloudflare (CDN/WAF **and** R2 storage — not AWS S3), OpenAI, Mercado Pago, Sentry, PostHog.
 - **Tooling rule (resolved):** **`bun`** for the MVP single app; **`pnpm`** for the planned Turborepo monorepo (ADR-005). Storage = **Cloudflare R2** (env vars `R2_*`; no AWS S3). Canonical rules in `docs/02-architecture/deployment.md` §2.0 and `docs/glossary.md`.
@@ -106,7 +106,7 @@ A minimal skeleton is runnable (see Current Status); all feature work is still *
 4. `docs/environments.md` — environment matrix and domains (English).
 5. `docs/02-architecture/deployment.md` — deployment plan (pt-BR, planned; no pipeline exists yet).
 
-Local skeleton commands (repo root, `bun`): `bun install` → `bunx prisma db push` (creates `prisma/dev.db` from the `User` stub) → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun test` (vitest). `/api/health` returns 503 until DB/Redis/AI are configured (`src/app/api/health/route.ts`).
+Local skeleton commands (repo root, `bun`): `bun install` → `bunx prisma db push` (creates `prisma/dev.db` from the `User` stub) → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun test` (vitest). `/api/health` returns 200 when the DB check passes, 503 only on DB failure (`src/app/api/health/route.ts`). Copy `.env.example` → `.env` (Prisma CLI and `bun` scripts load `.env`, not `.env.local`).
 
 Before any implementation work, load the mandatory baseline per `AGENTS.md`: `docs/`, `.specs/`, and the ADRs in `docs/02-architecture/decisions.md`. Never implement requirements that are not documented.
 

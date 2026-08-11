@@ -1,6 +1,6 @@
 # Glossary — Arkana Agora
 
-> Canonical project glossary. The authoritative, detailed pt-BR glossary lives in `docs/00-overview/glossary.md`. This file is the operational summary with disambiguation and naming conventions, linking to where terms are applied.
+> **Consolidated glossary:** The authoritative, detailed pt-BR glossary lives in `docs/00-overview/glossary.md`. This file is the operational summary with disambiguation and naming conventions, linking to where terms are applied.
 
 ## Domain Terms
 
@@ -24,7 +24,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | Term | Definition | Applied in |
 |---|---|---|
 | SSE (Server-Sent Events) | One-way server→client streaming used for AI interpretations (note: not WebSocket; ADR-004) | `docs/05-ai/architecture.md`, `docs/04-api/overview.md` |
-| RBAC | Role-Based Access Control; roles `FREE_USER → PLUS_USER → PROFESSIONAL → ADMIN → SUPER_ADMIN` | `docs/07-security/permissions.md` |
+| RBAC | Role-Based Access Control; roles `USER → PROFESSIONAL → ADMIN` (+ `SUPER_ADMIN` planned), implemented in `prisma/schema.prisma`; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension | `docs/07-security/permissions.md` |
 | PWA | Progressive Web App (manifest, service worker, offline cache) — planned V1 | `docs/01-product/mvp.md` |
 | LGPD | Lei Geral de Proteção de Dados (Lei 13.709/2018); privacy-by-design requirement | `docs/07-security/lgpd.md`, `docs/07-security/security.md` |
 | JWT | JSON Web Tokens (RS256) for API sessions: access 15 min, refresh 7 days (rotation) | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
