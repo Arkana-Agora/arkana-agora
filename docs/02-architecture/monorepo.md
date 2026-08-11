@@ -1,31 +1,37 @@
 # Estratégia de Monorepo — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-10
 
 ---
 
 ## 1. Estrutura Atual (MVP — Monolito)
 
-O MVP do arkana-agora é uma aplicação **Next.js 16 monolítica** com toda a lógica em um único projeto:
+O MVP do arkana-agora é uma aplicação **Next.js 16 monolítica** com toda a lógica em um único projeto na **raiz do repo**:
 
 ```
 arkana-agora/                   # Raiz do projeto (monolito)
 ├── src/
 │   ├── app/                   # App Router (páginas + API)
-│   ├── components/            # Componentes React
-│   ├── lib/                   # Utilitários, Prisma, auth
-│   ├── services/              # Lógica de negócio
-│   ├── stores/                # Zustand stores
-│   └── types/                 # Tipos TypeScript
+│   │   └── api/health/        # GET /api/health (envelope; 503 até serviços configurados)
+│   ├── components/            # Componentes React (placeholder — vazio)
+│   ├── lib/                   # Utilitários, Prisma (src/lib/prisma.ts; auth/IA pendentes)
+│   ├── services/              # Lógica de negócio (placeholder — vazio)
+│   ├── stores/                # Zustand stores (placeholder — vazio)
+│   └── types/                 # Tipos TypeScript (placeholder — vazio)
 ├── prisma/
-│   └── schema.prisma          # Schema do banco
-├── public/                    # Assets estáticos
-├── tests/                     # Testes
-├── package.json
+│   ├── schema.prisma          # Schema do banco (stub User + enums)
+│   └── seed.ts                # Seed no-op
+├── public/                    # Assets estáticos (vazio)
+├── tests/                     # Testes (tests/health.test.ts, vitest)
+├── package.json               # Scripts bun: dev, build, lint, type-check, test, seed
 ├── next.config.ts
-├── tailwind.config.ts
-└── tsconfig.json
+├── tsconfig.json
+├── eslint.config.mjs
+├── vitest.config.ts
+└── .env.example               # Nomes de env vars documentados (sem segredos)
 ```
+
+**Status:** o esqueleto acima já existe na raiz (bun, Prisma SQLite dev via `bunx prisma db push`, rota `/api/health`, vitest, ESLint). `tailwind.config.ts` ainda **não** foi criado — Tailwind CSS 4 é planejado (`docs/02-architecture/architecture.md` §3.1). `backend/` e `frontend/` na raiz são placeholders vazios e não fazem parte desta estrutura.
 
 **Racional**: Para o MVP, a simplicidade do monolito permite iteração rápida. Não há overhead de configuração de múltiplos pacotes, e o deploy é direto na Vercel.
 

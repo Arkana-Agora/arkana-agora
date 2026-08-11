@@ -281,8 +281,8 @@ Utilizar **Mercado Pago** como gateway de pagamento principal.
 - Domínio completo do mercado brasileiro de pagamentos digitais
 - Suporte nativo a PIX (instantâneo, sem custo adicional para o comprador)
 - Split de pagamento nativo (plataforma recebe comissão, vendedor recebe o restante)
-| Suporte a assinaturas recorrentes (plano PLUS)
-| Webhooks confiáveis com retry automático
+- Suporte a assinaturas recorrentes (plano PLUS)
+- Webhooks confiáveis com retry automático
 | Sandbox completo para testes em staging
 | SDK oficial para Node.js com tipagem TypeScript
 | Aceitação ampla — maioria dos brasileiros já tem conta Mercado Pago
@@ -291,8 +291,8 @@ Utilizar **Mercado Pago** como gateway de pagamento principal.
 - Vendor lock-in com ecossistema Mercado Livre
 - Taxas podem ser mais altas que alternativas (2,99% a 7,49% dependendo do método)
 - Documentação pode ser confusa e mudar com frequência
-| Limitações para pagamentos internacionais (foco é Brasil)
-| Dependência de disponibilidade do serviço (SLA não é 100% garantido)
+- Limitações para pagamentos internacionais (foco é Brasil)
+- Dependência de disponibilidade do serviço (SLA não é 100% garantido)
 
 ### Alternativas Consideradas
 

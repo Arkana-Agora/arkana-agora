@@ -1,7 +1,7 @@
 # Integrations — Arkana Agora
 
 > Canonical catalog of the external systems and contracts Arkana Agora depends on.
-> **Status: documentation-only.** No integration code exists yet; all entries below are the **documented design** (referenced to the pt-BR SDD). Secondary source of truth for each is listed in the "Contract" column.
+> **Status: no integration code yet.** The repo's skeleton (Next.js 16 at root) has no integration wiring — no OpenAI, Mercado Pago, OAuth, SMTP, Redis, or R2 code exists; all entries below are the **documented design** (referenced to the pt-BR SDD). Secondary source of truth for each is listed in the "Contract" column.
 
 ## Integration Catalog
 

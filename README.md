@@ -1,6 +1,6 @@
 # Arkana Agora
 
-Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), numerology and astrology with AI-driven readings and a vertical social network — currently in the **documentation/design phase** (no code exists yet).
+Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), numerology and astrology with AI-driven readings and a vertical social network. The repo holds the full **Software Design Document (SDD)** plus a **minimal Next.js 16 skeleton** at the root (the first application code); all business features are still **planned**.
 
 > Tagline: *"Onde a intuição encontra a tecnologia."*
 
@@ -10,8 +10,9 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ## Current Status
 
-- **Documentation-only.** `backend/` and `frontend/` are empty directories. There is no `package.json`, `prisma/`, `src/`, Dockerfile, `docker-compose.yml`, `.env*`, CI workflow, or IaC anywhere in the repo.
-- Everything in `docs/` and `.specs/` describes the **documented, planned design** (SDD, ADRs, specs). Nothing is implemented, provisioned, or deployed.
+- **Minimal skeleton implemented** at the repo root: a Next.js 16 (App Router) modular-monolith app per ADR-001/ADR-002 — `bun` toolchain (`package.json`), `src/app/` (layout/page/error/loading/not-found + `src/app/api/health/route.ts`), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (`User` stub matching `docs/03-database/entities.md` §1), `prisma/seed.ts`, `tests/health.test.ts` (vitest), `.env.example` (var names only, no secrets). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
+- **No business logic yet.** Auth, payments, AI, SSE, social, and admin are still **planned** — everything in `docs/` and `.specs/` describes the **documented design** (SDD, ADRs, specs). Nothing is provisioned or deployed; `/api/health` returns 503 until DB/Redis/AI are configured.
+- `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
 - **No AWS usage is documented.** Planned providers are fully managed SaaS: Vercel, Railway, Neon, Upstash, Cloudflare (CDN/WAF **and** R2 storage — not AWS S3), OpenAI, Mercado Pago, Sentry, PostHog.
 - **Tooling rule (resolved):** **`bun`** for the MVP single app; **`pnpm`** for the planned Turborepo monorepo (ADR-005). Storage = **Cloudflare R2** (env vars `R2_*`; no AWS S3). Canonical rules in `docs/02-architecture/deployment.md` §2.0 and `docs/glossary.md`.
 
@@ -19,8 +20,18 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ```
 .
-├── backend/          # EMPTY — reserved for future services (no code yet)
-├── frontend/         # EMPTY — reserved for the Next.js app (no code yet)
+├── src/              # Next.js 16 monolith (MVP): app/ (App Router + API), lib/, services/, stores/, types/
+├── prisma/           # schema.prisma (User stub) + seed.ts
+├── tests/            # vitest (tests/health.test.ts)
+├── public/           # static assets (empty)
+├── package.json      # bun toolchain: dev, build, lint, type-check, test, seed
+├── next.config.ts    # reactStrictMode
+├── tsconfig.json     # strict; paths @/* → ./src/*
+├── eslint.config.mjs # eslint-config-next (flat)
+├── vitest.config.ts  # tsconfig-paths
+├── .env.example      # documented env var names (no secrets)
+├── backend/          # EMPTY placeholder — NOT part of the documented structure (no code yet)
+├── frontend/         # EMPTY placeholder — NOT part of the documented structure (no code yet)
 ├── docs/             # Software Design Document (SDD) — source of truth
 ├── .specs/           # Per-module implementation specs (001–010)
 └── AGENTS.md         # Project governance rules (read before implementing)
@@ -62,7 +73,7 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ## Tech Stack Snapshot
 
-All entries are **documented design, not yet implemented** (MVP = MVP target; **[planned]** = explicitly future).
+All entries are **documented design, not yet implemented**, except the bare skeleton: Next.js 16, Prisma, bun, and vitest exist as scaffolding only (see Current Status) — no feature logic (auth, AI, payments, social) is implemented. (MVP = MVP target; **[planned]** = explicitly future).
 
 | Technology | Role | Status |
 |---|---|---|
@@ -87,13 +98,15 @@ All entries are **documented design, not yet implemented** (MVP = MVP target; **
 
 ## Getting Started
 
-There is **no code to install or run** — this repository is documentation-only. Start by reading the SDD:
+A minimal skeleton is runnable (see Current Status); all feature work is still **planned**. Start by reading the SDD:
 
 1. `docs/00-overview/README.md` — project overview and conventions (pt-BR).
 2. `docs/architecture.md` — architecture reference and invariants (English).
 3. `docs/infrastructure.md` — target infrastructure and constraints (English).
 4. `docs/environments.md` — environment matrix and domains (English).
 5. `docs/02-architecture/deployment.md` — deployment plan (pt-BR, planned; no pipeline exists yet).
+
+Local skeleton commands (repo root, `bun`): `bun install` → `bunx prisma db push` (creates `prisma/dev.db` from the `User` stub) → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun test` (vitest). `/api/health` returns 503 until DB/Redis/AI are configured (`src/app/api/health/route.ts`).
 
 Before any implementation work, load the mandatory baseline per `AGENTS.md`: `docs/`, `.specs/`, and the ADRs in `docs/02-architecture/decisions.md`. Never implement requirements that are not documented.
 
@@ -123,4 +136,4 @@ Toolchain: **`bun`** for MVP; **`pnpm`** for the planned monorepo (ADR-005). Sto
 
 ## Contributing
 
-Follow the rules in `AGENTS.md` and the workflow skills in `.opencode/skills/`. Keep the "implemented vs. planned" separation accurate in `docs/architecture.md` as code lands in `backend/`/`frontend/`.
+Follow the rules in `AGENTS.md` and the workflow skills in `.opencode/skills/`. Keep the "implemented vs. planned" separation accurate in `docs/architecture.md` as code lands in `src/` (MVP monolith at repo root; `backend/`/`frontend/` stay placeholders).

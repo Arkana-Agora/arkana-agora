@@ -1,7 +1,7 @@
 # Environments — Arkana Agora
 
 > Canonical environment matrix and deployment context.
-> **Status: documentation-only.** No environment is provisioned/running yet. Every value below is the **documented target** from `docs/02-architecture/deployment.md`; provider consoles are not yet configured. No AWS usage is documented anywhere in the SDD — providers are Vercel/Railway/Neon/Upstash/Cloudflare.
+> **Status: skeleton only.** A minimal Next.js skeleton runs locally (`bun run dev`, `/api/health` — 503 until services configured); no environment is provisioned/deployed and no provider console is configured. Every value below is the **documented target** from `docs/02-architecture/deployment.md`. `.env.example` at the repo root lists all documented var names (no secrets). No AWS usage is documented anywhere in the SDD — providers are Vercel/Railway/Neon/Upstash/Cloudflare.
 
 ## Environment Matrix
 

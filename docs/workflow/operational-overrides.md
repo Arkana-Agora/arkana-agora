@@ -22,7 +22,7 @@ lambda:
 
 # Example: validation
 validation:
-  command: "npm run validate"
+  command: "bun run lint && bun run type-check && bun run test"   # MVP skeleton scripts (package.json)
   run_before_commit: true
 ```
 

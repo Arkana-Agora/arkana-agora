@@ -171,7 +171,7 @@ const cleanInput = DOMPurify.sanitize(userInput, {
 1. **Nenhum segredo no código-fonte** — use variáveis de ambiente
 2. **`.env.example`** — arquivo de template com nomes das variáveis, sem valores
 3. **`.gitignore`** — `.env` sempre ignorado no versionamento
-4. **Segredos em produção** — usar secret manager (ex.: AWS Secrets Manager, Vault)
+4. **Segredos em produção** — usar secret manager do provedor (ex.: consoles Vercel/Neon/Upstash) ou gerenciador de segredos dedicado
 5. **Rotação de chaves** — chaves JWT rotacionadas a cada 90 dias
 
 ### Variáveis de Ambiente Críticas
@@ -207,10 +207,10 @@ R2_PUBLIC_URL=https://assets.arkanaagora.com.br
 
 | Ferramenta | Frequência | Ação |
 |---|---|---|
-| `npm audit` | A cada commit (CI) | Falha o build se encontrar vulnerabilidades críticas/alta |
+| `bun audit` | A cada commit (CI) | Falha o build se encontrar vulnerabilidades críticas/alta |
 | Dependabot | Diário | Abre PRs automáticas com atualizações de segurança |
 | Snyk | Semanal | Scan completo de vulnerabilidades com relatório |
-| Lockfile | Sempre | `package-lock.json` obrigatório, sem alterações manuais |
+| Lockfile | Sempre | `bun.lock` obrigatório (MVP, bun) — sem alterações manuais |
 
 ### Política de Atualização
 
@@ -245,7 +245,7 @@ R2_PUBLIC_URL=https://assets.arkanaagora.com.br
 
 ### Runbook de Incidente
 
-1. **Detecção** — alertas de monitoramento (Sentry, Datadog, logs)
+1. **Detecção** — alertas de monitoramento (Sentry, Grafana/Prometheus, logs)
 2. **Triagem** — classificar severidade (P1 a P4)
 3. **Contenção** — isolar sistemas afetados, bloquear IPs maliciosos
 4. **Comunicação** — notificar equipe, stakeholders e (se LGPD) titulares e ANPD

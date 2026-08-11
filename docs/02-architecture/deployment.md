@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-10
 
 ---
 
@@ -25,6 +25,8 @@
 ### 2.1 Backend e Frontend (frameworks e onde fica o código)
 
 > A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
+>
+> **Status (esqueleto mínimo):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (stub `User` + enums), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`. Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Nenhuma lógica de negócio (auth, IA, pagamentos, social) existe ainda — veja `docs/architecture.md` → "Implementation status".
 
 | Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
 |---|---|---|---|---|
@@ -82,6 +84,8 @@ bun run dev:ws       # Socket.io na porta 3003
 # Iniciar tudo (com Caddy)
 bun run dev:all
 ```
+
+> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados; `bunx prisma db push` cria `prisma/dev.db` (SQLite).
 
 ### 2.4 Variáveis de Ambiente (`.env.local`)
 

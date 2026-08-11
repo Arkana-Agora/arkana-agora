@@ -6,8 +6,9 @@
 
 ## Implementation status (read first)
 
-- **No application code exists yet.** `backend/` and `frontend/` are empty directories; there is no `package.json`, `prisma/`, or `src/` anywhere in the repo.
-- Everything in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. Nothing below is implemented.
+- **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database,redis,ai}}`, version from `package.json`, `database` probed via `SELECT 1`, 503 while `redis`/`ai` unconfigured, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (User stub + enums matching `docs/03-database/entities.md` §1), `prisma/seed.ts` (no-op), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db`). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
+- `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
+- **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. Auth, payments, AI, SSE, social, and admin are not implemented.
 - Items the docs themselves mark as future ("futuro", "planejado", "V1+") are additionally labeled **[planned]**.
 - The docs target an MVP as a **modular monolith** (single Next.js app) with a documented evolution path to a **Turborepo monorepo with microservices** (ADR-005, `docs/02-architecture/monorepo.md`).
 
@@ -26,7 +27,7 @@ Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), nume
 
 ## Technology Stack
 
-All entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
+Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest — see "Implementation status"), all entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
 
 | Technology | Role | Status | Source of truth |
 |---|---|---|---|
@@ -135,4 +136,4 @@ These are documented decisions that must not be broken without a new ADR:
 - Adding a service or port must be reflected in `docs/02-architecture/monorepo.md` and `docs/02-architecture/deployment.md`.
 - DB schema changes: follow the Prisma migration chain (`docs/03-database/migrations.md`); keep SQLite/PostgreSQL parity (ADR-002).
 - Deploy changes: follow `docs/02-architecture/deployment.md` (Vercel web, Railway WS, Neon, Upstash, Cloudflare) — never deploy via IAC per project convention.
-- Keep "implemented" vs "planned" separation in this file accurate as code lands in `backend/`/`frontend/`.
+- Keep "implemented" vs "planned" separation in this file accurate as code lands in `src/` (MVP monolith at repo root); `backend/`/`frontend/` stay placeholders and are not part of the documented structure.

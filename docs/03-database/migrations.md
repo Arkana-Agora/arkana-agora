@@ -213,8 +213,8 @@ O arkana-agora requer dados iniciais para funcionar. O seeding é feito via `pri
 # Executar seed completo
 bunx prisma db seed
 
-# Configuração no package.json
-# "prisma": { "seed": "bun run prisma/seed.ts" }
+# Configuração no package.json (já presente no esqueleto)
+# "prisma": { "seed": "bunx tsx prisma/seed.ts" }
 ```
 
 ### 6.2 Dados de Seed

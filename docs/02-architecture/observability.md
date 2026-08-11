@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-10
 
 ---
 
@@ -132,9 +132,9 @@ O Sentry captura erros tanto no **browser** (client) quanto no **servidor** (API
 import * as Sentry from '@sentry/nextjs';
 
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV,
-  release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
+  release: process.env.SENTRY_RELEASE,
   tracesSampleRate: 0.1, // 10% das transações
   profilesSampleRate: 0.1, // 10% dos perfis de performance
   integrations: [
@@ -214,7 +214,7 @@ Sentry.setContext('reading', {
 import posthog from 'posthog-js';
 
 export const analytics = typeof window !== 'undefined'
-  ? posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+  ? posthog.init(process.env.POSTHOG_KEY!, {
       api_host: 'https://us.i.posthog.com',
       capture_pageviews: true,
       capture_pageleave: true,
@@ -382,11 +382,13 @@ export const metrics = {
 
 ```typescript
 // app/api/health/route.ts
+import pkg from '../../package.json';
+// ...
 export async function GET() {
   const checks = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version,
+    version: pkg.version,
     services: {
       database: await checkDatabase(),
       redis: await checkRedis(),

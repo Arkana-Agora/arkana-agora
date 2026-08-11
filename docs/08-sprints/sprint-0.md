@@ -4,96 +4,110 @@
 > **Identificador**: `arkana-agora`  
 > **Duração**: 3 semanas  
 > **Equipe**: 2 desenvolvedores full-stack  
-> **Status**: Planejamento
+> **Status**: Reescorpado — esqueleto monolítico implementado na raiz (`docs/02-architecture/monorepo.md` §1, `docs/architecture.md` → "Implementation status")
 
 ---
 
 ## Objetivo
 
-Preparar toda a infraestrutura técnica necessária para o desenvolvimento acelerado dos próximos sprints. Este sprint estabelece a fundação do monorepo, pipelines de CI/CD, banco de dados, autenticação e design system.
+Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado dos próximos sprints. **Após reescopo, o sprint entregou um esqueleto mínimo como monolito Next.js único na raiz do repo (toolchain `bun`), adiando o monorepo (ADR-005) para depois do MVP.** O planejamento original abaixo foi mantido como referência histórica; o estado implementado está em `docs/02-architecture/monorepo.md` e `docs/architecture.md`.
 
 ---
 
 ## User Stories
 
-| # | User Story | Critério de Aceite |
-|---|-----------|-------------------|
-| US-001 | Como desenvolvedor, preciso que o monorepo esteja configurado com Turborepo para desenvolvimento paralelo | Monorepo com `pnpm` + Turborepo, builds isolados por pacote, cache funcional |
-| US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push |
-| US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros |
-| US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL |
-| US-005 | Como desenvolvedor, preciso que o NextAuth.js esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email |
-| US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados |
+| # | User Story | Critério de Aceite | Estado real |
+|---|-----------|-------------------|-------------|
+| US-001 | Como desenvolvedor, preciso de um setup base para desenvolvimento paralelo | Monorepo com `pnpm` + Turborepo, builds isolados por pacote, cache funcional | **Adiado** — monorepo é futuro (ADR-005); MVP é app único `bun` na raiz |
+| US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push | **Parcial** — scripts `lint`/`type-check`/`test`/`build` existem; pipeline GH Actions ainda não criado |
+| US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Pendente** — sem `docker-compose.yml` no repo |
+| US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com stub `User` + enums; dev SQLite `file:./dev.db` via `db push` |
+| US-005 | Como desenvolvedor, preciso que o NextAuth.js esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Pendente** — dependência instalada, sem lógica de auth |
+| US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Pendente** — sem shadcn/ui/Tailwind configurados ainda |
 
 ---
 
 ## Tasks Detalhadas
 
+> Itens marcados `[x]` correspondem ao que foi entregue no esqueleto (estado em `docs/02-architecture/monorepo.md` §1).
+
 ### Configuração do Monorepo
-- [ ] 1. Inicializar monorepo com Turborepo + pnpm workspaces
-- [ ] 2. Configurar `apps/web` (Next.js 16 + TypeScript 5)
-- [ ] 3. Configurar `packages/shared` (ui, types, config)
-- [ ] 4. Definir estrutura de pastas padrão (feature-based)
+- [x] 1. Inicializar app único Next.js 16 na raiz do repo (MVP monolito) — monorepo Turborepo + pnpm adiado para ADR-005
+- [x] 2. Configurar `src/` (App Router + TypeScript 5) — `src/app/`, `src/lib/`, `src/types/`, `src/components/`, `src/services/`, `src/stores/`
+- [ ] 3. Configurar `packages/shared` (ui, types, config) — **não se aplica ao MVP monolito**
+- [x] 4. Definir estrutura de pastas padrão (feature-based) — raiz do app
 
 ### Banco de Dados
-- [ ] 5. Setup Docker Compose (web, postgres, redis)
-- [ ] 6. Configurar Prisma ORM + PostgreSQL connection
-- [ ] 7. Criar migrations iniciais: `User`, `UserProfile`, `Subscription`
-- [ ] 8. Configurar seed script para dados de teste
+- [ ] 5. Setup Docker Compose (web, postgres, redis) — **pendente**
+- [x] 6. Configurar Prisma ORM — `src/lib/prisma.ts` (singleton), schema stub `User` + enums (`UserRole`, `UserPlan`, `AuthProvider`)
+- [x] 7. Stub inicial: model `User` — demais entidades (18, 5 domínios) documentadas em `docs/03-database/entities.md`; migrations versionadas pendentes
+- [x] 8. Configurar seed script — `prisma/seed.ts` (no-op), `bun run seed`
 
 ### Autenticação
-- [ ] 9. Setup NextAuth.js v4 (Google OAuth, magic link, JWT strategy)
-- [ ] 10. Configurar middleware de proteção de rotas
-- [ ] 11. Páginas de login/callback funcionais
+- [ ] 9. Setup NextAuth.js v4 (Google OAuth, magic link, JWT strategy) — **pendente**
+- [ ] 10. Configurar middleware de proteção de rotas — **pendente**
+- [ ] 11. Páginas de login/callback funcionais — **pendente**
 
 ### Design System
-- [ ] 12. Configurar shadcn/ui (New York style, dark/light theme)
-- [ ] 13. Definir design tokens: cores (paleta mística), tipografia, espaçamento
-- [ ] 14. Criar componentes base: Button, Input, Card, Avatar, Dialog
-- [ ] 15. Setup Storybook para documentação visual dos componentes
+- [ ] 12. Configurar shadcn/ui (New York style, dark/light theme) — **pendente**
+- [ ] 13. Definir design tokens — **pendente**
+- [ ] 14. Criar componentes base — **pendente**
+- [ ] 15. Setup Storybook para documentação visual — **pendente**
 
 ### CI/CD e Observabilidade
-- [ ] 16. GitHub Actions: pipeline lint → test → build → deploy
-- [ ] 17. Vercel project setup com ambiente de staging
-- [ ] 18. Error tracking (Sentry) setup
-- [ ] 19. Logging (Pino.js) configuration
-- [ ] 20. Health check endpoint (`/api/health`)
+- [ ] 16. GitHub Actions: pipeline lint → test → build → deploy — **pendente**
+- [ ] 17. Vercel project setup com ambiente de staging — **pendente**
+- [ ] 18. Error tracking (Sentry) setup — **pendente**
+- [ ] 19. Logging (Pino.js) configuration — **pendente**
+- [x] 20. Health check endpoint (`/api/health`) — `src/app/api/health/route.ts` (envelope; retorna 503 até serviços configurados)
 
 ### Documentação e Padrões
-- [ ] 21. Environment variables documentadas (`.env.example`)
-- [ ] 22. ESLint + Prettier + Husky + lint-staged
-- [ ] 23. Landing page base (hero section, footer)
-- [ ] 24. README do monorepo com instruções de setup
-- [ ] 25. Documentação do setup local (guia passo a passo)
+- [x] 21. Environment variables documentadas — `.env.example` (nomes apenas, sem segredos)
+- [x] 22. ESLint configurado — `eslint.config.mjs` (eslint-config-next flat); Husky/lint-staged/Prettier ainda não
+- [x] 23. Landing page base — `src/app/page.tsx` + `layout.tsx` (pt-BR), `error`/`loading`/`not-found`
+- [x] 24. Documentação da estrutura — `docs/02-architecture/monorepo.md` §1
+- [x] 25. Documentação do setup local — `docs/02-architecture/deployment.md` §2 + `.env.example`
 
 ---
 
 ## Critérios de Aceite do Sprint
 
-- [x] Monorepo funcional com builds isolados por pacote
-- [x] Deploy automático em staging via GitHub Actions → Vercel
-- [x] Autenticação funcionando com Google OAuth
-- [x] Banco de dados conectado com migrations aplicadas
-- [x] Design system com tema claro/escuro operacional
-- [x] Health check retornando status 200
+- [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
+- [ ] Deploy automático em staging via GitHub Actions → Vercel — **pendente** (sem pipeline criado)
+- [ ] Autenticação funcionando com Google OAuth — **pendente**
+- [ ] Banco de dados conectado com migrations aplicadas — **parcial** (stub `User`, SQLite dev via `db push`)
+- [ ] Design system com tema claro/escuro operacional — **pendente**
+- [x] Health check endpoint presente — retorna 503 (não 200) até serviços configurados
 - [x] Documentação de setup local completa
 
 ---
 
-## Arquitetura Técnica
+## Arquitetura Técnica (estado real)
 
 ```
-arkana-agora/
-├── apps/
-│   └── web/          # Next.js 16 (App Router)
-├── packages/
-│   ├── ui/           # shadcn/ui + tokens
-│   ├── types/        # TypeScript interfaces
-│   └── config/       # Configurações compartilhadas
-├── docker-compose.yml
-├── turbo.json
-├── pnpm-workspace.yaml
-└── .env.example
+arkana-agora/                  # Raiz = monolito MVP (bun)
+├── src/
+│   ├── app/                   # App Router (layout pt-BR, page, error/loading/not-found, globals.css)
+│   │   └── api/health/        # GET /api/health (envelope; 503 até serviços configurados)
+│   ├── components/            # (placeholder vazio)
+│   ├── lib/                   # src/lib/prisma.ts (Prisma singleton)
+│   ├── services/              # (placeholder vazio)
+│   ├── stores/                # (placeholder vazio)
+│   └── types/                 # (placeholder vazio)
+├── prisma/
+│   ├── schema.prisma          # Stub User + enums (SQLite dev / PostgreSQL Neon prod)
+│   └── seed.ts                # Seed no-op
+├── public/                    # Assets estáticos (vazio)
+├── tests/                     # tests/health.test.ts (vitest)
+├── package.json               # Scripts bun: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test
+├── next.config.ts
+├── tsconfig.json
+├── eslint.config.mjs
+├── vitest.config.ts
+└── .env.example               # Nomes de env vars documentados (sem segredos)
+
+# Monorepo futuro (ADR-005, planejado): apps/web + packages/{ui,types,config,utils,api-client}
+# com pnpm + Turborepo + turbo.json + pnpm-workspace.yaml — ainda não existe.
 ```
 
 ---
@@ -102,7 +116,7 @@ arkana-agora/
 
 | Risco | Probabilidade | Impacto | Mitigação |
 |-------|--------------|---------|-----------|
-| Configuração Turborepo complexa | Média | Alto | Seguir template oficial, documentar cada passo |
+| Configuração Turborepo complexa | Média | Alto | Adiado para pós-MVP (ADR-005) — MVP é app único, sem overhead de monorepo |
 | Compatibilidade Prisma/Postgres | Baixa | Alto | Usar versões testadas, Docker para ambiente idêntico |
 | Google OAuth aprovação | Baixa | Médio | Preparar OAuth consent screen com antecedência |
 | Tempo de setup maior que estimado | Média | Médio | Focar no essencial, adiar Storybook se necessário |
@@ -110,6 +124,8 @@ arkana-agora/
 ---
 
 ## Estimativa
+
+> Estimativa original (planejamento). No reescopo, apenas o esqueleto foi entregue; as demais frentes seguem pendentes.
 
 | Recurso | Horas | Dias Úteis |
 |---------|-------|-------------|
@@ -125,10 +141,17 @@ arkana-agora/
 
 ## Entregáveis
 
-- Repositório monorepo configurado e documentado
-- Pipeline CI/CD funcional
+**Entregues no esqueleto:**
+- App único Next.js 16 (App Router) na raiz, toolchain `bun` — documentado em `docs/02-architecture/monorepo.md` §1
+- Prisma stub (`User` + enums) + seed no-op; dev DB SQLite via `bunx prisma db push`
+- Rota `/api/health` (envelope; 503 até serviços configurados) + teste vitest
+- `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `next.config.ts`, `.env.example`
+- Documentação de estrutura e setup local
+
+**Pendentes (planejados):**
+- Pipeline CI/CD (GitHub Actions) → Vercel
 - Infraestrutura Docker Compose
-- Schema Prisma com tabelas base
-- Autenticação NextAuth.js operacional
-- Design system com tema claro/escuro
-- Landing page base
+- Migrations Prisma versionadas + tabelas completas (18 entidades, `docs/03-database/entities.md`)
+- Autenticação NextAuth.js (Google OAuth, magic link)
+- Design system shadcn/ui (claro/escuro)
+- Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
