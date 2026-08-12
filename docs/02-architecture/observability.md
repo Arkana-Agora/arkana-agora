@@ -387,25 +387,19 @@ import { APP_VERSION } from '@/lib/version';
 // ...
 
 export async function GET() {
-  const services = {
-    database: await checkDatabase(), // SELECT 1, 5s timeout
-    redis: { status: 'not-configured' },
-    ai: { status: 'not-configured' },
-  };
-
-  const hasFailure = Object.values(services).some((s) => s.status === 'error');
+  const database = await checkDatabase(); // SELECT 1, 5s timeout
   const checks = {
-    status: hasFailure ? 'degraded' : 'ok', // derived from checks, never hardcoded
+    status: database.status === 'ok' ? 'ok' : 'degraded', // derived from checks, never hardcoded
     timestamp: new Date().toISOString(),
     version: APP_VERSION,
-    services,
+    services: { database },
   };
 
-  return NextResponse.json(checks, { status: hasFailure ? 503 : 200 });
+  return NextResponse.json(checks, { status: database.status === 'ok' ? 200 : 503 });
 }
 ```
 
-> **Contrato (implementado no esqueleto):** `not-configured` é neutro — não derruba o endpoint. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura (ex.: banco fora do ar). `status` no corpo é derivado dos checks (`ok`/`degraded`) e nunca contradiz o código HTTP. Ao adicionar um serviço real (Redis, IA), implemente `checkRedis()`/`checkAI()` e remova os stubs `not-configured`.
+> **Contrato (implementado no esqueleto):** `database` é a única dependência dura do envelope `{status, timestamp, version, services: { database }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura (ex.: banco fora do ar). `status` no corpo é derivado do check (`ok`/`degraded`) e nunca contradiz o código HTTP. Redis e IA **ainda não fazem parte do envelope** — quando forem adicionados como serviços reais, implemente `checkRedis()`/`checkAI()` seguindo `docs/solutions/patterns/backend/health-check-envelope.md` e estenda `services`. Serviços opcionais não configurados reportam `{ status: 'not-configured' }`, neutro — não derrubam o endpoint.
 
 ---
 

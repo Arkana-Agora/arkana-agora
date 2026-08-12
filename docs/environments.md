@@ -1,7 +1,7 @@
 # Environments — Arkana Agora
 
 > Canonical environment matrix and deployment context.
-> **Status: skeleton only.** A minimal Next.js skeleton runs locally (`bun run dev`, `/api/health` — returns 200 when the DB check passes, 503 only on DB failure; Redis/AI report `not-configured` as neutral); no environment is provisioned/deployed and no provider console is configured. Every value below is the **documented target** from `docs/02-architecture/deployment.md`. `.env.example` at the repo root lists all documented var names (no secrets). No AWS usage is documented anywhere in the SDD — providers are Vercel/Railway/Neon/Upstash/Cloudflare.
+> **Status: skeleton only.** A minimal Next.js skeleton runs locally (`bun run dev`, `/api/health` — returns 200 when the DB check passes, 503 only on DB failure; Redis/AI are **not part of the envelope yet** — added when wired, per `docs/02-architecture/observability.md` §6.3); no environment is provisioned/deployed and no provider console is configured. Every value below is the **documented target** from `docs/02-architecture/deployment.md`. `.env.example` at the repo root lists all documented var names (no secrets). No AWS usage is documented anywhere in the SDD — providers are Vercel/Railway/Neon/Upstash/Cloudflare.
 
 ## Environment Matrix
 
@@ -57,7 +57,7 @@ Local stack also runs via Docker (`docker-compose.yml` with web, ws, postgres:16
 | Alerts | — | Slack | PagerDuty + Slack (warning → Slack 30 min; high → PagerDuty 15 min; critical → PagerDuty+Slack+SMS 5 min) |
 | DB access | SQLite file | Neon console / staging branch | Neon console (prod), restricted |
 | Deploy permissions | Any developer | Team (Vercel) | Restricted (Vercel Pro owners) + CI |
-| Health check | `http://localhost:3000/api/health` | `https://staging.../api/health` | `https://arkanaagora.com.br/api/health` (DB probed; Redis/AI neutral `not-configured`) |
+| Health check | `http://localhost:3000/api/health` | `https://staging.../api/health` | `https://arkanaagora.com.br/api/health` (DB probed; Redis/AI checks added when configured, per `observability.md` §6.3) |
 
 **Known environmental constraints**
 - Vercel serverless cold starts (~250ms) and invocation limits (1000/min hobby, 3000/min pro).

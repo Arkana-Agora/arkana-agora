@@ -31,22 +31,22 @@ Use this pattern whenever you build or extend a status/health endpoint in this r
 - `src/lib/version.ts` — central version constant
 - `tests/health.test.ts` — the vitest contract test
 - `src/lib/prisma.ts` — Prisma singleton (must be used, not re-instantiated)
-- `docs/02-architecture/observability.md` §6.3 — the written contract (pt-BR): "`not-configured` é neutro — não derruba o endpoint. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura. `status` no corpo é derivado dos checks (`ok`/`degraded`) e nunca contradiz o código HTTP. Ao adicionar um serviço real (Redis, IA), implemente `checkRedis()`/`checkAI()` e remova os stubs `not-configured`."
+- `docs/02-architecture/observability.md` §6.3 — the written contract (pt-BR): "`database` é a única dependência dura do envelope `{status, timestamp, version, services: { database }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura. `status` no corpo é derivado do check (`ok`/`degraded`) e nunca contradiz o código HTTP. Redis e IA ainda não fazem parte do envelope — quando adicionados, implemente `checkRedis()`/`checkAI()` seguindo o padrão; serviços opcionais não configurados reportam `{ status: 'not-configured' }`, neutro."
 
 ## Current Implementation Snapshot
 
-- `GET /api/health` returns `{ status, timestamp, version, services: { database, redis, ai } }`.
-- `status` is **derived** from the checks: `degraded` if any service is `error`, else `ok`. Never hardcoded.
-- `database` is the **only hard dependency**: probed via `prisma.$queryRaw\`SELECT 1\`` wrapped in a `Promise.race` 5s timeout (`DB_CHECK_TIMEOUT_MS = 5_000`); failure is caught, logged with `console.error("[health] database check failed", error)`, and returned as `{ status: "error" }`.
-- `redis` and `ai` are stubs reporting `{ status: "not-configured" }` — **neutral**: they do not contribute to `hasFailure`.
-- HTTP mapping: `200` when no check failed, `503` only on hard DB failure.
+- `GET /api/health` returns `{ status, timestamp, version, services: { database } }`.
+- `status` is **derived** from the checks: `degraded` if the DB check is `error`, else `ok`. Never hardcoded.
+- `database` is the **only hard dependency** (and currently the only service in the envelope): probed via `prisma.$queryRaw\`SELECT 1\`` wrapped in a `Promise.race` 5s timeout (`DB_CHECK_TIMEOUT_MS = 5_000`); failure is caught, logged with `console.error("[health] database check failed", error)`, and returned as `{ status: "error" }`.
+- **Redis and AI are NOT yet part of the envelope** (the `not-configured` stubs were removed in the route refactor, commit `094082b`). They are added as real checks when those services are wired, per the Complete Example below.
+- HTTP mapping: `200` when the DB check passes, `503` only on hard DB failure.
 - `version` comes from `APP_VERSION` (`src/lib/version.ts`, reads `pkg.version` from `package.json` at module load) — the route never deep-imports `package.json` itself.
 - `export const dynamic = "force-dynamic"` — the endpoint must never be statically cached.
-- `tests/health.test.ts` imports `GET` directly (vitest, `@/` alias via `vitest.config.ts`) and asserts: envelope shape, `version === APP_VERSION`, redis/ai exactly `{ status: "not-configured" }`, and the status/HTTP coherence rule (`ok` ⇔ 200, `degraded` ⇔ 503).
+- `tests/health.test.ts` imports `GET` directly (vitest, `@/` alias via `vitest.config.ts`) and asserts: envelope shape, `version === APP_VERSION`, `services.database.status` ∈ `{ "ok", "error" }`, and the status/HTTP coherence rule (`ok` ⇔ 200, `degraded` ⇔ 503).
 
 ## Planned / Optional Extensions (NOT implemented yet)
 
-- Real `checkRedis()` / `checkAI()` implementations replacing the `not-configured` stubs, per `observability.md` §6.3. When added, follow Steps 1–2 below.
+- Real `checkRedis()` / `checkAI()` checks added to `services`, per `observability.md` §6.3 and the Complete Example below. When added, unconfigured optional services report `{ status: "not-configured" }` (neutral — never degrade the endpoint) and configured-but-failing services report `error` (degrade).
 - The `GET /admin/system/health` endpoint specified in `docs/04-api/admin.md` — reuse the same envelope shape and derivation rule.
 
 ## Pattern Overview
@@ -127,8 +127,8 @@ And the test asserts: `["not-configured", "ok", "error"]` contains `body.service
 
 ## Project-Specific Constraints
 
-- [ ] Top-level `status` is **derived** from checks (`ok`/`degraded`) and must never contradict the HTTP code (pinned by `tests/health.test.ts`).
-- [ ] `not-configured` is **neutral** — it never contributes to `hasFailure` and never triggers 503 (contract per `observability.md` §6.3).
+- [ ] Top-level `status` is **derived** from the checks (`ok`/`degraded`) and must never contradict the HTTP code (pinned by `tests/health.test.ts`). With only `database` in the envelope today, `degraded` ⇔ DB check `error`.
+- [ ] `not-configured` is **neutral** — it never contributes to the failure aggregate and never triggers 503. Applies to optional services (Redis, AI) once they join the envelope (contract per `observability.md` §6.3); not in the envelope today.
 - [ ] HTTP mapping: `200` when no check failed; `503` only on a hard (configured-but-failing) dependency.
 - [ ] Every check is time-boxed with `Promise.race` + `setTimeout` (DB uses `DB_CHECK_TIMEOUT_MS = 5_000`).
 - [ ] Prisma access goes through the `@/lib/prisma` singleton — never `new PrismaClient()` in a route (route handlers are imported per request in dev).
@@ -141,7 +141,7 @@ And the test asserts: `["not-configured", "ok", "error"]` contains `body.service
 ## Anti-Patterns (What NOT to Do)
 
 - ❌ Returning 503 (or `degraded`) when an optional service reports `not-configured` — it is neutral by contract.
-- ❌ Hardcoding `status: "ok"` in the body — it must be derived from `hasFailure`.
+- ❌ Hardcoding `status: "ok"` in the body — it must be derived from the checks.
 - ❌ Guarding the DB check with `if (!process.env.DATABASE_URL) return ...` — Prisma 6 does not throw at import; the guard gives false confidence and the query still fails at runtime.
 - ❌ Instantiating `new PrismaClient()` inside the route module instead of importing the `@/lib/prisma` singleton.
 - ❌ Letting a probe run without a `Promise.race` timeout — a hung DB/Redis call hangs the whole endpoint.
@@ -162,3 +162,7 @@ And the test asserts: `["not-configured", "ok", "error"]` contains `body.service
 2. **Updating the test:** extend the local `HealthBody` type in `tests/health.test.ts` and assert the new service's possible statuses and the degradation rule.
 3. **Cross-layer sync:** if the status vocabulary (`ok`/`error`/`not-configured`, `ok`/`degraded`) or HTTP mapping changes, update `docs/02-architecture/observability.md` §6.3 in the same change.
 4. **Verification:** `bun test` (vitest), `bun run type-check`, and a manual `bun run dev` + `curl http://localhost:3000/api/health` with the dev DB up (expect 200/`ok`) and stopped (expect 503/`degraded`).
+
+## Refresh Notes
+
+- **2026-08-12:** Implementation snapshot updated to match the code — the envelope currently ships `services: { database }` only; Redis/AI `not-configured` stubs were removed in the route refactor (commit `094082b`) and are now documented as planned extensions with the neutral-`not-configured` semantics preserved for when they join. Constraint/anti-pattern wording made pattern-generic (`hasFailure` no longer exists in code). Source-of-truth quote synced with `observability.md` §6.3.

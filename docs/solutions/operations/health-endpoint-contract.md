@@ -37,15 +37,15 @@ resolved_in: "Health endpoint fix, branch dev, 2026-08-11"
 
 Applied in `src/app/api/health/route.ts` + `tests/health.test.ts` + new `src/lib/version.ts`:
 
-- `status` in the body is **derived** from the checks (`ok` when none failed, `degraded` when any is `error`) and never contradicts the HTTP code.
-- `redis`/`ai` report `{ status: "not-configured" }` — **neutral**: they never contribute to the failure aggregate. HTTP 200 is reachable as soon as the DB check passes; 503 only on hard DB failure.
+- `status` in the body is **derived** from the DB check (`ok` when it passes, `degraded` when it errors) and never contradicts the HTTP code.
+- The envelope is `{ status, timestamp, version, services: { database } }` — **Redis/AI are NOT yet part of the envelope** (they were removed in the refactor). When those services are wired, add `checkRedis()`/`checkAI()` following `docs/solutions/patterns/backend/health-check-envelope.md`; unconfigured optional services report `{ status: "not-configured" }` — **neutral**, they never contribute to the failure aggregate. HTTP 200 is reachable as soon as the DB check passes; 503 only on hard DB failure.
 - DB check is **time-boxed** (`Promise.race` + `setTimeout`, `DB_CHECK_TIMEOUT_MS = 5_000`) and **catches + logs** failures (`console.error("[health] database check failed", error)`).
 - Version comes from `APP_VERSION` (`src/lib/version.ts`, reads `pkg.version` from `../../package.json` at module load) — routes never deep-import `package.json`.
-- `tests/health.test.ts` pins the contract **DB-state-agnostically**: asserts envelope shape, `version === APP_VERSION`, redis/ai exactly `not-configured`, and the derivation rule (`ok` ⇔ 200, `degraded` ⇔ 503).
+- `tests/health.test.ts` pins the contract **DB-state-agnostically**: asserts envelope shape, `version === APP_VERSION`, `services.database` ∈ {`ok`, `error`}, and the derivation rule (`ok` ⇔ 200, `degraded` ⇔ 503).
 
 # Verification
 
-- `Command:` `npm run type-check` / `npm run lint` / `npm test`
+- `Command:` `bun run type-check` / `bun run lint` / `bun test`
 - `Result:` exit 0 / 0 / 0 (1 test passed)
 
 # Prevention
@@ -59,3 +59,8 @@ Applied in `src/app/api/health/route.ts` + `tests/health.test.ts` + new `src/lib
 - `docs/solutions/patterns/backend/health-check-envelope.md` — the prescriptive pattern
 - `src/app/api/health/route.ts`, `src/lib/version.ts`, `tests/health.test.ts` — implementation
 - `docs/02-architecture/observability.md` §6.3 — written contract
+
+## Refresh Notes
+
+- **2026-08-12:** Updated Verification commands from `npm` to `bun` (`bun run type-check` / `bun run lint` / `bun test`) to match the MVP bun toolchain (package.json).
+- **2026-08-12:** Fixed Fix-section to match the implemented code — the envelope is `services: { database }` only; Redis/AI stubs were removed in the route refactor (commit `094082b`) and are now documented as planned extensions, not current state. Test description corrected (it asserts `services.database`, not redis/ai).
