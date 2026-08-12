@@ -229,7 +229,7 @@ assets.arkanaagora.com.br  → Cloudflare R2 (imagens)
 # ====================
 FROM oven/bun:1 AS deps
 WORKDIR /app
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production=false
 
 # ====================
@@ -515,3 +515,9 @@ railway up --rollback
 ---
 
 *Documento parte do SDD (Software Design Document) do arkana-agora.*
+
+---
+
+## Refresh Notes
+
+- **2026-08-12:** Dockerfile §5.1 updated — `COPY package.json bun.lockb ./` → `bun.lock ./` to match the bun text lockfile actually committed in the repo (the old `bun.lockb` binary format is not used). Consistent with `docs/07-security/security.md` (bun.lock mandatory). No other drift found.
