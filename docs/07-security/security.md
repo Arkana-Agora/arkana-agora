@@ -32,36 +32,38 @@ const hashedPassword = await bcrypt.hash(password, saltRounds);
 const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 ```
 
-### JWT (JSON Web Tokens)
+### JWT (JSON Web Tokens) — fluxo híbrido (ADR-009)
 
 | Parâmetro | Access Token | Refresh Token |
 |---|---|---|
-| Algoritmo | RS256 | RS256 |
-| Chave | Par RSA (2048 bits) | Par RSA (2048 bits) |
-| Expiração | 15 minutos | 7 dias |
-| Armazenamento | Memória do cliente | Cookie httpOnly, Secure, SameSite=Strict |
-| Rotação | Não | Sim (a cada uso, o anterior é invalidado) |
+| Algoritmo | RS256 | Opaco (gerado via `randomBytes`); apenas o hash SHA-256 é persistido |
+| Chave | Par RSA (2048 bits) | N/A (opaco, não assinado) |
+| Expiração | 15 minutos | 30 dias |
+| Armazenamento | Memória do cliente | Cookie httpOnly, Secure, SameSite=Strict + tabela `Session` (hash) |
+| Rotação | Não | Sim (a cada uso, o anterior é invalidado, mantendo o `familyId`) |
 
 ```typescript
 // Payload do access token
 interface JWTPayload {
   sub: string;          // userId
-  email: string;
   role: UserRole;
+  plan: UserPlan;
+  tokenVersion: number; // bump em mudança de role/plan, suspensão ou logout-all
   iat: number;          // issued at
   exp: number;          // expiration
   jti: string;          // unique token ID
 }
+// Permissões NÃO vão no token: derivadas server-side a partir do role.
 ```
 
 ### Refresh Token Rotation
 
-1. O cliente envia o refresh token via cookie httpOnly
-2. O servidor valida o refresh token
-3. O servidor invalida o refresh token anterior (revogação)
-4. O servidor gera um novo par (access + refresh)
+1. O cliente envia o refresh token via cookie httpOnly (`path=/api/v1/auth`)
+2. O servidor busca a sessão pelo hash SHA-256 do token e valida `expiresAt`/`revokedAt`
+3. O servidor invalida o refresh token anterior (marca `replacedByTokenId`)
+4. O servidor gera um novo access token e rotaciona o refresh token (mesmo `familyId`)
 5. O novo refresh token é enviado em cookie
-6. Se um refresh token já usado for reenviado, todos os tokens da sessão são revogados (detecção de roubo)
+6. Se um refresh token já rotacionado for reenviado (reuso), todos os tokens da família (`familyId`) são revogados (detecção de roubo)
 
 ---
 
@@ -71,12 +73,12 @@ interface JWTPayload {
 
 | Endpoint | Limite | Janela | Usuários Autenticados |
 |---|---|---|---|
-| `POST /auth/login` | 5 req | 15 min | Não se aplica |
-| `POST /auth/register` | 3 req | 15 min | Não se aplica |
-| `POST /auth/forgot-password` | 3 req | 1 hora | Não se aplica |
-| `GET /api/*` | 100 req | 1 min | 300 req / 1 min |
-| `POST /api/*` | 50 req | 1 min | 150 req / 1 min |
-| `POST /api/readings` | 10 req | 1 min | Ilimitado (Plus) |
+| `POST /api/v1/auth/login` | 5 req | 15 min | Não se aplica |
+| `POST /api/v1/auth/register` | 3 req | 15 min | Não se aplica |
+| `POST /api/v1/auth/forgot-password` | 3 req | 1 hora | Não se aplica |
+| `GET /api/v1/*` | 100 req | 1 min | 300 req / 1 min |
+| `POST /api/v1/*` | 50 req | 1 min | 150 req / 1 min |
+| `POST /api/v1/readings` | 3/dia | dia | 10/dia |
 
 ### CORS (Cross-Origin Resource Sharing)
 
@@ -84,7 +86,7 @@ interface JWTPayload {
 const corsOptions = {
   origin: process.env.ALLOWED_ORIGINS.split(','),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   maxAge: 86400, // 24h preflight cache
 };

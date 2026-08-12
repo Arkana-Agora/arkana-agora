@@ -9,9 +9,9 @@
 |---|---|---|---|---|
 | OpenAI GPT-4o / GPT-4o-mini | External (AI) | AI interpretations (tarot/cards/horoscope), streaming via SSE | OpenAI (via `z-ai-web-dev-sdk`) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md`, `docs/05-ai/prompts.md` |
 | Mercado Pago | External (payments) | Checkout (PIX/card/boleto), subscriptions (Arkana Plus), split payments, webhooks | Mercado Pago | `docs/04-api/marketplace.md`, ADR-008 |
-| Google OAuth | External (auth) | Social login (`POST /api/v1/auth/social`, provider `google`) | Google | `docs/04-api/authentication.md` |
-| Facebook OAuth | External (auth) | Social login (provider `facebook`) | Meta | `docs/04-api/authentication.md` |
-| SMTP / email | External | Magic-link login (10 min TTL), password reset (1h TTL) | Unspecified SMTP provider | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
+| Google OAuth | External (auth) | Social login via NextAuth `/api/auth/*` (provider `google`) | Google | `docs/04-api/authentication.md` |
+| Facebook OAuth | External (auth) | Social login via NextAuth `/api/auth/*` (provider `facebook`) | Meta | `docs/04-api/authentication.md` |
+| SMTP / email | External | Magic-link login (15 min TTL), password reset (1h TTL) | Unspecified SMTP provider | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
 | Neon PostgreSQL | External (data) | Serverless production database (staging branch + prod) | Neon | `docs/02-architecture/deployment.md`, `docs/03-database/*` |
 | Upstash Redis | External (data) | Sessions, rate limiting, cache (AI interpretation 24h TTL), BullMQ queues, Pub/Sub event bus | Upstash | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | External (storage) | Card images (WebP, 3 variants), avatars, post images | Cloudflare | `docs/02-architecture/deployment.md` §4 |
@@ -43,7 +43,7 @@
 ## Contracts and Data Flows
 
 - **API**: REST + SSE, base URL `/api/v1`, JWT bearer sessions (NextAuth v4). Standard error envelope, cursor/offset pagination, per-plan rate limits. See `docs/04-api/overview.md` (OpenAPI 3.1.0 template embedded).
-- **Auth**: `POST /auth/register|login|social|magic-link|refresh|logout|forgot-password|reset-password`, `GET /auth/me`. Access token 15 min, refresh token 7 days, magic link 10 min. See `docs/04-api/authentication.md`.
+- **Auth**: `POST /api/v1/auth/register|login|magic-link|magic-link/verify|refresh|logout|forgot-password|reset-password`, `GET /api/v1/auth/me`. OAuth (Google/Facebook) via NextAuth `/api/auth/*`. Access token 15 min, refresh token 30 days (opaque), magic link 15 min. See `docs/04-api/authentication.md`.
 - **AI streaming (SSE)**: `POST /api/v1/ai/reading/stream` → `Content-Type: text/event-stream` with `{type: content|done}` payloads and `tokensUsed`. Fallback chain GPT-4o → GPT-4o-mini → generic cache → friendly error. See `docs/05-ai/architecture.md`, `docs/04-api/overview.md`.
 - **Payments**: `POST /api/v1/payments/create` → Mercado Pago checkout → webhook `POST /api/v1/webhooks/mercadopago` → order/payment status update; native split payment; PLUS subscription via recurring billing. Entities `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
 - **Real-time (Socket.io :3003)**: events `feed:new_post`, `notification:new`, `presence:update`, `reading:shared`, `chat:message` [planned]. Inter-service event bus: `user:registered`, `reading:created`, `payment:completed`, `post:liked` (EventEmitter dev / Redis Pub/Sub prod). See `docs/02-architecture/architecture.md` §6.

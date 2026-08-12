@@ -59,7 +59,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [ ] 17. Vercel project setup com ambiente de staging — **pendente**
 - [ ] 18. Error tracking (Sentry) setup — **pendente**
 - [ ] 19. Logging (Pino.js) configuration — **pendente**
-- [x] 20. Health check endpoint (`/api/health`) — `src/app/api/health/route.ts` (envelope; DB com timeout 5s, Redis/IA neutros `not-configured`, 200 quando nenhum check falha, 503 só em falha dura)
+- [x] 20. Health check endpoint (`/api/health`) — `src/app/api/health/route.ts` (envelope `{status,timestamp,version,services:{database}}`; DB com timeout 5s, 200 quando o check de DB passa, 503 só em falha dura)
 
 ### Documentação e Padrões
 - [x] 21. Environment variables documentadas — `.env.example` (nomes apenas, sem segredos)
@@ -148,7 +148,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 **Entregues no esqueleto:**
 - App único Next.js 16 (App Router) na raiz, toolchain `bun` — documentado em `docs/02-architecture/monorepo.md` §1
 - Prisma stub (`User` + enums) + seed no-op; dev DB SQLite via `bunx prisma db push`
-- Rota `/api/health` (envelope; 200 quando DB ok, 503 em falha dura; Redis/IA neutros `not-configured`) + teste vitest
+- Rota `/api/health` (envelope `{status,timestamp,version,services:{database}}`; 200 quando DB ok, 503 em falha dura; Redis/IA adicionados quando conectados, per `observability.md` §6.3) + teste vitest
 - `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `next.config.ts`, `.env.example`
 - Documentação de estrutura e setup local
 
@@ -165,7 +165,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - **providerId convention for EMAIL (H-2):** Set `providerId = email` normalized to lowercase (clarified 2025-08-11). Aligns with existing `email @unique` constraint. Updates: `prisma/schema.prisma`, `docs/04-api/authentication.md`, `docs/03-database/entities.md`. See `sprint-0.clarifications.md`.
 - **LGPD 30-day soft-delete (H-3):** Soft delete with `deletedAt DateTime?` on User model (clarified 2025-08-11). Existing `isActive` flag + new `deletedAt` for restoration window. Queries filter `isActive = true AND deletedAt IS NULL`. Restoration endpoint within 30-day window. See `sprint-0.clarifications.md`.
 - Conflito de enums RBAC: `entities.md`/schema (USER, PROFESSIONAL, ADMIN) vs antigo `permissions.md` (FREE_USER…SUPER_ADMIN) — alinhado em `docs/07-security/permissions.md`; `requirements.md` RNF-005 atualizado para o modelo alinhado (3 roles + SUPER_ADMIN planejado; plano FREE/PLUS é dimensão separada).
-- **Rastreado para o planejamento do auth:** `.specs/001-auth/design.md` ainda descreve 5 roles (`role: 'user' | 'plus' | 'pro' | 'admin' | 'superadmin'`) — rever para `UserRole` (USER/PROFESSIONAL/ADMIN + SUPER_ADMIN planejado) com plano `UserPlan` separado. Também decidir prefixo único das rotas de auth: `docs/02-architecture/architecture.md` documenta `/api/auth/*` (padrão NextAuth) enquanto `docs/04-api/authentication.md` declara módulo `src/app/api/v1/auth/`.
+- **Resolvido (ADR-009):** `.specs/001-auth/design.md` reescrito para `UserRole` (USER/PROFESSIONAL/ADMIN + SUPER_ADMIN planejado) com plano `UserPlan` separado. Prefixo de rotas decidido: `/api/auth/*` = endpoints internos NextAuth (fixo da lib); `/api/v1/auth/*` = auth REST custom (incl. `POST /api/v1/auth/refresh` para rotação). `architecture.md` §2.2 atualizado; `authentication.md` mantém módulo `src/app/api/v1/auth/`.
 
 ---
 

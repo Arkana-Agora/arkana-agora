@@ -55,7 +55,7 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 - [ ] 16. Plano de assinatura: mensal R$ 19,90
 - [ ] 17. Integração assinatura recorrente Mercado Pago
 - [ ] 18. Middleware de verificação de assinatura ativa
-- [ ] 19. Gating de recursos premium: leituras ilimitadas, baralhos exclusivos, sem anúncios
+- [ ] 19. Gating de recursos premium: 10 tiragens/dia, leituras IA ilimitadas (soft limit), baralhos exclusivos, sem anúncios
 - [ ] 20. Página de pricing com comparação Free vs Plus
 - [ ] 21. Fluxo de cancelamento de assinatura
 - [ ] 22. Período trial de 7 dias

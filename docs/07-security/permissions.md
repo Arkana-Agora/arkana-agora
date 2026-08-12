@@ -57,7 +57,7 @@ Plano (dimensão ortogonal ao role):
 
 | Permissão | FREE | PLUS | PRO | ADMIN | SUPER |
 |---|---|---|---|---|---|
-| `readings.draw_free` | ✅ (3/dia) | ✅ (∞) | ✅ (∞) | ✅ (∞) | ✅ (∞) |
+| `readings.draw_free` | ✅ (3/dia) | ✅ (10/dia) | ✅ (∞) | ✅ (∞) | ✅ (∞) |
 | `readings.draw_premium_spreads` | ❌ | ✅ | ✅ | ✅ | ✅ |
 | `readings.save` | ✅ (10) | ✅ (∞) | ✅ (∞) | ✅ (∞) | ✅ (∞) |
 | `readings.share` | ✅ (marca d'água) | ✅ (sem marca) | ✅ (sem marca) | ✅ (sem marca) | ✅ (sem marca) |
@@ -137,13 +137,16 @@ Plano (dimensão ortogonal ao role):
 
 ## Rate Limits por Role
 
-| Endpoint | FREE | PLUS | PRO | ADMIN | SUPER |
+Quotas diárias e rate limits (ADR-009 Gate C):
+
+| Recurso | FREE | PLUS | PRO | ADMIN | SUPER |
 |---|---|---|---|---|---|
-| `GET /api/*` (geral) | 100/min | 300/min | 300/min | 600/min | 600/min |
-| `POST /api/*` (geral) | 50/min | 150/min | 150/min | 600/min | 600/min |
-| `POST /api/readings` | 10/min | Ilimitado* | Ilimitado* | Ilimitado* | Ilimitado* |
-| `POST /api/social/posts` | 5/hora | Ilimitado* | Ilimitado* | 600/min | 600/min |
-| `POST /api/auth/login` | 5/15min | 5/15min | 5/15min | 20/15min | 20/15min |
+| `GET /api/v1/*` (geral) | 100/min | 300/min | 300/min | 600/min | 600/min |
+| `POST /api/v1/*` (geral) | 50/min | 150/min | 150/min | 600/min | 600/min |
+| `POST /api/v1/readings` | 3/dia | 10/dia | Ilimitado* | Ilimitado* | Ilimitado* |
+| `POST /api/v1/ai/...` (interpretações IA) | 10/dia | Ilimitado* | Ilimitado* | Ilimitado* | Ilimitado* |
+| `POST /api/v1/social/posts` | 5/hora | Ilimitado* | Ilimitado* | 600/min | 600/min |
+| `POST /api/v1/auth/login` | 5/15min | 5/15min | 5/15min | 20/15min | 20/15min |
 
 > \* Ilimitado com soft limit de 100/min para proteção contra abuso.
 

@@ -230,7 +230,9 @@ Utilizar **shadcn/ui** (estilo **New York**) como base do sistema de design.
 ## ADR-007: Socket.io mini-service separado
 
 ### Status
-**Aceito** ✅
+**Aceito** ✅ — parcialmente **supersedido** pelo ADR-009 (ver nota abaixo)
+
+> **Nota (ADR-009, 2026-08-12):** a autenticação no Socket.io passa a usar o **access token JWT custom RS256** (validado com `jwt.verify(..., { algorithms: ['RS256'] })` e `tokenVersion`), em vez da sessão "JWT do NextAuth" originalmente prevista. O restante desta ADR permanece válido.
 
 ### Contexto
 A plataforma precisa de funcionalidades em tempo real: feed de atualizações, notificações instantâneas, indicador de presença (online/offline). O Next.js suporta WebSocket via API Routes, mas com limitações em serverless e sem escala horizontal nativa.
@@ -249,7 +251,7 @@ Implementar um **mini-service Socket.io separado** na porta **3003**, comunicand
 
 **Negativas:**
 - Infraestrutura adicional para manter (mais um container/serviço)
-- Necessidade de autenticação separada (validar JWT do NextAuth no Socket.io)
+- Necessidade de autenticação separada (validar access token JWT custom RS256 no Socket.io — ver nota ADR-009)
 - Comunicação inter-service requer Event Bus ou chamadas HTTP
 - Debugging mais complexo com dois processos
 
@@ -303,6 +305,67 @@ Utilizar **Mercado Pago** como gateway de pagamento principal.
 | Iugu | Menor market share, menos recursos, split menos flexível |
 | Pagar.me | Boa opção, mas adquirida pela Stone — futuro incerto |
 | Asaas | Focado em recorrência, menos flexível para marketplace |
+
+## ADR-009: Consolidação de identidade, autenticação e limites
+
+### Status
+**Aceito** ✅
+
+### Contexto
+A análise cruzada de `docs/` e `.specs/` (relatório de 2026-08-12) identificou contradições que bloqueiam a implementação segura do auth:
+
+1. **Modelo de identidade**: `.specs/001-auth/design.md` define `role: 'user' | 'plus' | 'pro' | 'admin' | 'superadmin'`, misturando plano e role; `docs/07-security/permissions.md` lista `USER (plano FREE)` / `USER (plano PLUS)` como linhas de role; `docs/04-api/overview.md:166-170` trata `Admin` como plano.
+2. **Mecanismo de autenticação**: `docs/04-api/overview.md:39` declara "NextAuth.js v4 com sessões JWT", mas o mesmo documento (`:44-47`, `:358-361`) e `.specs/001-auth/design.md` especificam fluxo REST com `access_token` + `refresh_token` via Bearer; `docs/02-architecture/decisions.md:252` (ADR-007) valida "JWT do NextAuth" no Socket.io. Rotação de refresh era indefinida.
+3. **Limites de consumo**: `docs/01-product/mvp.md:109` e `docs/01-product/business-rules.md:11-12` dizem FREE=3 tiragens/dia e PLUS=10/dia; `docs/07-security/permissions.md:60` e `docs/01-product/user-stories.md:584` dizem PLUS=∞. Rate limits divergem entre `permissions.md:142-143` (PLUS GET 300/min) e `overview.md:169` (PLUS 500/min).
+
+### Decisão
+
+**Gate A — Modelo de identidade (role, plano, provedor).** Fonte da verdade: `prisma/schema.prisma` e `docs/03-database/entities.md`.
+
+- `UserRole`: `USER`, `PROFESSIONAL`, `ADMIN` (enum). `SUPER_ADMIN` permanece **planejado pós-MVP** — não entra no schema do MVP.
+- `UserPlan`: `FREE`, `PLUS` (enum) — **dimensão ortogonal ao role**. `PLUS` nunca é um role; corresponde a `role=USER` + `plan=PLUS`.
+- `AuthProvider`: `EMAIL`, `GOOGLE`, `FACEBOOK`. `providerId`: EMAIL → e-mail normalizado minúsculo; OAuth → subject ID do provedor; `@@unique([provider, providerId])`.
+- LGPD: soft delete via `isActive=false` + `deletedAt` com janela de restauração de 30 dias (sprint-0.clarifications H-3).
+- Reescrita de `.specs/001-auth/design.md`: remover `plus`/`pro`/`superadmin` do `role`; usar os dois campos separados (`role` e `plan`).
+
+**Gate B — Autenticação híbrida: NextAuth.js v4 como camada de login + Custom JWT por cima.**
+
+- **Camada de login (NextAuth v4)**: lida com Google OAuth, Facebook OAuth, magic link e e-mail/senha; gerencia `User`/`Accounts` no banco via adapter Prisma. O `session` do NextAuth retorna o mínimo (`{ user: { id, email } }`) ou não é usado no client.
+- **Custom JWT Layer** (disparada após o callback de login confirmar a identidade):
+  - `access_token` JWT curto (**15 min, RS256**) com payload `sub`, `role`, `plan`, `tokenVersion` — verificável em qualquer serviço (incluindo o Socket.io mini-service do ADR-007). Permissões **não** vão no token: são derivadas server-side a partir do role. A claim `tokenVersion` (bump em mudança de role/plan, suspensão ou logout-all) é validada contra Redis a cada requisição para revogação imediata.
+  - `refresh_token` opaco (**30 dias**) persistido em banco (com Redis para cache/blacklist), com **rotação + detecção de reuso** (rotação invalida o token anterior; reuso revoga a família inteira).
+  - Middleware custom (em vez de `getServerSession()`): valida `Authorization: Bearer <token>` com `jwt.verify(..., { algorithms: ['RS256'] })`.
+  - Rota `POST /api/v1/auth/refresh`: recebe refresh token → emite novo access + refresh (rotação).
+- Esta decisão **substitui** a leitura de "NextAuth.js v4 com sessões JWT" de `docs/04-api/overview.md:39` e mantém a dependência NextAuth v4 (Google + magic link) do `docs/01-product/mvp.md:31` e `docs/08-sprints/backlog.md:29` (B-005) — mas **apenas como camada de login**, não como fonte da sessão autenticada.
+
+**Gate C — Limites de consumo.** Valores canônicos (fonte única: `docs/07-security/permissions.md`; `docs/04-api/overview.md` passa a referenciá-la, corrigindo o `Admin` da tabela "por plano" e incluindo `PROFESSIONAL`):
+
+- Tiragens: FREE = **3/dia** (Tarot do Dia não conta); PLUS = **10/dia** (decisão C-1(b) — revisa `permissions.md:60`, `user-stories.md:584` e alinha a `business-rules.md` e `mvp.md`).
+- AI (interpretação): FREE = **10/dia**; PLUS = **ilimitado com soft limit** (100/min).
+- Rate limits req/min: GET `100/300/300/600/600`; POST `50/150/150/600/600` (FREE/PLUS/PRO/ADMIN/SUPER) — valores de `permissions.md:142-143` são canônicos sobre os de `overview.md:169-170`.
+- Login: 5 tentativas/15min (20/15min para ADMIN/SUPER).
+
+### Consequências
+
+**Positivas:**
+- Modelo de identidade único e verificado (schema já implementado) — elimina o risco de bugs de autorização por conflito role/plano.
+- NextAuth v4 provê a parte difícil (OAuth Google/Facebook, magic link, gerenciamento de contas) sem abandoná-la; o Custom JWT entrega tokens stateless verificáveis em qualquer serviço (API, Socket.io, mobile futuro).
+- Refresh rotation com blacklist reduz a janela de roubo de token; payload `role`/`plan`/`tokenVersion` no access token permite autorização consistente com revogação imediata.
+- Limites definidos em uma única fonte (`permissions.md`) com regras de negócio explícitas e testáveis.
+
+**Negativas:**
+- Duas camadas de autenticação para manter e integrar (callback NextAuth → geração de JWT custom; logout precisa invalidar sessão NextAuth + refresh).
+- Implementação própria do JWT custom requer auditoria de segurança (rotação de refresh, RS256 key management, CSRF nos fluxos de login) antes do go-live.
+- Mudança de limite de tiragens PLUS (∞ → 10/dia) exige revisão de `permissions.md`, `user-stories.md` e das telas de marketing de benefícios (MVP).
+
+### Alternativas Consideradas
+
+| Alternativa | Por que não escolhida |
+|---|---|
+| NextAuth.js v4 como sessão/cookie única | Modelo de sessão-cookie conflita com API Bearer, mobile e com verificação em serviços externos (Socket.io) |
+| Custom JWT puro (sem NextAuth) | Duplicaria OAuth/magic link/Account management — retrabalho e risco de segurança |
+| Auth.js v5 | API e modelo de sessão reescritos; custo de migração e menor familiaridade da equipe |
+| Manter conflito (role misto / limites divergentes) | Bloqueio de implementação; risco de vulnerabilidade de autorização (escalada via `plan=pro`) e de cobrança equivocada |
 
 ---
 

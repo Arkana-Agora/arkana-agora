@@ -128,7 +128,7 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **Feed** | Linha do tempo com versos de usuarios seguidos e conteudo sugerido. |
 | **Marketplace** | Espaco para profissionais oferecerem servicos de leitura, consultoria e produtos esotericos. |
 | **Gift (Presente)** | Item virtual que usuarios podem enviar uns aos outros como forma de apreciacao. |
-| **Arkana Plus** | Plano de assinatura premium da plataforma, com beneficios como tiragens ilimitadas e acessos exclusivos. |
+| **Arkana Plus** | Plano de assinatura premium da plataforma, com beneficios como 10 tiragens por dia e acessos exclusivos. |
 | **Freemium** | Modelo de negocio onde funcionalidades basicas sao gratuitas e avancadas requerem assinatura. |
 | **Tarot do Dia** | Tiragem diaria automatica com uma unica carta, disponivel gratuitamente para todos os usuarios. |
 | **Historico** | Registro de todas as tiragens e leituras realizadas pelo usuario na plataforma. |

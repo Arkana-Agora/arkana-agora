@@ -165,7 +165,7 @@ Implementar marketplace para profissionais, sistema de pagamentos e assinatura A
 | 3.7 | Plano Arkana Plus (R$19,90/mes, R$179,90/ano) | 17 | 3.4 |
 | 3.8 | Trial de 7 dias com cancelamento facilitado | 17 | 3.7 |
 | 3.9 | Tela de checkout de assinatura | 17 | 3.7 |
-| 3.10 | Beneficios Plus: tiragens ilimitadas, espalhamentos exclusivos | 18 | 3.7 |
+| 3.10 | Beneficios Plus: 10 tiragens/dia, espalhamentos exclusivos | 18 | 3.7 |
 | 3.11 | Saque de profissionais via Mercado Pago | 18 | 3.5 |
 | 3.12 | Dispute automatica (7 dias) | 19 | 3.5 |
 | 3.13 | Baralho Cigano (Lenormand 36 cartas) | 19 | 1.4 |

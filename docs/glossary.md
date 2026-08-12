@@ -27,7 +27,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | RBAC | Role-Based Access Control; roles `USER → PROFESSIONAL → ADMIN` (+ `SUPER_ADMIN` planned), implemented in `prisma/schema.prisma`; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension | `docs/07-security/permissions.md` |
 | PWA | Progressive Web App (manifest, service worker, offline cache) — planned V1 | `docs/01-product/mvp.md` |
 | LGPD | Lei Geral de Proteção de Dados (Lei 13.709/2018); privacy-by-design requirement | `docs/07-security/lgpd.md`, `docs/07-security/security.md` |
-| JWT | JSON Web Tokens (RS256) for API sessions: access 15 min, refresh 7 days (rotation) | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
+| JWT | JSON Web Tokens (RS256) for API sessions: access 15 min, refresh 30 days (opaque, rotation) | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
 | JWT Bearer / API Key / Internal Token | Authentication header types: `Authorization: Bearer`, `X-API-Key`, `X-Internal-Token` | `docs/04-api/overview.md` |
 | NextAuth.js v4 | Auth library (OAuth, credentials, JWT) | `docs/04-api/authentication.md`, ADR/`docs/02-architecture/architecture.md` |
 | Prisma | TypeScript ORM; SQLite (dev) → PostgreSQL/Neon (prod) | `docs/03-database/*`, ADR-002 |

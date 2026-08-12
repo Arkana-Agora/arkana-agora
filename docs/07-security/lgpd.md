@@ -30,7 +30,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 |---|---|---|---|
 | **Acesso** | Art. 18, II | Configurações → "Meus Dados" → "Exportar meus dados" | 15 dias |
 | **Correção** | Art. 18, III | Editar campos diretamente no perfil | Imediato |
-| **Eliminação** | Art. 18, VI | Configurações → "Excluir conta" | 30 dias (grace period: 7 dias) |
+| **Eliminação** | Art. 18, VI | Configurações → "Excluir conta" | 30 dias (grace period: 30 dias) |
 | **Portabilidade** | Art. 18, V | Configurações → "Exportar meus dados" (JSON/CSV) | 15 dias |
 | **Revogação do consentimento** | Art. 18, IX | Configurações → Privacidade → Desativar | Imediato |
 | **Oposição** | Art. 18, IV | Configurações → Privacidade | Imediato |
@@ -105,7 +105,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | Dados financeiros | 5 anos | Obrigação fiscal (Lei 9.613/98) |
 | Logs de acesso | 90 dias | Segurança e auditoria |
 | Cookies de análise | 13 meses | Padrão do Google Analytics |
-| Tokens de sessão | 7 dias | Segurança da sessão |
+| Tokens de sessão | 30 dias | Segurança da sessão |
 | Tokens de recuperação | 1 hora | Segurança da conta |
 
 ---

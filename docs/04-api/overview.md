@@ -36,14 +36,16 @@ https://{dominio}/api/v1/{recurso}
 
 ## Autenticação
 
-O **arkana-agora** utiliza NextAuth.js v4 com sessões JWT.
+O **arkana-agora** utiliza autenticação híbrida (ADR-009): NextAuth.js v4 como camada de login (Google, Facebook, magic link) + Custom JWT Layer para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias).
 
 ### Fluxo
 
 ```
-Cliente → POST /auth/login → JWT (access_token + refresh_token)
-Cliente → Requisição com header: Authorization: Bearer <token>
-Servidor → Valida JWT → Processa requisição
+Cliente → POST /api/v1/auth/login (ou callback OAuth/magic link via NextAuth /api/auth/*) → NextAuth confirma identidade
+Servidor → Gera access_token (RS256) + refresh_token (rotação)
+Cliente → Requisição com header: Authorization: Bearer <access_token>
+Servidor → Valida JWT custom → Processa requisição
+Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → novos access + refresh (rotação)
 ```
 
 ### Tipos de Autenticação
@@ -161,13 +163,17 @@ GET /api/v1/tarot/decks?page=2&limit=20
 
 ## Rate Limiting
 
-Limites por plano de usuário:
+Limites por role/plano de usuário (fonte canônica: `docs/07-security/permissions.md`):
 
-| Plano | Requisições/min | Requisições/dia | AI Requests/dia |
-|-------|----------------|-----------------|-----------------|
-| Free | 100 | 1.000 | 10 |
-| Plus | 500 | 10.000 | Ilimitado |
-| Admin | 1.000 | Ilimitado | Ilimitado |
+| Role / Plano | Requisições/min | AI Requests/dia |
+|--------------|-----------------|-----------------|
+| Free (USER, plano FREE) | 100 | 10 |
+| Plus (USER, plano PLUS) | 300 | Ilimitado (soft limit 100/min) |
+| Professional | 300 | Ilimitado |
+| Admin | 600 | Ilimitado |
+| Super Admin [planejado] | 600 | Ilimitado |
+
+> Tiragens diárias: FREE = 3/dia (Tarot do Dia não conta), PLUS = 10/dia. Limites por endpoint em `permissions.md` (§ Rate Limits por Role).
 
 ### Comportamento ao exceder
 
@@ -357,8 +363,6 @@ components:
             user:
               type: object
             accessToken:
-              type: string
-            refreshToken:
               type: string
 
   responses:

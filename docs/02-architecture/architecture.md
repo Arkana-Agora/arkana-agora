@@ -77,11 +77,12 @@ src/
 │   │   ├── marketplace/
 │   │   └── profile/
 │   ├── api/                # API Routes
-│   │   ├── auth/           # NextAuth.js endpoints
-│   │   ├── readings/       # CRUD de leituras
-│   │   ├── social/         # Feed, follows, posts
-│   │   ├── marketplace/    # Produtos, pedidos
-│   │   └── payments/       # Integração Mercado Pago
+│   │   ├── auth/           # NextAuth.js endpoints internos (callbacks, session, csrf)
+│   │   ├── v1/auth/        # Auth REST custom (ADR-009): register, login, refresh, logout
+│   │   ├── v1/readings/    # CRUD de leituras
+│   │   ├── v1/social/      # Feed, follows, posts
+│   │   ├── v1/marketplace/ # Produtos, pedidos
+│   │   └── v1/payments/    # Integração Mercado Pago
 │   ├── layout.tsx
 │   └── page.tsx            # Landing page
 ├── components/
@@ -112,18 +113,19 @@ As rotas de API seguem o padrão RESTful:
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `POST` | `/api/auth/...` | Autenticação (NextAuth.js) |
-| `GET` | `/api/readings` | Listar leituras do usuário |
-| `POST` | `/api/readings` | Criar nova leitura |
-| `GET` | `/api/readings/[id]` | Buscar leitura específica |
-| `GET` | `/api/feed` | Feed social do usuário |
-| `POST` | `/api/posts` | Criar postagem |
-| `POST` | `/api/follows` | Seguir usuário |
-| `GET` | `/api/marketplace/products` | Listar produtos |
+| `POST` | `/api/auth/...` | Endpoints internos NextAuth.js (callbacks, session, csrf) — não renomeáveis |
+| `POST` | `/api/v1/auth/...` | Auth REST custom (ADR-009): register, login, refresh, logout |
+| `GET` | `/api/v1/readings` | Listar leituras do usuário |
+| `POST` | `/api/v1/readings` | Criar nova leitura |
+| `GET` | `/api/v1/readings/[id]` | Buscar leitura específica |
+| `GET` | `/api/v1/feed` | Feed social do usuário |
+| `POST` | `/api/v1/posts` | Criar postagem |
+| `POST` | `/api/v1/follows` | Seguir usuário |
+| `GET` | `/api/v1/marketplace/products` | Listar produtos |
 | `POST` | `/api/v1/payments/create` | Criar pagamento |
 | `POST` | `/api/v1/webhooks/mercadopago` | Webhook Mercado Pago |
 
-> **Nota sobre versionamento:** ADR-005 (planned) will version all routes to `/api/v1/` when monorepo microservices switch. Current docs use `/api/` for non-versioned routes and `/api/v1/` for versioned routes (e.g., payments/webhooks). See `docs/02-architecture/architecture.md` §6.1.
+> **Divisão de rotas de auth (ADR-009):** `/api/auth/*` é reservado aos endpoints internos do NextAuth.js (caminho fixo da biblioteca). Todas as rotas REST próprias — incluindo auth — ficam versionadas em `/api/v1/*`. `/api/v1/auth/refresh` é a rota de rotação do refresh token.
 
 ### 2.3 Mini Services
 
@@ -164,17 +166,17 @@ export default async function ReadingPage({ params }: { params: { id: string } }
 - **API Routes** do Next.js como controladores HTTP
 - **Zod** para validação de entrada/saída
 - **SSE** para streaming de interpretações IA
-- **NextAuth.js v4** para sessão e autenticação
+- **NextAuth.js v4** como camada de login (OAuth, magic link) + **Custom JWT** (access RS256 / refresh rotativo) para a sessão autenticada (ADR-009)
 
 ```typescript
-// Exemplo: API Route com validação
+// Exemplo: API Route com validação (autenticação via access token custom — ADR-009)
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const payload = await verifyToken(req); // jwt.verify(..., { algorithms: ['RS256'] }) + tokenVersion check
+  if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
   const data = CreateReadingSchema.parse(body);
-  const reading = await readingService.create(session.user.id, data);
+  const reading = await readingService.create(payload.sub, data);
   return NextResponse.json(reading, { status: 201 });
 }
 ```
@@ -408,7 +410,7 @@ export class InMemoryCache {
 
 - **Protocolo**: HTTP/2, JSON
 - **Uso**: Todas as operações CRUD padrão
-- **Autenticação**: JWT via NextAuth.js (cookie `next-auth.session-token`)
+- **Autenticação**: Custom JWT Bearer (access RS256 15min; refresh rotativo 30d) emitido após login via NextAuth.js (ADR-009)
 - **Versionamento**: URI path `/api/v1/...` (futuro)
 
 ### 6.2 SSE (Server-Sent Events) — Leituras IA
@@ -489,7 +491,7 @@ packages/api-client/     # Cliente API compartilhado
 | Renderização | SSR + CSR | Apenas CSR (nativo) |
 | Estado | Zustand + TanStack Query | Zustand + TanStack Query (mesmo!) |
 | UI | shadcn/ui + Tailwind | Tamagui (ou NativeWind) |
-| Autenticação | NextAuth.js cookies | NextAuth.js + secure storage |
+| Autenticação | Custom JWT Bearer (login via NextAuth.js) | Custom JWT Bearer + secure storage (mesmo token) |
 | Push Notifications | — | Expo Notifications |
 | Anim. Cartas | Framer Motion | react-native-reanimated |
 
@@ -497,9 +499,9 @@ packages/api-client/     # Cliente API compartilhado
 
 ## 8. Segurança
 
-- **Autenticação**: NextAuth.js v4 com Google, Facebook, email magic link
-- **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN)
-- **CSRF**: Proteção nativa do NextAuth.js
+- **Autenticação**: NextAuth.js v4 (camada de login: Google, Facebook, email magic link) + Custom JWT Layer (access RS256 / refresh rotativo) — ADR-009. Middleware custom `verifyToken()` valida `Authorization: Bearer` (substitui `getServerSession()`).
+- **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN); permissões derivadas server-side do role (não embutidas no token)
+- **CSRF**: Double-submit token (`__Host-csrf-token` + header `X-Requested-With`) nos endpoints que usam cookies (`/api/v1/auth/*`, callbacks); endpoints apenas-Bearer não exigem. `/api/auth/*` mantém o CSRF nativo do NextAuth.js
 - **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js
 - **Input Validation**: Zod schemas em todas as rotas de API
 - **Content Security Policy**: Headers de segurança configurados no `next.config.ts`

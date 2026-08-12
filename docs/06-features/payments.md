@@ -8,7 +8,7 @@
 
 O módulo de Pagamentos do **Arkana Agora** é o sistema financeiro central da plataforma, processando todas as transações através da integração com o **Mercado Pago**. O módulo cobre dois fluxos principais: **assinaturas** do plano Arkana Plus e **transações pontuais** do Marketplace (compra de produtos, consultas e presentes). Todas as transações são processadas em Reais (BRL) com suporte a PIX, cartão de crédito e boleto bancário.
 
-O plano Arkana Plus oferece leituras ilimitadas, tiragens premium, interpretações IA avançadas e acesso antecipado a novos recursos. O sistema de gestão de assinaturas controla renovações, cancelamentos e reativações, com período de teste de 7 dias para novos assinantes. O histórico de cobranças e a geração de recibos ficam disponíveis na área de configurações do usuário. A política de reembolso prevê devolução integral em até 7 dias para assinaturas e análise caso a caso para produtos do Marketplace.
+O plano Arkana Plus oferece 10 tiragens por dia, tiragens premium, interpretações IA avançadas e acesso antecipado a novos recursos. O sistema de gestão de assinaturas controla renovações, cancelamentos e reativações, com período de teste de 7 dias para novos assinantes. O histórico de cobranças e a geração de recibos ficam disponíveis na área de configurações do usuário. A política de reembolso prevê devolução integral em até 7 dias para assinaturas e análise caso a caso para produtos do Marketplace.
 
 ---
 
@@ -16,7 +16,7 @@ O plano Arkana Plus oferece leituras ilimitadas, tiragens premium, interpretaç�
 
 | Recurso | Gratuito | Plus (R$ 19,90/mês) |
 |---|---|---|
-| Leituras por dia | 3 | Ilimitadas |
+| Leituras por dia | 3 | 10 |
 | Tiragens disponíveis | Simples (1, 3, Sim/Não) | Todas (Cruz Celta, Amor, GT) |
 | Interpretação IA | Básica | Avançada com contexto |
 | Tarot Diário | Sim | Sim (interpretação estendida) |

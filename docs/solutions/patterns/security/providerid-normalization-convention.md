@@ -159,8 +159,8 @@ async function linkEmailToOAuthAccount(
   "password": "SenhaForte123"
 }
 
-// POST /api/v1/auth/social
-// OAuth registration
+// POST /api/v1/auth/social (deprecated — OAuth via NextAuth /api/auth/*, ADR-009)
+// OAuth registration (legacy)
 {
   "provider": "google",
   "subjectId": "12345678901234567890" // OAuth subject ID

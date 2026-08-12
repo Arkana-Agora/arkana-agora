@@ -1,8 +1,8 @@
 # API Admin — arkana-agora
 
-> **Módulo**: `src/app/api/v1/admin/` | **Autenticação**: JWT + role `admin` | **Auditoria**: Todas as ações logadas
+> **Módulo**: `src/app/api/v1/admin/` | **Autenticação**: JWT + role `ADMIN` | **Auditoria**: Todas as ações logadas
 
-> **Health contract:** See `docs/solutions/patterns/backend/health-check-envelope.md` for the envelope pattern. Admin health endpoint (`GET /admin/system/health`) uses a richer variant with per-service metadata (latency, connectionPool, sslExpiry, memoryUsage, etc.) as documented in this endpoint. Both share the same `data` wrapper and status/until/uptime structure.
+> **Health contract:** See `docs/solutions/patterns/backend/health-check-envelope.md` for the envelope pattern. The implemented `GET /api/health` returns a flat envelope `{ status, timestamp, version, services }` (no `data` wrapper). The planned admin health endpoint (`GET /admin/system/health`) uses a richer variant with per-service metadata (latency, connectionPool, sslExpiry, memoryUsage, etc.) and wraps it in the standard admin `data` wrapper, sharing the same status/uptime structure as documented in this endpoint.
 
 ## Sumário
 
@@ -30,7 +30,7 @@ Authorization: Bearer <admin_jwt_token>
 X-Admin-Secret: <chave_admin>
 ```
 
-> Apenas usuários com `role: "admin"` podem acessar. Ações são registradas em log de auditoria.
+> Apenas usuários com `role: "ADMIN"` podem acessar. Ações são registradas em log de auditoria.
 
 ### Log de Auditoria
 
@@ -42,7 +42,7 @@ Toda ação admin gera registro:
   "adminId": "usr_admin1",
   "action": "user.role_change",
   "targetId": "usr_target123",
-  "details": { "oldRole": "free", "newRole": "admin" },
+  "details": { "oldRole": "USER", "newRole": "ADMIN" },
   "ip": "189.123.45.67",
   "userAgent": "Mozilla/5.0...",
   "timestamp": "2025-01-15T10:30:00Z"
@@ -87,8 +87,8 @@ GET /api/v1/admin/users?page=1&limit=20&role=user&plan=plus&search=maria&sortBy=
       "email": "maria@email.com",
       "username": "mariatarot",
       "avatar": "/avatars/usr_a1b2c3d4.jpg",
-      "role": "user",
-      "plan": "plus",
+      "role": "USER",
+      "plan": "PLUS",
       "status": "active",
       "stats": {
         "totalReadings": 42,
@@ -130,7 +130,7 @@ Content-Type: application/json
 ```json
 {
   "name": "Maria Silva Santos",
-  "plan": "plus",
+  "plan": "PLUS",
   "status": "active"
 }
 ```
@@ -152,7 +152,7 @@ Content-Type: application/json
     "user": {
       "id": "usr_target123",
       "name": "Maria Silva Santos",
-      "plan": "plus",
+      "plan": "PLUS",
       "status": "active",
       "updatedAt": "2025-01-15T10:30:00Z"
     }
@@ -182,7 +182,7 @@ Content-Type: application/json
 
 ```json
 {
-  "role": "professional",
+  "role": "PROFESSIONAL",
   "reason": "Usuário solicitou venda de produtos esotéricos. Documentação verificada."
 }
 ```
@@ -191,15 +191,15 @@ Content-Type: application/json
 
 | Role | Descrição | Permissões |
 |------|-----------|------------|
-| `user` | Usuário comum | Acesso padrão |
-| `professional` | Profissional / vendedor marketplace | Criação de produtos + tudo de user |
-| `admin` | Administrador | Acesso total |
+| `USER` | Usuário comum | Acesso padrão |
+| `PROFESSIONAL` | Profissional / vendedor marketplace | Criação de produtos + tudo de USER |
+| `ADMIN` | Administrador | Acesso total |
 
 ### Validação
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `role` | string | Sim | `user`, `professional`, `admin` |
+| `role` | string | Sim | `USER`, `PROFESSIONAL`, `ADMIN` |
 | `reason` | string | Sim | Motivo da alteração (mín 10 chars) |
 
 ### Resposta — 200 OK
@@ -209,7 +209,7 @@ Content-Type: application/json
   "data": {
     "user": {
       "id": "usr_target123",
-      "role": "professional"
+      "role": "PROFESSIONAL"
     },
     "auditId": "audit_002"
   }

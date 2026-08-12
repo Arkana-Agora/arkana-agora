@@ -91,7 +91,7 @@ O sistema deve permitir o compartilhamento de tiragens:
 ### RF-TAROT-008: Limite de Tiragens Diarias
 O sistema deve implementar limites de uso por plano:
 - **Plano Free**: maximo 3 tiragens por dia (reset as 00:00 BRT)
-- **Plano Plus**: tiragens ilimitadas
+- **Plano Plus**: maximo 10 tiragens por dia (ADR-009)
 - Contador exibido na UI: "Voce fez 2 de 3 tiragens hoje"
 - Quando o limite e atingido: modal informativo com CTA para upgrade
 - Leituras de tiragens ja salvas nao contam como nova tiragem

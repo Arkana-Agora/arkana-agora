@@ -581,7 +581,7 @@ User stories do projeto `arkana-agora` no formato padrao: "Como [persona], quero
 **Como** usuario gratuito, **quero** ver o que esta incluso no Arkana Plus, **para** decidir se vale a pena assinar.
 
 **Criterios de Aceitacao:**
-- Dado que o usuario acessa a pagina de beneficios, quando a tela carrega, entao ve lista completa com: tiragens ilimitadas, espalhamentos exclusivos, leituras avancadas, horoscopo personalizado completo, sem anuncios
+- Dado que o usuario acessa a pagina de beneficios, quando a tela carrega, entao ve lista completa com: 10 tiragens por dia, espalhamentos exclusivos, leituras avancadas, horoscopo personalizado completo, sem anuncios
 
 **Prioridade:** Alto | **Versao:** V1
 
