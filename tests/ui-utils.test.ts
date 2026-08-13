@@ -7,7 +7,7 @@ describe("cn", () => {
     expect(cn("bg-red-500", "text-white")).toBe("bg-red-500 text-white");
   });
 
-  it("resolve conflito de conflito tailwind com tailwind-merge", () => {
+  it("resolve conflito de classes tailwind com tailwind-merge", () => {
     expect(cn("px-2 py-1", "px-4")).toBe("py-1 px-4");
   });
 
@@ -29,7 +29,8 @@ describe("buttonVariants", () => {
   });
 
   it("aplica a variante outline", () => {
-    expect(buttonVariants({ variant: "outline" })).toContain("border-input");
+    expect(buttonVariants({ variant: "outline" })).toContain("border-border");
+    expect(buttonVariants({ variant: "outline" })).toContain("dark:border-input");
   });
 
   it("aplica o tamanho lg", () => {

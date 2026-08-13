@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth/auth";
 
 import { Button } from "@/components/ui/button";
@@ -14,10 +13,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export default async function DashboardPage() {
   const session = await auth();
 
-  if (!session?.user) {
-    redirect("/login");
-  }
-
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="absolute top-4 right-4">
@@ -27,7 +22,7 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle>Dashboard</CardTitle>
           <CardDescription>
-            Olá, {session.user.name ?? session.user.email} — sessão
+            Olá, {session?.user?.name ?? session?.user?.email} — sessão
             autenticada.
           </CardDescription>
         </CardHeader>
