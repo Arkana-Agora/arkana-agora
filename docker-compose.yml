@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arkana-postgres
+    environment:
+      POSTGRES_USER: arkana
+      POSTGRES_PASSWORD: arkana
+      POSTGRES_DB: arkana
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkana -d arkana"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: arkana-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+volumes:
+  pg_data:
+  redis_data:
