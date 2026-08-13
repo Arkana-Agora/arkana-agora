@@ -421,18 +421,18 @@ jobs:
           name: nextjs-build
           path: .next/
 
+  # Staging/preview a cada push na `main` (M0); prod via promoção manual no painel da Vercel.
+  # Sem secrets VERCEL_* configurados, o job é skipado e o workflow permanece verde.
   deploy-staging:
-    name: Deploy Staging
+    name: Deploy Staging (Vercel preview)
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'pull_request'
-    # Deploy automático via Vercel (PR preview)
-
-  deploy-production:
-    name: Deploy Produção
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      secrets.VERCEL_TOKEN != '' &&
+      secrets.VERCEL_ORG_ID != '' &&
+      secrets.VERCEL_PROJECT_ID != ''
     steps:
       - uses: actions/checkout@v4
       - uses: amondnet/vercel-action@v25
@@ -440,7 +440,6 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
 ```
 
 ### 6.2 Fluxo de Deploy
