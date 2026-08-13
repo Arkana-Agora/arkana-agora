@@ -36,7 +36,7 @@ https://{dominio}/api/v1/{recurso}
 
 ## Autenticação
 
-O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (Google, Facebook, magic link) + Custom JWT Layer para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias).
+O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1).
 
 ### Fluxo
 
@@ -121,7 +121,7 @@ data: {"type": "done", "payload": {"tokensUsed": 1523}}
 
 ## Paginação
 
-O **arkana-agora** utiliza dois策略 de paginação conforme o contexto:
+O **arkana-agora** utiliza duas estratégias de paginação conforme o contexto:
 
 ### Cursor-based (Feeds e listas ordenadas por tempo)
 

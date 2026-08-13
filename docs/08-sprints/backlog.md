@@ -39,7 +39,11 @@
 
 | ID | User Story | Prioridade | Estimativa | Versão |
 |----|-----------|-----------|-----------|--------|
-| B-009 | Cadastro/Login social | Crítica | 5d | MVP |
+| B-009 | Cadastro/Login social (magic link + Google OAuth já entregues no Sprint 0/F2A, ADR-010) | Crítica | 2d | MVP |
+| B-009A | Custom JWT Layer: access RS256 (15 min) + refresh rotation (30 dias) + revogação (`tokenVersion`) | Crítica | 3d | MVP |
+| B-009B | Rate limit do magic link (RF-AUTH-003: 3 links/hora) via `/api/v1/auth/magic-link` | Alta | 1d | MVP |
+| B-009C | Credentials e-mail/senha + Facebook OAuth (Sprint 1, ADR-010 §10) | Alta | 2d | MVP |
+| B-009D | Model `Account` + backfill `provider`/`providerId` (multi-provedor, ADR-010 §5) | Média | 2d | MVP |
 | B-010 | Perfil do usuário | Crítica | 3d | MVP |
 | B-011 | Motor de tiragem de tarot | Crítica | 5d | MVP |
 | B-012 | Tarot do dia | Alta | 2d | MVP |
@@ -50,7 +54,7 @@
 | B-017 | Landing page completa | Alta | 3d | MVP |
 | B-018 | Seed data (baralhos) | Média | 1d | MVP |
 
-**Subtotal**: 10 itens | **34 dias úteis**
+**Subtotal**: 14 itens | **44 dias úteis**
 
 ---
 

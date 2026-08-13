@@ -33,7 +33,12 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 ## Tasks Detalhadas
 
 ### Autenticação e Perfil
-- [ ] 1. Tela de cadastro/login com Google OAuth e email (magic link)
+- [x] 1. Tela de cadastro/login com Google OAuth e email (magic link) — **implementado no Sprint 0 (F2A, ADR-010)**
+- [ ] 1a. Custom JWT Layer (Sprint 1): access token RS256 de 15 min + refresh token rotativo de 30 dias + `tokenVersion`/revogação server-side (model `Session`, ADR-009 Gate C; encerra a janela de não-revogação do ADR-010)
+- [ ] 1b. Rate limit do magic link (RF-AUTH-003: 3 links/hora) na rota `/api/v1/auth/magic-link`
+- [ ] 1c. Credentials e-mail/senha — Sprint 1 (ADR-010 §10)
+- [ ] 1d. Facebook OAuth — Sprint 1 (ADR-010 §10)
+- [ ] 1e. Model `Account` + backfill dos pares `provider`/`providerId` (multi-provedor por usuário, ADR-010 §5)
 - [ ] 2. Tela de onboarding pós-cadastro (nome, data de nascimento)
 - [ ] 3. Tela de perfil: editar dados pessoais, upload de avatar
 - [ ] 4. Cálculo automático de signo zodiacal baseado na data de nascimento
