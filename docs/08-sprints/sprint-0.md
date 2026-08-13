@@ -22,7 +22,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 | US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push | **Parcial** — scripts `lint`/`type-check`/`test`/`build` existem; pipeline GH Actions ainda não criado |
 | US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Pendente** — sem `docker-compose.yml` no repo |
 | US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com 5 models (User, UserProfile, Subscription, Session, VerificationToken); dev PostgreSQL (Docker Postgres 16) via `bunx prisma migrate dev`; init migration `20260813000605_init` aplicada |
-| US-005 | Como desenvolvedor, preciso que o NextAuth.js esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Pendente** — dependência `next-auth` removida do `package.json` (v4 é incompatível com Next 16 + React 19); reinstalar na sprint de auth com versão compatível (Auth.js v5 beta ou v4 corrigida) e atualizar as referências a "NextAuth v4" nos docs |
+| US-005 | Como desenvolvedor, preciso que o Auth.js v5 esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010); Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link; ver task 9 |
 | US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Pendente** — sem shadcn/ui/Tailwind configurados ainda |
 
 ---
@@ -78,7 +78,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 
 - [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
 - [ ] Deploy automático em staging via GitHub Actions → Vercel — **pendente** (sem pipeline criado)
-- [ ] Autenticação funcionando com Google OAuth — **pendente**
+- [x] Autenticação funcionando com Google OAuth — **entregue (F2A)** — Auth.js v5 (ADR-010); login `/login` (Google + magic link), sessão JWT do Auth.js, proteção de `/dashboard` via `src/proxy.ts`
 - [ ] Banco de dados conectado com migrations aplicadas — **parcial** (5 models + init `20260813000605_init` aplicada em dev PostgreSQL/Docker)
 - [ ] Design system com tema claro/escuro operacional — **pendente**
 - [x] Health check endpoint presente — 200 quando o check de DB passa; 503 apenas em falha dura; `status` do corpo derivado dos checks (`ok`/`degraded`)
@@ -160,7 +160,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - Pipeline CI/CD (GitHub Actions) → Vercel
 - Infraestrutura Docker Compose
 - Migrations Prisma versionadas + tabelas completas (18 entidades, `docs/03-database/entities.md`)
-- Autenticação NextAuth.js (Google OAuth, magic link)
+- Autenticação Sprint 1: e-mail/senha (credentials), Facebook OAuth, Custom JWT Layer (access RS256 + refresh rotation) e rotas `/api/v1/auth/*` (rate limit de magic link, LGPD delete)
 - Design system shadcn/ui (claro/escuro)
 - Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
 

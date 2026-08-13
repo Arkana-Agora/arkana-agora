@@ -41,7 +41,7 @@ Estabelecer a infraestrutura tecnica, ferramentas de desenvolvimento e pipelines
 | 0.3 | Setup do Tailwind CSS 4 + shadcn/ui | 1 | 0.2 |
 | 0.4 | Docker Compose (app + PostgreSQL + Redis) | 1 | 0.1 |
 | 0.5 | Prisma schema inicial + migrations | 2 | 0.4 |
-| 0.6 | NextAuth.js v4 com providers (Google, Facebook) | 2 | 0.2 |
+| 0.6 | Auth.js v5 com providers (Google, magic link — ADR-010; Facebook na Sprint 1) | 2 | 0.2 |
 | 0.7 | CI/CD pipeline (GitHub Actions: lint, test, build) | 2 | 0.1 |
 | 0.8 | ESLint + Prettier + Husky (pre-commit) | 1 | 0.1 |
 | 0.9 | Banco de dados de referencia (cartas, selos, tons) | 2 | 0.5 |

@@ -115,7 +115,7 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **Monorepo** | Repositorio unico contendo multiplos pacotes/aplicacoes, gerenciado com ferramentas como Turborepo. |
 | **SQLite** | Banco de dados relacional embarcado; foi usado em desenvolvimento até a Fase 1 do Sprint 0, quando o dev migrou para Docker Postgres 16 (`docs/03-database/migrations.md`). |
 | **PostgreSQL** | Banco de dados relacional robusto do arkana-agora: Docker Postgres 16 em desenvolvimento e Neon em producao. |
-| **NextAuth.js v4** | Biblioteca de autenticacao para Next.js, com suporte a OAuth, credenciais e JWT. |
+| **Auth.js v5** | Biblioteca de autenticacao para Next.js (sucessora do NextAuth.js v4), com `next-auth@5.0.0-beta.32` pinado e suporte a OAuth, magic link e JWT (ADR-010). |
 | **Tailwind CSS 4** | Framework CSS utility-first, utilizado para estilizacao da interface. |
 
 ---

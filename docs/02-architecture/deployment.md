@@ -31,13 +31,13 @@
 | Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
 |---|---|---|---|---|
 | **Frontend (web)** | Next.js 16 (App Router) + TypeScript | `apps/web` (monorepo futuro) / raiz do app (MVP) | 3000 | `bun run dev` |
-| **Backend (API)** | Next.js API Routes + Prisma + NextAuth v4 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
+| **Backend (API)** | Next.js API Routes + Prisma + Auth.js v5 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
 | **Backend — WebSocket** | Node.js + Socket.io | `services/ws-service` | 3003 | `bun run dev:ws` |
 | **Backend — IA** (futuro) | Node.js | `services/ai-service` | 3004 | — |
 | **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
 | **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
 
-Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), NextAuth v4 (auth), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (New York) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
+Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (New York) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
 
 ### 2.2 Stack Local
 

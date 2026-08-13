@@ -25,10 +25,10 @@ Este documento define o escopo do Minimum Viable Product (MVP) e as features pla
 
 | Campo | Detalhe |
 |-------|---------|
-| **Descricao** | Cadastro e login via Google OAuth e Facebook Login |
+| **Descricao** | Cadastro e login via Google OAuth e magic link (email) |
 | **User Stories** | US-001, US-002, US-003, US-004, US-005 |
 | **Requisitos** | RF-001, RF-002, RF-003, RF-004, RF-005 |
-| **Dependencias** | NextAuth.js v4 configurado |
+| **Dependencias** | Auth.js v5 configurado (ADR-010) |
 | **Estimativa** | 3 dias |
 
 ### MV-002: Perfil Basico
@@ -223,7 +223,7 @@ Este documento define o escopo do Minimum Viable Product (MVP) e as features pla
 Semana 1-2: Fundacao (Fase 0 parcial)
   |- Monorepo, Next.js, Tailwind, shadcn/ui
   |- Docker, Prisma, banco de dados
-  |- NextAuth.js (Google + Facebook)
+  |- Auth.js v5 — Google OAuth + magic link (ADR-010)
   |- Banco de dados de cartas RWS
 
 Semana 3-4: Auth + Perfil
@@ -331,7 +331,7 @@ O MVP estara pronto para lancamento quando todos os criterios a seguir forem ate
 1. **Funcional**: Todas as 9 features MVP estao implementadas e testadas
 2. **Performance**: FCP < 1,5s, LCP < 2,5s, CLS < 0,1 em redes 4G
 3. **IA**: Leitura streaming com inicio em < 3s e sem interrupcoes em 95% das requisicoes
-4. **Auth**: Cadastro Google + Facebook + Email funcional com confirmacao
+4. **Auth**: Cadastro Google + Email (magic link) funcional com confirmacao (Facebook: Sprint 1)
 5. **Seguranca**: Todos os endpoints protegidos, LGPD (consentimento + exclusao) implementado
 6. **Testes**: Cobertura minima de 60% no backend, testes E2E dos fluxos criticos
 7. **Deploy**: Pipeline CI/CD verde, deploy automatico em staging e producao

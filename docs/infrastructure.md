@@ -82,7 +82,7 @@ assets.arkanaagora.com.br → Cloudflare R2 (images)
 
 | Service | Provider / tech | Port | Status | Integration points |
 |---|---|---|---|---|
-| Web app (Next.js, App Router) | Vercel serverless | 3000 | planejado | REST API routes, SSR, SSE streaming, NextAuth.js v4 |
+| Web app (Next.js, App Router) | Vercel serverless | 3000 | planejado | REST API routes, SSR, SSE streaming, Auth.js v5 (ADR-010) |
 | Socket.io mini-service | Railway (Node.js) | 3003 | planejado | WebSocket events (`feed:new_post`, `notification:new`, `presence:update`, `reading:shared`, `chat:message`); Redis adapter for horizontal scale |
 | AI service | Node.js | 3004 | planejado (futuro) | SSE streaming of GPT-4o interpretations |
 | Worker (BullMQ) | Railway (Node.js) | 3005 | planejado (futuro) | Daily horoscopes, email notifications, image processing |
@@ -99,7 +99,7 @@ assets.arkanaagora.com.br → Cloudflare R2 (images)
 | Alerting | PagerDuty + Slack | — | planejado | Escalation: warning → Slack (30 min), high → PagerDuty (15 min), critical → PagerDuty+Slack+SMS (5 min) |
 | Tracing | OpenTelemetry | — | planejado (futuro) | Backends considered: Jaeger, Tempo, Honeycomb, Datadog — no decision recorded |
 
-**External dependencies with contracts:** Mercado Pago webhooks, OpenAI API (rate limits: 500 RPM / 200K TPM Tier 1), Google/Facebook OAuth (NextAuth.js), SMTP (magic links). See `docs/integrations.md` for the contract catalog; contracts are also documented inline in `docs/04-api/*` and `docs/05-ai/providers.md`.
+**External dependencies with contracts:** Mercado Pago webhooks, OpenAI API (rate limits: 500 RPM / 200K TPM Tier 1), Google/Facebook OAuth (Auth.js v5 — Google no MVP, Facebook na Sprint 1), SMTP (magic links). See `docs/integrations.md` for the contract catalog; contracts are also documented inline in `docs/04-api/*` and `docs/05-ai/providers.md`.
 
 ## Deployment and Operations
 

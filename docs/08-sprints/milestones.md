@@ -36,8 +36,8 @@ Semana  1───3───5──────8──────13────
 - [ ] `docker compose up` sobe toda a stack em < 60 segundos
 - [ ] CI/CD pipeline verde: lint → test → build → deploy
 - [ ] Deploy automático em staging (Vercel) a cada push na `main`
-- [ ] NextAuth.js: login com Google OAuth redirecionando corretamente
-- [ ] NextAuth.js: magic link enviando email e autenticando
+- [x] Auth.js v5: login com Google OAuth redirecionando corretamente — entregue (F2A, ADR-010)
+- [x] Auth.js v5: magic link enviando email e autenticando — entregue (F2A, ADR-010)
 - [ ] PostgreSQL conectado via Prisma, migrations aplicadas
 - [ ] Tabelas `User`, `UserProfile`, `Subscription` criadas
 - [ ] Design system shadcn/ui renderizando em tema claro e escuro
