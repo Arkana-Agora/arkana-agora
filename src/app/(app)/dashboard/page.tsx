@@ -1,17 +1,17 @@
-import { auth, signOut } from "@/auth/auth";
+import { auth, signOut } from "@/auth/auth"
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
+} from "@/components/ui/card"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await auth()
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
@@ -29,8 +29,8 @@ export default async function DashboardPage() {
         <CardContent>
           <form
             action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
+              "use server"
+              await signOut({ redirectTo: "/login" })
             }}
           >
             <Button type="submit" variant="outline">
@@ -40,5 +40,5 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
     </main>
-  );
+  )
 }

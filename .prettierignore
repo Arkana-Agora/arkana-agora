@@ -1,0 +1,30 @@
+# Build / generated
+.next/
+out/
+build/
+coverage/
+node_modules/
+next-env.d.ts
+
+# Environment (nunca commitar)
+.env
+.env.*
+!.env.example
+
+# Lockfiles
+bun.lock
+bun.lockb
+package-lock.json
+pnpm-lock.yaml
+
+# Config de tooling do repo (não é código do produto)
+.opencode/
+.github/
+agents.md
+arkana-agora-spec.html
+arkana-agora.code-workspace
+*.cjs
+
+# Documentação — formatação manual deliberada (tabelas largas)
+docs/
+.specs/

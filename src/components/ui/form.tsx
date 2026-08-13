@@ -120,10 +120,7 @@ function FormControl(props: React.ComponentProps<typeof Slot.Root>) {
   )
 }
 
-function FormDescription({
-  className,
-  ...props
-}: React.ComponentProps<"p">) {
+function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
   const { formDescriptionId } = useFormField()
 
   return (

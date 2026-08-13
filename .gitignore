@@ -38,3 +38,6 @@ next-env.d.ts
 # local sqlite (dev)
 *.db
 prisma/dev.db*
+
+# scripts github cli
+*.cjs

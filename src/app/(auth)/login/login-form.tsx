@@ -1,52 +1,53 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { signIn } from "next-auth/react";
+import { useState } from "react"
+import type { FormEvent } from "react"
+import { signIn } from "next-auth/react"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
-type Status = "idle" | "loading" | "sent" | "error";
+type Status = "idle" | "loading" | "sent" | "error"
 
-const EMAIL_SEND_ERROR = "Não foi possível enviar o link de acesso. Tente novamente.";
+const EMAIL_SEND_ERROR =
+  "Não foi possível enviar o link de acesso. Tente novamente."
 
 export function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("")
+  const [status, setStatus] = useState<Status>("idle")
+  const [error, setError] = useState<string | null>(null)
 
   async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus("loading");
-    setError(null);
+    event.preventDefault()
+    setStatus("loading")
+    setError(null)
     try {
       const result = await signIn("email", {
         email: email.trim(),
         redirect: false,
         callbackUrl: "/dashboard",
-      });
+      })
       if (result?.error) {
-        setStatus("error");
-        setError(EMAIL_SEND_ERROR);
+        setStatus("error")
+        setError(EMAIL_SEND_ERROR)
       } else {
-        setStatus("sent");
+        setStatus("sent")
       }
     } catch {
-      setStatus("error");
-      setError(EMAIL_SEND_ERROR);
+      setStatus("error")
+      setError(EMAIL_SEND_ERROR)
     }
   }
 
   async function handleGoogleSignIn() {
-    setStatus("loading");
-    setError(null);
+    setStatus("loading")
+    setError(null)
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      await signIn("google", { callbackUrl: "/dashboard" })
     } catch {
-      setStatus("error");
-      setError("Não foi possível entrar com o Google. Tente novamente.");
+      setStatus("error")
+      setError("Não foi possível entrar com o Google. Tente novamente.")
     }
   }
 
@@ -56,7 +57,7 @@ export function LoginForm() {
         Enviamos um link de acesso para <strong>{email}</strong>. Verifique sua
         caixa de entrada.
       </p>
-    );
+    )
   }
 
   return (
@@ -106,5 +107,5 @@ export function LoginForm() {
         Entrar com Google
       </Button>
     </form>
-  );
+  )
 }

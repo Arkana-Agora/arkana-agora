@@ -13,7 +13,17 @@
     "type-check": "tsc --noEmit",
     "seed": "bunx tsx prisma/seed.ts",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mjs,cjs,js}": [
+      "eslint --fix",
+      "bunx prettier --write"
+    ],
+    "*.{json,md,css}": "bunx prettier --write"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -42,6 +52,9 @@
     "@vitest/coverage-v8": "^3.0.5",
     "eslint": "^9.19.0",
     "eslint-config-next": "^16.0.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "prisma": "^6.5.0",
     "shadcn": "^4.17.0",
     "tsx": "^4.19.2",

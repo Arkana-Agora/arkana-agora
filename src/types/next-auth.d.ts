@@ -1,13 +1,13 @@
-import type { DefaultSession } from "next-auth";
+import type { DefaultSession } from "next-auth"
 
 declare module "@auth/core/jwt" {
   interface JWT {
-    userId?: string;
+    userId?: string
   }
 }
 
 declare module "@auth/core/types" {
   interface Session {
-    user: { id?: string } & DefaultSession["user"];
+    user: { id?: string } & DefaultSession["user"]
   }
 }

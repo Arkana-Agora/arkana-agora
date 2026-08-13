@@ -1,22 +1,23 @@
-import type { Metadata } from "next";
-import type { ReactNode } from "react";
-import { Geist } from "next/font/google";
+import type { Metadata } from "next"
+import type { ReactNode } from "react"
+import { Geist } from "next/font/google"
 
-import { cn } from "@/lib/utils";
-import { Providers } from "@/components/providers";
-import "./globals.css";
+import { cn } from "@/lib/utils"
+import { Providers } from "@/components/providers"
+import "./globals.css"
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
 export const metadata: Metadata = {
   title: "Arkana Agora",
-  description: "Tarot, Lenormand, numerologia e astrologia com IA — social vertical",
-};
+  description:
+    "Tarot, Lenormand, numerologia e astrologia com IA — social vertical",
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: ReactNode;
+  children: ReactNode
 }>) {
   return (
     <html
@@ -28,5 +29,5 @@ export default function RootLayout({
         <Providers>{children}</Providers>
       </body>
     </html>
-  );
+  )
 }

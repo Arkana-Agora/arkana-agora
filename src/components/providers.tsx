@@ -1,9 +1,9 @@
 "use client"
 
-import type { ReactNode } from "react";
-import { SessionProvider } from "next-auth/react";
+import type { ReactNode } from "react"
+import { SessionProvider } from "next-auth/react"
 
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/theme-provider"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -17,5 +17,5 @@ export function Providers({ children }: { children: ReactNode }) {
         {children}
       </ThemeProvider>
     </SessionProvider>
-  );
+  )
 }

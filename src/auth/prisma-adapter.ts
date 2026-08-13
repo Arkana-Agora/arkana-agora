@@ -1,31 +1,31 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client"
 import type {
   Adapter,
   AdapterAccount,
   AdapterUser,
   VerificationToken,
-} from "next-auth/adapters";
-import { prisma } from "@/lib/prisma";
+} from "next-auth/adapters"
+import { prisma } from "@/lib/prisma"
 
 const PROVIDER_ENUM: Record<string, "EMAIL" | "GOOGLE"> = {
   email: "EMAIL",
   google: "GOOGLE",
-};
+}
 
 function toProviderEnum(provider: string): "EMAIL" | "GOOGLE" {
-  const mapped = PROVIDER_ENUM[provider];
+  const mapped = PROVIDER_ENUM[provider]
   if (!mapped) {
-    throw new Error(`Unknown auth provider: ${provider}`);
+    throw new Error(`Unknown auth provider: ${provider}`)
   }
-  return mapped;
+  return mapped
 }
 
 function toAdapterUser(user: {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: Date | null;
-  avatar: string | null;
+  id: string
+  name: string
+  email: string
+  emailVerified: Date | null
+  avatar: string | null
 }): AdapterUser {
   return {
     id: user.id,
@@ -33,7 +33,7 @@ function toAdapterUser(user: {
     email: user.email,
     emailVerified: user.emailVerified,
     image: user.avatar,
-  };
+  }
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -42,7 +42,7 @@ function isUniqueViolation(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "P2002"
-  );
+  )
 }
 
 function isNotFound(error: unknown): boolean {
@@ -51,13 +51,13 @@ function isNotFound(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "P2025"
-  );
+  )
 }
 
 export const prismaAdapter = {
   async createUser(user) {
-    const email = user.email.toLowerCase();
-    const name = user.name ?? email.split("@")[0];
+    const email = user.email.toLowerCase()
+    const name = user.name ?? email.split("@")[0]
     try {
       const created = await prisma.user.create({
         data: {
@@ -69,23 +69,23 @@ export const prismaAdapter = {
           provider: "EMAIL",
           providerId: email,
         },
-      });
-      return toAdapterUser(created);
+      })
+      return toAdapterUser(created)
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new Error(
           `Conta com e-mail ${email} existe, mas está inativa/excluída (janela LGPD).`,
-        );
+        )
       }
-      throw error;
+      throw error
     }
   },
 
   async getUser(id) {
     const user = await prisma.user.findFirst({
       where: { id, deletedAt: null, isActive: true },
-    });
-    return user ? toAdapterUser(user) : null;
+    })
+    return user ? toAdapterUser(user) : null
   },
 
   async getUserByEmail(email) {
@@ -95,8 +95,8 @@ export const prismaAdapter = {
         deletedAt: null,
         isActive: true,
       },
-    });
-    return user ? toAdapterUser(user) : null;
+    })
+    return user ? toAdapterUser(user) : null
   },
 
   async getUserByAccount({ provider, providerAccountId }) {
@@ -107,21 +107,22 @@ export const prismaAdapter = {
         deletedAt: null,
         isActive: true,
       },
-    });
-    return user ? toAdapterUser(user) : null;
+    })
+    return user ? toAdapterUser(user) : null
   },
 
   async updateUser(user) {
-    const data: Prisma.UserUpdateInput = {};
-    if (typeof user.name === "string") data.name = user.name;
-    if (user.email !== undefined) data.email = user.email.toLowerCase();
-    if (user.emailVerified !== undefined) data.emailVerified = user.emailVerified;
-    if (user.image !== undefined) data.avatar = user.image;
+    const data: Prisma.UserUpdateInput = {}
+    if (typeof user.name === "string") data.name = user.name
+    if (user.email !== undefined) data.email = user.email.toLowerCase()
+    if (user.emailVerified !== undefined)
+      data.emailVerified = user.emailVerified
+    if (user.image !== undefined) data.avatar = user.image
     const updated = await prisma.user.update({
       where: { id: user.id },
       data,
-    });
-    return toAdapterUser(updated);
+    })
+    return toAdapterUser(updated)
   },
 
   async linkAccount(account: AdapterAccount) {
@@ -131,11 +132,11 @@ export const prismaAdapter = {
         provider: toProviderEnum(account.provider),
         providerId: account.providerAccountId,
       },
-    });
+    })
   },
 
   async unlinkAccount() {
-    return undefined;
+    return undefined
   },
 
   async createVerificationToken(verificationToken: VerificationToken) {
@@ -146,23 +147,23 @@ export const prismaAdapter = {
         type: "MAGIC_LINK",
         expiresAt: verificationToken.expires,
       },
-    });
-    return verificationToken;
+    })
+    return verificationToken
   },
 
   async useVerificationToken({ token }) {
     try {
       const record = await prisma.verificationToken.delete({
         where: { token },
-      });
+      })
       return {
         identifier: record.identifier,
         token: record.token,
         expires: record.expiresAt,
-      };
+      }
     } catch (error) {
-      if (isNotFound(error)) return null;
-      throw error;
+      if (isNotFound(error)) return null
+      throw error
     }
   },
-} satisfies Adapter;
+} satisfies Adapter
