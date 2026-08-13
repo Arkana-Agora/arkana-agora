@@ -1,6 +1,6 @@
 # Estratégia de Migrações — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-12
 
 ---
 
@@ -10,13 +10,11 @@ O arkana-agora utiliza **Prisma Migrate** para gerenciamento versionado do esque
 
 ```
 prisma/
-├── schema.prisma          # Schema fonte de verdade
+├── schema.prisma          # Schema fonte de verdade (datasource postgresql)
 └── migrations/
-    ├── 20250711000000_init/
-    │   └── migration.sql   # Migration inicial
-    ├── 20250711010000_add_reading_tables/
-    │   └── migration.sql
-    └── migration_lock.toml
+    ├── 20260813000605_init/
+    │   └── migration.sql   # Migration inicial — APLICADA (Sprint 0 / F1)
+    └── migration_lock.toml  # provider = postgresql
 ```
 
 ---
@@ -33,7 +31,7 @@ YYYYMMDDHHMMSS_descriptive_name
 
 | Migration | Nome | Descrição |
 |-----------|------|-----------|
-| `20250711000000` | `init` | Criação inicial das tabelas de usuário e autenticação |
+| `20260813000605` | `init` | Criação inicial (User, UserProfile, Subscription, Session, VerificationToken) — **aplicada (Sprint 0 / F1)** |
 | `20250711010000` | `add_reading_tables` | Tabelas de leitura, cartas e baralhos |
 | `20250712000000` | `add_social_tables` | Tabelas de feed, follows, comentários |
 | `20250712010000` | `add_marketplace_tables` | Tabelas de produtos, pedidos e pagamentos |
@@ -48,17 +46,20 @@ YYYYMMDDHHMMSS_descriptive_name
 ### 3.1 Desenvolvimento (Local)
 
 ```bash
-# Desenvolvimento: db push (sem migration files)
-bunx prisma db push
+# Subir banco de dev (Docker Postgres 16 — ver docker-compose.yml)
+docker compose up -d postgres
 
-# Quando quiser criar uma migration:
+# Aplicar/generar migrations versionadas (dev)
 bunx prisma migrate dev --name descriptive_name
+
+# Aplicar migrations já existentes (sem criar nova — usado pelo compose/CI)
+bunx prisma migrate deploy
 
 # Resetar banco de desenvolvimento (CUIDADO — apaga dados)
 bunx prisma migrate reset
 ```
 
-**Racional**: No desenvolvimento, `db push` sincroniza o schema sem gerar arquivos de migration, permitindo iteração rápida. `migrate dev` é usado quando a mudança é madura e precisa ser versionada.
+**Racional**: desde a F1 (Sprint 0) o banco de dev é **PostgreSQL** (Docker Postgres 16, mesma engine da produção/Neon), então o dev usa **migrations versionadas** (`migrate dev`) como única forma de sincronizar o schema — o SQL gerado em dev é portável para produção. `db push` **não** é mais usado (não gera migration files e deixaria dev fora de sync com prod). O serviço `migrate` do `docker-compose.yml` aplica migrations pendentes com `bunx prisma migrate deploy` (one-shot).
 
 ### 3.2 Staging
 
@@ -100,11 +101,11 @@ Antes de aplicar qualquer migration em produção, seguir obrigatoriamente:
 
 ## 5. Próximas Migrations Planeadas
 
-### Sprint 0 — Autenticação (MVP)
+### Sprint 0 — Autenticação (MVP) — ✅ APLICADA (Sprint 0 / F1, 2026-08-13)
 
-**Migration**: `20250711000000_init`
+**Migration**: `20260813000605_init` — **aplicada em dev** (Docker Postgres 16). Cobre **5 models**: `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (Session/VerificationToken = cópia de `.specs/001-auth/design.md` §4). SQL real versionado: `prisma/migrations/20260813000605_init/migration.sql` (`migration_lock.toml` = `postgresql`). Gerada com `bunx prisma migrate dev --name init` após a troca do datasource para `postgresql`.
 
-> ⚠️ **Ilustrativo, não copiar.** Este SQL é um rascunho (Postgres) para planejamento. O SQL gerado pelo `prisma migrate dev` usará tipos nativos do Prisma (enums para `role`/`plan`/`provider`) e difere deste rascunho (ex.: `TEXT`/`JSONB`/`TEXT[]` aqui). Regra da disciplina (§4.4): **nunca criar migration files manualmente** — gere com o Prisma CLI e revise o SQL gerado. A migration `init` deve ser gerada **depois** de trocar o datasource para `postgresql` (SQLite não gera SQL portável para Neon; ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3).
+> ⚠️ **Ilustrativo, não copiar.** O SQL abaixo é o **rascunho de planejamento** (pré-migration) e cobre apenas `User`/`UserProfile`; `Subscription`/`Session`/`VerificationToken` seguiram o mesmo processo. O SQL real gerado pelo Prisma difere (tipos nativos, enums, `TEXT[]` etc.) — **o arquivo versionado é a fonte de verdade**. Regra da disciplina (§4.4): **nunca criar migration files manualmente** — gere com o Prisma CLI e revise o SQL gerado.
 
 ```sql
 -- Criar tabela User
@@ -211,7 +212,7 @@ O arkana-agora requer dados iniciais para funcionar. O seeding é feito via `pri
 
 ### 6.1 Comando
 
-> ⚠️ **Envs:** o Prisma CLI e `tsx` **não** carregam `.env.local` — use o arquivo `.env` na raiz (copie de `.env.example`). Sem ele, `db push`/`db seed` falham com `Environment variable not found: DATABASE_URL`.
+> ⚠️ **Envs:** o Prisma CLI e `tsx` **não** carregam `.env.local` — use o arquivo `.env` na raiz (copie de `.env.example`). Sem ele, `migrate dev`/`db seed` falham com `Environment variable not found: DATABASE_URL`.
 
 ```bash
 # Executar seed completo
@@ -223,6 +224,8 @@ bunx prisma db seed
 ```
 
 ### 6.2 Dados de Seed
+
+> **Estado atual (Sprint 0 / F1):** o `prisma/seed.ts` real cria **1 admin + 1 test user** via `upsert` idempotente (com `UserProfile` aninhado; `providerId` EMAIL = email lowercase, H-2). Os dados de baralhos/spreads/astrologia abaixo são o **plano de seed** para quando essas entidades forem migradas (Sprints 1+).
 
 #### Baralho Rider-Waite-Smith (78 cartas)
 
@@ -375,54 +378,51 @@ bunx prisma db seed
 ## 7. Estrutura do Script de Seed
 
 ```typescript
-// prisma/seed.ts
-import { PrismaClient } from '@prisma/client';
+// prisma/seed.ts — estado real (Sprint 0 / F1): admin + test user (upsert idempotente)
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Iniciando seed do arkana-agora...');
+const ADMIN_EMAIL = "admin@arkanaagora.dev";
+const TEST_EMAIL = "test@arkanaagora.dev";
 
-  // 1. Criar baralhos
-  await seedTarotDeck();
-  await seedLenormandDeck();
-
-  // 2. Criar spreads
-  await seedSpreads();
-
-  // 3. Criar dados astrológicos (tabelas de referência)
-  // Nota: zodiac data é calculado em runtime, não armazenado como seed
-
-  console.log('✅ Seed concluído com sucesso!');
-}
-
-async function seedTarotDeck() {
-  const deck = await prisma.tarotDeck.create({
-    data: {
-      name: 'Rider-Waite-Smith',
-      type: 'RIDER_WAITE',
-      description: 'O baralho clássico de tarot, criado por Arthur Edward Waite e ilustrado por Pamela Colman Smith em 1909.',
-      cardCount: 78,
-      isActive: true,
-      cards: {
-        create: MAJOR_ARCANA_CARDS.map(card => ({
-          name: card.name,
-          number: card.number,
-          suit: 'MAJOR_ARCANA',
-          meaning_upright: card.upright,
-          meaning_reversed: card.reversed,
-          keywords: card.keywords,
-          imageUrl: `https://assets.arkanaagora.com.br/cards/rws/${card.number}.webp`,
-        })),
-      },
+export async function seed(): Promise<void> {
+  const admin = await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {},
+    create: {
+      email: ADMIN_EMAIL,
+      name: "Admin",
+      displayName: "Admin",
+      provider: "EMAIL",
+      providerId: ADMIN_EMAIL, // providerId EMAIL = email lowercase (H-2)
+      role: "ADMIN",
+      emailVerified: new Date(),
+      profile: { create: {} }, // UserProfile 1:1 aninhado
     },
   });
-  console.log(`✅ Baralho RWS criado com ${deck.cardCount} cartas`);
+
+  const test = await prisma.user.upsert({
+    where: { email: TEST_EMAIL },
+    update: {},
+    create: {
+      email: TEST_EMAIL,
+      name: "Test User",
+      displayName: "Test User",
+      provider: "EMAIL",
+      providerId: TEST_EMAIL,
+      role: "USER",
+      emailVerified: new Date(),
+      profile: { create: {} },
+    },
+  });
+
+  console.log(`Seed ok: admin=${admin.email} | test=${test.email}`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
+seed()
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {

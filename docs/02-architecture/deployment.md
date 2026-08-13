@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-11
+> Versão: 1.0 | Última atualização: 2026-08-12
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Ambiente | Propósito | URL | Banco de Dados |
 |----------|-----------|-----|----------------|
-| **Development** | Desenvolvimento local | `http://localhost:3000` | SQLite local |
+| **Development** | Desenvolvimento local | `http://localhost:3000` | Docker Postgres 16 (`arkana`, localhost:5432) |
 | **Staging** | Testes e QA | `staging.arkanaagora.com.br` | Neon PostgreSQL (staging) |
 | **Production** | Produção | `arkanaagora.com.br` | Neon PostgreSQL (prod) |
 
@@ -26,7 +26,7 @@
 
 > A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
 >
-> **Status (esqueleto mínimo):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (stub `User` + enums), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`. Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Nenhuma lógica de negócio (auth, IA, pagamentos, social) existe ainda — veja `docs/architecture.md` → "Implementation status".
+> **Status (esqueleto + F1 DB/Docker):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init` aplicada), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Dev DB: Docker Postgres 16 (`docker compose up -d postgres`) via `bunx prisma migrate dev`. Nenhuma lógica de negócio (auth, IA, pagamentos, social) existe ainda — veja `docs/architecture.md` → "Implementation status".
 
 | Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
 |---|---|---|---|---|
@@ -54,11 +54,13 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
 └────┬─────┘ └────┬─────┘ └──────┬───────┘
      │            │              │
      ▼            ▼              ▼
-┌──────────┐ ┌──────────┐ ┌──────────┐
-│ SQLite   │ │ Redis    │ │ File     │
-│ (Prisma) │ │ :6379    │ │ Storage  │
-└──────────┘ └──────────┘ └──────────┘
+┌────────────┐ ┌──────────┐ ┌──────────┐
+│ PostgreSQL │ │ Redis    │ │ File     │
+│ (Docker)   │ │ :6379    │ │ Storage  │
+└────────────┘ └──────────┘ └──────────┘
 ```
+
+> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** (sem ws/caddy — adiados para o Sprint 1 de chat). O diagrama acima é o stack local completo documentado; Socket.io e Caddy serão adicionados ao compose quando o serviço de chat for scaffoldado.
 
 ### 2.3 Comandos de Desenvolvimento
 
@@ -66,8 +68,11 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
 # Instalar dependências
 bun install
 
-# Rodar migrações (dev usa db push para simplicidade)
-bunx prisma db push
+# Subir banco de dev (Docker Postgres 16 + Redis)
+docker compose up -d postgres redis
+
+# Rodar migrações (dev: gera/aplica migrations versionadas)
+bunx prisma migrate dev
 
 # Gerar tipos Prisma
 bunx prisma generate
@@ -85,7 +90,7 @@ bun run dev:ws       # Socket.io na porta 3003
 bun run dev:all
 ```
 
-> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados; `bunx prisma db push` cria `prisma/dev.db` (SQLite).
+> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados (adiados para o Sprint 1 de chat). O banco de dev é o container `postgres` do compose (db/user/pass `arkana`, porta 5432); `docker compose up -d postgres redis` sobe banco + Redis.
 
 > **Logger note:** Until `src/lib/logger.ts` (Pino) is implemented, health-check pattern uses `console.error` with `[health]` prefix as a stopgap. See `docs/solutions/patterns/backend/health-check-envelope.md` for details.
 
@@ -98,8 +103,8 @@ bun run dev:all
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_WS_URL=ws://localhost:3003
 
-# Banco (dev)
-DATABASE_URL=file:./dev.db
+# Banco (dev) — Docker Postgres 16 via docker compose (db/user/pass: arkana)
+DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
 
 # Auth
 NEXTAUTH_SECRET=dev-secret-change-me
@@ -230,7 +235,7 @@ assets.arkanaagora.com.br  → Cloudflare R2 (imagens)
 FROM oven/bun:1 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production=false
+RUN bun install --frozen-lockfile
 
 # ====================
 # Estágio 2: Build
@@ -243,15 +248,16 @@ RUN bunx prisma generate
 RUN bun run build
 
 # ====================
-# Estágio 3: Produção
+# Estágio 3: Produção (standalone)
 # ====================
 FROM oven/bun:1 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# oven/bun:1 é Debian-based → usar groupadd/useradd (não addgroup/adduser do Alpine)
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 --gid nodejs --no-create-home nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
@@ -265,13 +271,52 @@ ENV HOSTNAME="0.0.0.0"
 CMD ["bun", "server.js"]
 ```
 
-### 5.2 Docker Compose (Stack Completa)
+> **Pré-requisito standalone:** `next.config.ts` define `output: "standalone"` e `serverExternalPackages: ["@prisma/client"]`. Sem `output: "standalone"` não existe `.next/standalone` para o runner copiar; `serverExternalPackages` mantém o Prisma Client como dependência externa (incluída pelo trace standalone), por isso o runner não copia `node_modules` inteiro.
+
+### 5.2 Docker Compose (Stack Completa — estado real, F1)
+
+> **Alinhado ao `docker-compose.yml` commitado (2026-08-12):** serviços `postgres` (db/user/pass `arkana`, porta 5432, healthcheck), `redis`, `migrate` (one-shot `bunx prisma migrate deploy`, build target `builder`) e `web` (porta 3000, `DATABASE_URL` + `REDIS_URL`). **Não há** chave `version:` (obsoleta no Compose v2) nem serviços `ws`/`caddy` — adiados para o Sprint 1 de chat.
 
 ```yaml
-# docker-compose.yml
-version: '3.9'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arkana-postgres
+    environment:
+      POSTGRES_USER: arkana
+      POSTGRES_PASSWORD: arkana
+      POSTGRES_DB: arkana
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkana -d arkana"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: arkana-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   web:
     build:
       context: .
@@ -279,64 +324,19 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://arkana:senha@postgres:5432/akasha_verso
-      - REDIS_URL=redis://redis:6379
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
-
-  ws:
-    build:
-      context: ./services/ws-service
-    ports:
-      - "3003:3003"
-    environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: arkana
-      POSTGRES_PASSWORD: senha
-      POSTGRES_DB: akasha_verso
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U arkana"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-    depends_on:
-      - web
-      - ws
 
 volumes:
   pg_data:
   redis_data:
-  caddy_data:
 ```
 
 ---
@@ -521,3 +521,4 @@ railway up --rollback
 ## Refresh Notes
 
 - **2026-08-12:** Dockerfile §5.1 updated — `COPY package.json bun.lockb ./` → `bun.lock ./` to match the bun text lockfile actually committed in the repo (the old `bun.lockb` binary format is not used). Consistent with `docs/07-security/security.md` (bun.lock mandatory). No other drift found.
+- **2026-08-12 (F1 — Banco de dados + Docker):** dev DB SQLite → Docker Postgres 16 — §1 env table, §2.1 skeleton status, §2.2 stack diagram, §2.3 dev commands (`db push` → `docker compose up -d postgres` + `bunx prisma migrate dev`), §2.4 `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana`. §5.1 Dockerfile aligned to the real file (named stages deps/builder/runner; `groupadd`/`useradd` because oven/bun:1 is Debian-based; `bun install --frozen-lockfile`; standalone prerequisite note on `next.config.ts`). §5.2 docker-compose replaced with the committed file (postgres/redis/migrate/web; db `arkana`; no `version:` key; no ws/caddy — deferred to Sprint 1 chat).

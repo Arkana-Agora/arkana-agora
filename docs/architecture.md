@@ -6,7 +6,7 @@
 
 ## Implementation status (read first)
 
-- **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database}}`, version from `src/lib/version.ts` (`APP_VERSION`), `database` probed via `SELECT 1` with a 5s timeout, top-level `status` derived from the check (`ok`/`degraded`), returns 200 when the DB check passes and 503 only on a hard DB failure, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (User stub + enums matching `docs/03-database/entities.md` §1), `prisma/seed.ts` (no-op), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db`). Dev DB: SQLite `file:./dev.db` via `bunx prisma db push`. Full tree: `docs/02-architecture/monorepo.md` §1.
+- **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database}}`, version from `src/lib/version.ts` (`APP_VERSION`), `database` probed via `SELECT 1` with a 5s timeout, top-level `status` derived from the check (`ok`/`degraded`), returns 200 when the DB check passes and 503 only on a hard DB failure, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken — Session/VerificationToken per `.specs/001-auth/design.md` §4), `prisma/migrations/` (init `20260813000605_init` applied, lock `postgresql`), `prisma/seed.ts` (idempotent upsert: admin + test user), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db*`), `Dockerfile` (multi-stage bun: deps/builder/runner, standalone), `docker-compose.yml` (postgres/redis/migrate/web), `.dockerignore`. Dev DB: Docker Postgres 16 via `docker compose up -d postgres` + `bunx prisma migrate dev`. Full tree: `docs/02-architecture/monorepo.md` §1.
 - `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
 - **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. Auth, payments, AI, SSE, social, and admin are not implemented.
 - Items the docs themselves mark as future ("futuro", "planejado", "V1+") are additionally labeled **[planned]**.
@@ -32,7 +32,7 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest — see "Im
 | Technology | Role | Status | Source of truth |
 |---|---|---|---|
 | Next.js (App Router) | Web framework: SSR, RSC, API Routes, SSE streaming | MVP | ADR-001; `docs/02-architecture/architecture.md` §2.1 |
-| Prisma ORM | Data access; SQLite (dev) / PostgreSQL (prod); migrations | MVP | ADR-002; `docs/03-database/*` |
+| Prisma ORM | Data access; PostgreSQL (Docker Postgres 16 dev / Neon prod); migrations | MVP | ADR-002; `docs/03-database/*` |
 | Zustand | Client-side state (UI, reading session, auth) | MVP | ADR-003; `.specs/003-tarot-engine/design.md` §7 |
 | TanStack Query | Server-state cache, invalidation, mutations | MVP | ADR-003 |
 | shadcn/ui (New York style) | Design system (Radix-based, copied into repo) | MVP | ADR-006; `docs/02-architecture/architecture.md` §3.1 |
@@ -41,11 +41,11 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest — see "Im
 | NextAuth.js v4 | Auth: JWT sessions, Google/Facebook OAuth, magic link | MVP | `docs/02-architecture/architecture.md` §8; `docs/04-api/authentication.md` |
 | z-ai-web-dev-sdk + GPT-4o | AI interpretations, SSE streaming, model router (GPT-4o / GPT-4o-mini fallback) | MVP | `docs/05-ai/architecture.md`; `docs/05-ai/prompts.md` |
 | Mercado Pago | Payments: PIX, credit card, boleto; split payment; PLUS subscription | MVP | ADR-008; `docs/04-api/marketplace.md` |
-| SQLite → PostgreSQL (Neon) | Local dev DB → serverless prod DB | MVP | ADR-002; `docs/02-architecture/deployment.md` §1 |
+| PostgreSQL (Docker Postgres 16 dev → Neon prod) | Local dev DB → serverless prod DB (same engine since F1) | MVP | ADR-002; `docs/02-architecture/deployment.md` §1 |
 | Redis (Upstash) | Sessions, cache, rate limiting, WS horizontal adapter | MVP | `docs/02-architecture/scalability.md` §3 |
 | Cloudflare R2 | Card images, avatars, post images | MVP | `docs/02-architecture/architecture.md` §1; `docs/02-architecture/deployment.md` §4 |
 | Socket.io (mini-service, :3003) | Real-time: feed, notifications, presence | MVP | ADR-007; `docs/02-architecture/architecture.md` §2.3 |
-| Docker / docker-compose | Local full-stack stack (web, ws, postgres, redis, caddy) | MVP | `docs/02-architecture/deployment.md` §5 |
+| Docker / docker-compose | Local stack (postgres, redis, migrate, web); ws/caddy deferred to Sprint 1 chat | MVP | `docs/02-architecture/deployment.md` §5 |
 | Pino + Sentry + PostHog + Vercel Analytics | Logging, error tracking, analytics, Web Vitals | MVP | `docs/02-architecture/observability.md` |
 | PWA (manifest, service worker, offline cache) | Installable mobile web app | **[planned]** (V1) | `docs/01-product/mvp.md` V1-009; `docs/00-overview/roadmap.md` |
 | Turborepo + pnpm workspaces | Monorepo orchestration | **[planned]** (V1+) | ADR-005; `docs/02-architecture/monorepo.md` |
@@ -111,7 +111,7 @@ Mercado Pago (ADR-008): `POST /api/v1/payments/create` → checkout (PIX/card/bo
 
 ### Data layer
 
-18 entities across 5 domains (Auth & User, Readings & Tarot, Social, Marketplace, System) — `docs/03-database/erd.md`, `docs/03-database/relationships.md` (1:1, 1:N, N:M via `Follow` junction; cascade matrix). DB: SQLite in dev, Neon PostgreSQL in prod via Prisma (ADR-002). Cache layers: L1 client (Zustand/in-memory) → L2 Redis (sessions, feed, rate limit, AI interpretation cache 24h) → L3 CDN (card images, static assets) — `docs/02-architecture/scalability.md` §3. API conventions: `/api/v1` versioning, JWT bearer, standardized error envelope, cursor/offset pagination, per-plan rate limits (`docs/04-api/overview.md`).
+18 entities across 5 domains (Auth & User, Readings & Tarot, Social, Marketplace, System) — `docs/03-database/erd.md`, `docs/03-database/relationships.md` (1:1, 1:N, N:M via `Follow` junction; cascade matrix). DB: Docker Postgres 16 in dev, Neon PostgreSQL in prod via Prisma (ADR-002); init migration `20260813000605_init` applied (5 of 18 entities). Cache layers: L1 client (Zustand/in-memory) → L2 Redis (sessions, feed, rate limit, AI interpretation cache 24h) → L3 CDN (card images, static assets) — `docs/02-architecture/scalability.md` §3. API conventions: `/api/v1` versioning, JWT bearer, standardized error envelope, cursor/offset pagination, per-plan rate limits (`docs/04-api/overview.md`).
 
 ## Architecture Invariants
 
@@ -119,7 +119,7 @@ These are documented decisions that must not be broken without a new ADR:
 
 1. **AI streaming uses SSE, not WebSocket** — unidirectional server→client is sufficient; native reconnection (ADR-004).
 2. **Socket.io is a separate mini-service on :3003**, communicating via Event Bus — never embedded in the Next.js app (ADR-007).
-3. **Prisma is the only ORM**; schema lives in `prisma/schema.prisma`; SQLite in dev, PostgreSQL in prod (ADR-002). Schema changes require the documented migration discipline (`docs/03-database/migrations.md`).
+3. **Prisma is the only ORM**; schema lives in `prisma/schema.prisma`; PostgreSQL in dev (Docker Postgres 16) and prod (Neon) (ADR-002). Schema changes require the documented migration discipline (`docs/03-database/migrations.md`).
 4. **State split is fixed**: Zustand for client state, TanStack Query for server state (ADR-003).
 5. **shadcn/ui (New York) is the design-system base** (ADR-006); **Tailwind CSS 4** for styling.
 6. **Mercado Pago is the payment gateway** (ADR-008).
@@ -134,6 +134,6 @@ These are documented decisions that must not be broken without a new ADR:
 - Before any implementation, load the baseline: `docs/`, `.specs/`, ADRs (`docs/02-architecture/decisions.md`).
 - Changing a documented invariant (SSE, Socket.io separation, ORM, state split, payment gateway) requires a new ADR first.
 - Adding a service or port must be reflected in `docs/02-architecture/monorepo.md` and `docs/02-architecture/deployment.md`.
-- DB schema changes: follow the Prisma migration chain (`docs/03-database/migrations.md`); keep SQLite/PostgreSQL parity (ADR-002).
+- DB schema changes: follow the Prisma migration chain (`docs/03-database/migrations.md`); dev and prod are both PostgreSQL (Docker Postgres 16 / Neon) — never introduce a dev/prod engine gap (ADR-002).
 - Deploy changes: follow `docs/02-architecture/deployment.md` (Vercel web, Railway WS, Neon, Upstash, Cloudflare) — never deploy via IAC per project convention.
 - Keep "implemented" vs "planned" separation in this file accurate as code lands in `src/` (MVP monolith at repo root); `backend/`/`frontend/` stay placeholders and are not part of the documented structure.

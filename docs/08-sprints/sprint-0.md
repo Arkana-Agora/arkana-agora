@@ -21,7 +21,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 | US-001 | Como desenvolvedor, preciso de um setup base para desenvolvimento paralelo | Monorepo com `pnpm` + Turborepo, builds isolados por pacote, cache funcional | **Adiado** — monorepo é futuro (ADR-005); MVP é app único `bun` na raiz |
 | US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push | **Parcial** — scripts `lint`/`type-check`/`test`/`build` existem; pipeline GH Actions ainda não criado |
 | US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Pendente** — sem `docker-compose.yml` no repo |
-| US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com stub `User` + enums; dev SQLite `file:./dev.db` via `db push` |
+| US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com 5 models (User, UserProfile, Subscription, Session, VerificationToken); dev PostgreSQL (Docker Postgres 16) via `bunx prisma migrate dev`; init migration `20260813000605_init` aplicada |
 | US-005 | Como desenvolvedor, preciso que o NextAuth.js esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Pendente** — dependência `next-auth` removida do `package.json` (v4 é incompatível com Next 16 + React 19); reinstalar na sprint de auth com versão compatível (Auth.js v5 beta ou v4 corrigida) e atualizar as referências a "NextAuth v4" nos docs |
 | US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Pendente** — sem shadcn/ui/Tailwind configurados ainda |
 
@@ -41,7 +41,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [ ] 5. Setup Docker Compose (web, postgres, redis) — **pendente**
 - [x] 6. Configurar Prisma ORM — `src/lib/prisma.ts` (singleton), schema stub `User` + enums (`UserRole`, `UserPlan`, `AuthProvider`)
 - [x] 7. Stub inicial: model `User` — demais entidades (18, 5 domínios) documentadas em `docs/03-database/entities.md`; migrations versionadas pendentes
-- [x] 8. Configurar seed script — `prisma/seed.ts` (no-op), `bun run seed` (`bunx tsx prisma/seed.ts` em `scripts.seed` e `prisma.seed`)
+- [x] 8. Configurar seed script — `prisma/seed.ts` (admin + test user, upsert idempotente), `bun run seed` (`bunx tsx prisma/seed.ts` em `scripts.seed` e `prisma.seed`)
 
 ### Autenticação
 - [ ] 9. Setup NextAuth.js (Google OAuth, magic link, JWT strategy) — **pendente** — **TODO rastreado:** reinstalar `next-auth` com versão compatível com Next 16 (v4 não instala/roda: peer range exclui Next 16; `cookies()`/`headers()` síncronos quebram no App Router; `middleware.ts` virou `proxy.ts`). Preferir Auth.js v5 beta. Também decidir a convenção de `providerId` para contas EMAIL (ver `prisma/schema.prisma` header)
@@ -79,7 +79,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
 - [ ] Deploy automático em staging via GitHub Actions → Vercel — **pendente** (sem pipeline criado)
 - [ ] Autenticação funcionando com Google OAuth — **pendente**
-- [ ] Banco de dados conectado com migrations aplicadas — **parcial** (stub `User`, SQLite dev via `db push`)
+- [ ] Banco de dados conectado com migrations aplicadas — **parcial** (5 models + init `20260813000605_init` aplicada em dev PostgreSQL/Docker)
 - [ ] Design system com tema claro/escuro operacional — **pendente**
 - [x] Health check endpoint presente — 200 quando o check de DB passa; 503 apenas em falha dura; `status` do corpo derivado dos checks (`ok`/`degraded`)
 - [x] Documentação de setup local completa
@@ -99,15 +99,19 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 │   ├── stores/                # (placeholder vazio)
 │   └── types/                 # (placeholder vazio)
 ├── prisma/
-│   ├── schema.prisma          # Stub User + enums (SQLite dev / PostgreSQL Neon prod)
-│   └── seed.ts                # Seed no-op
+│   ├── schema.prisma          # 5 models (User, UserProfile, Subscription, Session, VerificationToken) — PostgreSQL (Docker Postgres 16 dev / Neon prod)
+│   ├── migrations/            # init 20260813000605_init (aplicada; lock postgresql)
+│   └── seed.ts                # Seed admin + test (idempotente)
 ├── public/                    # Assets estáticos (vazio)
 ├── tests/                     # tests/health.test.ts (vitest)
 ├── package.json               # Scripts bun: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test
-├── next.config.ts
+├── next.config.ts             # output: "standalone" + serverExternalPackages
 ├── tsconfig.json
 ├── eslint.config.mjs
 ├── vitest.config.ts
+├── Dockerfile                 # multi-stage bun (deps → builder → runner)
+├── docker-compose.yml         # postgres + redis + migrate + web
+├── .dockerignore
 └── .env.example               # Nomes de env vars documentados (sem segredos)
 
 # Monorepo futuro (ADR-005, planejado): apps/web + packages/{ui,types,config,utils,api-client}
@@ -147,7 +151,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 
 **Entregues no esqueleto:**
 - App único Next.js 16 (App Router) na raiz, toolchain `bun` — documentado em `docs/02-architecture/monorepo.md` §1
-- Prisma stub (`User` + enums) + seed no-op; dev DB SQLite via `bunx prisma db push`
+- Prisma schema com 5 models (User, UserProfile, Subscription, Session, VerificationToken) + init migration `20260813000605_init` aplicada; seed idempotente (admin + test); dev DB Docker Postgres 16 via `bunx prisma migrate dev`
 - Rota `/api/health` (envelope `{status,timestamp,version,services:{database}}`; 200 quando DB ok, 503 em falha dura; Redis/IA adicionados quando conectados, per `observability.md` §6.3) + teste vitest
 - `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `next.config.ts`, `.env.example`
 - Documentação de estrutura e setup local
@@ -161,7 +165,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
 
 **Decisões rastreadas para a Sprint 1 (não reversíveis de forma barata — ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3):**
-- Banco de dados de dev: SQLite não suporta listas escalares (`String[]`) que `entities.md` define (`UserProfile.skills`, `Post.images`) — escolher Docker Postgres (deployment.md §5.2) ou modelar como `Json`. See docs/infrastructure.md → Known Constraints.
+- Banco de dados de dev: **Resolvido (F1)** — escolhido Docker Postgres 16 (`docker-compose.yml`); listas escalares (`String[]`) suportadas no dev; init migration gerada com datasource `postgresql`. See docs/infrastructure.md → Known Constraints.
 - **providerId convention for EMAIL (H-2):** Set `providerId = email` normalized to lowercase (clarified 2025-08-11). Aligns with existing `email @unique` constraint. Updates: `prisma/schema.prisma`, `docs/04-api/authentication.md`, `docs/03-database/entities.md`. See `sprint-0.clarifications.md`.
 - **LGPD 30-day soft-delete (H-3):** Soft delete with `deletedAt DateTime?` on User model (clarified 2025-08-11). Existing `isActive` flag + new `deletedAt` for restoration window. Queries filter `isActive = true AND deletedAt IS NULL`. Restoration endpoint within 30-day window. See `sprint-0.clarifications.md`.
 - Conflito de enums RBAC: `entities.md`/schema (USER, PROFESSIONAL, ADMIN) vs antigo `permissions.md` (FREE_USER…SUPER_ADMIN) — alinhado em `docs/07-security/permissions.md`; `requirements.md` RNF-005 atualizado para o modelo alinhado (3 roles + SUPER_ADMIN planejado; plano FREE/PLUS é dimensão separada).

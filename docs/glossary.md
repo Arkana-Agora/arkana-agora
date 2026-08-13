@@ -30,8 +30,8 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | JWT | JSON Web Tokens (RS256) for API sessions: access 15 min, refresh 30 days (opaque, rotation) | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
 | JWT Bearer / API Key / Internal Token | Authentication header types: `Authorization: Bearer`, `X-API-Key`, `X-Internal-Token` | `docs/04-api/overview.md` |
 | NextAuth.js v4 | Auth library (OAuth, credentials, JWT) | `docs/04-api/authentication.md`, ADR/`docs/02-architecture/architecture.md` |
-| Prisma | TypeScript ORM; SQLite (dev) → PostgreSQL/Neon (prod) | `docs/03-database/*`, ADR-002 |
-| SQLite / PostgreSQL = Neon | Dev/prod databases | `docs/02-architecture/deployment.md` §1 |
+| Prisma | TypeScript ORM; Docker Postgres 16 (dev) → Neon PostgreSQL (prod) | `docs/03-database/*`, ADR-002 |
+| PostgreSQL (Docker Postgres 16 dev / Neon prod) | Dev/prod databases — same engine since F1 (no SQLite) | `docs/02-architecture/deployment.md` §1 |
 | Upstash Redis | Serverless Redis: sessions, cache, rate limit, BullMQ queues, Pub/Sub | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | Object storage for card images, avatars, posts | `docs/02-architecture/deployment.md` §4 |
 | BullMQ | Background job queue (worker :3005) — planned | `docs/02-architecture/architecture.md`, `docs/02-architecture/scalability.md` |

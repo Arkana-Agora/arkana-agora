@@ -113,8 +113,8 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **CI/CD** | Pipeline de Integracao Continua e Entrega Continua, automatizando testes e deploy. |
 | **Mercado Pago** | Gateway de pagamento brasileiro, utilizado para processar assinaturas e transacoes do marketplace. |
 | **Monorepo** | Repositorio unico contendo multiplos pacotes/aplicacoes, gerenciado com ferramentas como Turborepo. |
-| **SQLite** | Banco de dados relacional embarcado, utilizado em desenvolvimento. Em producao, migra para PostgreSQL. |
-| **PostgreSQL** | Banco de dados relacional robusto, utilizado em ambiente de producao do arkana-agora. |
+| **SQLite** | Banco de dados relacional embarcado; foi usado em desenvolvimento até a Fase 1 do Sprint 0, quando o dev migrou para Docker Postgres 16 (`docs/03-database/migrations.md`). |
+| **PostgreSQL** | Banco de dados relacional robusto do arkana-agora: Docker Postgres 16 em desenvolvimento e Neon em producao. |
 | **NextAuth.js v4** | Biblioteca de autenticacao para Next.js, com suporte a OAuth, credenciais e JWT. |
 | **Tailwind CSS 4** | Framework CSS utility-first, utilizado para estilizacao da interface. |
 
