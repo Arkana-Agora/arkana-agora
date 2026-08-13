@@ -43,7 +43,7 @@ jobs:
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: arkana_test
+          POSTGRES_DB: akasha_test
         ports:
           - 5432:5432
         options: >-
@@ -52,13 +52,17 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/arkana_test
+      DATABASE_URL: postgresql://test:test@localhost:5432/akasha_test
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v1
       - run: bun install --frozen-lockfile
       - run: bunx prisma migrate deploy
-      - run: bun run test
+      - run: bun run test:coverage
+      - uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+        continue-on-error: true
 
   build:
     name: Build

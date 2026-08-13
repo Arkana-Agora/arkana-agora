@@ -55,15 +55,15 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [ ] 15. Setup Storybook para documentação visual — **pendente**
 
 ### CI/CD e Observabilidade
-- [ ] 16. GitHub Actions: pipeline lint → test → build → deploy — **pendente**
-- [ ] 17. Vercel project setup com ambiente de staging — **pendente**
-- [ ] 18. Error tracking (Sentry) setup — **pendente**
-- [ ] 19. Logging (Pino.js) configuration — **pendente**
+- [x] 16. GitHub Actions: pipeline lint → test → build → deploy — **entregue (F3)**
+- [x] 17. Vercel project setup com ambiente de staging — **entregue (F3)**
+- [ ] 18. Error tracking (Sentry) setup — **pendente (F4)**
+- [ ] 19. Logging (Pino.js) configuration — **pendente (F4)**
 - [x] 20. Health check endpoint (`/api/health`) — `src/app/api/health/route.ts` (envelope `{status,timestamp,version,services:{database}}`; DB com timeout 5s, 200 quando o check de DB passa, 503 só em falha dura)
 
 ### Documentação e Padrões
 - [x] 21. Environment variables documentadas — `.env.example` (nomes apenas, sem segredos)
-- [x] 22. ESLint configurado — `eslint.config.mjs` (eslint-config-next flat); Husky/lint-staged/Prettier ainda não
+- [x] 22. ESLint configurado — `eslint.config.mjs` (eslint-config-next flat); Husky/lint-staged/Prettier implementados (F3)
 - [x] 23. Landing page base — `src/app/page.tsx` + `layout.tsx` (pt-BR), `error`/`loading`/`not-found`
 - [x] 24. Documentação da estrutura — `docs/02-architecture/monorepo.md` §1
 - [x] 25. Documentação do setup local — `docs/02-architecture/deployment.md` §2 + `.env.example`
@@ -77,7 +77,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 ## Critérios de Aceite do Sprint
 
 - [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
-- [ ] Deploy automático em staging via GitHub Actions → Vercel — **pendente** (sem pipeline criado)
+- [x] Deploy automático em staging via GitHub Actions → Vercel — **entregue (F3)**
 - [x] Autenticação funcionando com Google OAuth — **entregue (F2A)** — Auth.js v5 (ADR-010); login `/login` (Google + magic link), sessão JWT do Auth.js, proteção de `/dashboard` via `src/proxy.ts` + guard de grupo `src/app/(app)/layout.tsx` (F2B)
 - [ ] Banco de dados conectado com migrations aplicadas — **parcial** (5 models + init `20260813000605_init` aplicada em dev PostgreSQL/Docker)
 - [x] Design system com tema claro/escuro operacional — **entregue (F2B)** — Tailwind v4 + shadcn/ui (preset radix-nova), tokens oklch em `src/app/globals.css` (`:root`/`.dark`), `next-themes` (ThemeProvider/ThemeToggle), componentes base em `src/components/ui/`; ver tasks 12-14
