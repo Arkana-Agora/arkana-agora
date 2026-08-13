@@ -17,7 +17,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Login por magic link** — MVP: `EmailProvider` do Auth.js, token single-use válido por 15 minutos (`VerificationToken`, `type = "MAGIC_LINK"`)
 - **Login via OAuth (Google)** — MVP: vínculo via `User.provider`/`providerId`, sem model `Account` (provedor único no MVP); provider condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`
 - **Sessão JWT do Auth.js** — MVP: cookie JWT (`session: { strategy: "jwt" }`), sem gravação de sessão no banco
-- **Proteção de rotas** — MVP: `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`
+- **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
 - **Cadastro por e-mail e senha** — Sprint 1: validação de formato, força da senha e verificação de e-mail (credentials)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
@@ -35,7 +35,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 3. O clique no link autentica no callback `/api/auth/callback/email` (o token é deletado na redenção — single-use)
 4. **Google OAuth**: o Auth.js redireciona para o consent screen; no callback `/api/auth/callback/google`, o adapter mínimo busca/cria o usuário (`getUserByAccount`/`getUserByEmail`/`createUser` + `linkAccount`)
 5. A sessão é o **cookie JWT do Auth.js** (JWT strategy) — o Auth.js não grava sessões no banco
-6. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })`; sem sessão válida, redireciona para `/login`
+6. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })` e, em nível de route group, pelo guard `src/app/(app)/layout.tsx` (`auth()` + `redirect("/login")` — F2B); sem sessão válida, redireciona para `/login`
 7. **Sprint 1**: a Custom JWT Layer assume após o callback (callbacks `jwt`/`session` em `src/auth/auth.config.ts`): access token (15 min, RS256) + refresh token rotativo (30 dias)
 8. **Sprint 1**: rate limit de magic link (3/hora), recuperação de senha (1h) e exclusão de conta (LGPD, 30 dias)
 
@@ -48,7 +48,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 | Login OAuth (Google) | MVP |
 | Magic Link | MVP |
 | Sessão JWT do Auth.js (`/api/auth/*`) | MVP |
-| Proteção de rotas (`src/proxy.ts`) | MVP |
+| Proteção de rotas (`src/proxy.ts` + `src/app/(app)/layout.tsx`) | MVP |
 | Cadastro e-mail/senha | Sprint 1 |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 |

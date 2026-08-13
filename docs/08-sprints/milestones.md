@@ -40,7 +40,7 @@ Semana  1───3───5──────8──────13────
 - [x] Auth.js v5: magic link enviando email e autenticando — entregue (F2A, ADR-010)
 - [ ] PostgreSQL conectado via Prisma, migrations aplicadas
 - [ ] Tabelas `User`, `UserProfile`, `Subscription` criadas
-- [ ] Design system shadcn/ui renderizando em tema claro e escuro
+- [x] Design system shadcn/ui renderizando em tema claro e escuro — entregue (F2B, Sprint 0): Tailwind v4 + shadcn/ui (preset radix-nova), tokens oklch claro/escuro em `src/app/globals.css`, `next-themes` (ThemeProvider/ThemeToggle)
 - [x] Health check (`/api/health`) retornando 200 com status dos serviços — entregue no esqueleto (`src/app/api/health/route.ts`; contrato em `docs/02-architecture/observability.md` §6.3)
 - [ ] Sentry capturando erros de produção
 - [ ] Documentação de setup local completa e testada por terceiro

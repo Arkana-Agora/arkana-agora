@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.0 | Última atualização: 2026-08-13
 
 ---
 
@@ -26,7 +26,7 @@
 
 > A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
 >
-> **Status (esqueleto + F1 DB/Docker + F2A auth login):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init` aplicada), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Dev DB: Docker Postgres 16 (`docker compose up -d postgres`) via `bunx prisma migrate dev`. **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth** em `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`, `src/auth/`; credenciais e-mail/senha e Facebook OAuth ficam para o Sprint 1. Ainda não existe: IA, pagamentos, social, Custom JWT Layer (Sprint 1) — veja `docs/architecture.md` → "Implementation status".
+> **Status (esqueleto + F1 DB/Docker + F2A auth login + F2B design system):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init` aplicada), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Dev DB: Docker Postgres 16 (`docker compose up -d postgres`) via `bunx prisma migrate dev`. **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth** em `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`, `src/auth/`; credenciais e-mail/senha e Facebook OAuth ficam para o Sprint 1. **Design system implementado (Sprint 0, F2B):** Tailwind CSS 4 via `postcss.config.mjs` (plugin `@tailwindcss/postcss`), `components.json` (style radix-nova), tokens oklch claro/escuro em `src/app/globals.css`, `src/components/ui/` (Button, Card, Input, Label, Skeleton, Alert + `form.tsx` manual), `src/lib/utils.ts` (`cn`), `next-themes` (`providers.tsx`/`theme-provider.tsx`/`theme-toggle.tsx`), `layout.tsx` com fonte Geist (`--font-geist-sans`) + `suppressHydrationWarning`, guard de auth em `src/app/(app)/layout.tsx`. Ainda não existe: IA, pagamentos, social, Custom JWT Layer (Sprint 1) — veja `docs/architecture.md` → "Implementation status".
 
 | Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@
 | **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
 | **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
 
-Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (New York) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
+Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
 
 ### 2.2 Stack Local
 

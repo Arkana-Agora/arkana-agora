@@ -1,6 +1,6 @@
 # Estratégia de Monorepo — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.0 | Última atualização: 2026-08-13
 
 ---
 
@@ -13,8 +13,8 @@ arkana-agora/                   # Raiz do projeto (monolito)
 ├── src/
 │   ├── app/                   # App Router (páginas + API)
 │   │   └── api/health/        # GET /api/health (envelope; 200 quando DB ok, 503 em falha)
-│   ├── components/            # Componentes React (placeholder — vazio)
-│   ├── lib/                   # Utilitários, Prisma (src/lib/prisma.ts; auth/IA pendentes)
+│   ├── components/            # providers.tsx (SessionProvider + ThemeProvider), theme-provider.tsx, theme-toggle.tsx, ui/ (shadcn/ui radix-nova)
+│   ├── lib/                   # Utilitários, Prisma (src/lib/prisma.ts; src/lib/utils.ts — cn)
 │   │   └── version.ts         # APP_VERSION constant
 │   ├── services/              # Lógica de negócio (placeholder — vazio)
 │   ├── stores/                # Zustand stores (placeholder — vazio)
@@ -36,7 +36,7 @@ arkana-agora/                   # Raiz do projeto (monolito)
 └── .env.example               # Nomes de env vars documentados (sem segredos)
 ```
 
-**Status:** o esqueleto acima já existe na raiz (bun, Prisma PostgreSQL dev via Docker — `docker compose up -d postgres` + `bunx prisma migrate dev`, rota `/api/health`, vitest, ESLint, Dockerfile + docker-compose + .dockerignore desde a F1). `tailwind.config.ts` ainda **não** foi criado — Tailwind CSS 4 é planejado (`docs/02-architecture/architecture.md` §3.1). `backend/` e `frontend/` na raiz são placeholders vazios e não fazem parte desta estrutura.
+**Status:** o esqueleto acima já existe na raiz (bun, Prisma PostgreSQL dev via Docker — `docker compose up -d postgres` + `bunx prisma migrate dev`, rota `/api/health`, vitest, ESLint, Dockerfile + docker-compose + .dockerignore desde a F1; F2A: camada de login Auth.js v5 — ADR-010; F2B: design system). **Tailwind CSS 4 está configurado (F2B)** via `postcss.config.mjs` (plugin `@tailwindcss/postcss`) com tokens oklch `:root`/`.dark` em `src/app/globals.css` — o Tailwind v4 é CSS-first e **não usa** `tailwind.config.ts` (por isso o arquivo não existe, e não é esperado; ver `docs/02-architecture/architecture.md` §3.1). `backend/` e `frontend/` na raiz são placeholders vazios e não fazem parte desta estrutura.
 
 **Racional**: Para o MVP, a simplicidade do monolito permite iteração rápida. Não há overhead de configuração de múltiplos pacotes, e o deploy é direto na Vercel.
 

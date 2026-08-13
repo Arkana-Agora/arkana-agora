@@ -27,7 +27,7 @@
 | B-003 | CI/CD GitHub Actions | Crítica | 2d | MVP |
 | B-004 | Prisma + PostgreSQL setup | Crítica | 2d | MVP |
 | B-005 | Auth.js v5 (Google OAuth + magic link) — entregue (F2A/M0, ADR-010) | Crítica | 3d | MVP |
-| B-006 | Design system shadcn/ui | Alta | 5d | MVP |
+| B-006 | Design system shadcn/ui — entregue (F2B) | Alta | 5d | MVP |
 | B-007 | Sentry error tracking | Média | 1d | MVP |
 | B-008 | PostHog analytics | Média | 1d | MVP |
 

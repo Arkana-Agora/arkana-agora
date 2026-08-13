@@ -2,13 +2,13 @@
 
 > Canonical architecture reference for the **arkana-agora** project.
 > Authoritative source of truth is the pt-BR SDD under `docs/`; this file is the English operational summary with concrete pointers to those pages.
-> Last updated: 2026-08-12.
+> Last updated: 2026-08-13.
 
 ## Implementation status (read first)
 
 - **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database}}`, version from `src/lib/version.ts` (`APP_VERSION`), `database` probed via `SELECT 1` with a 5s timeout, top-level `status` derived from the check (`ok`/`degraded`), returns 200 when the DB check passes and 503 only on a hard DB failure, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken — Session/VerificationToken per `.specs/001-auth/design.md` §4), `prisma/migrations/` (init `20260813000605_init` applied, lock `postgresql`), `prisma/seed.ts` (idempotent upsert: admin + test user), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db*`), `Dockerfile` (multi-stage bun: deps/builder/runner, standalone), `docker-compose.yml` (postgres/redis/migrate/web), `.dockerignore`. Dev DB: Docker Postgres 16 via `docker compose up -d postgres` + `bunx prisma migrate dev`. Full tree: `docs/02-architecture/monorepo.md` §1.
 - `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
-- **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. The Auth.js v5 login layer (magic link + Google OAuth, ADR-010) shipped in M0; payments, AI, SSE, social, and admin are not implemented.
+- **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. The Auth.js v5 login layer (magic link + Google OAuth, ADR-010) and the design system (Tailwind CSS 4 + shadcn/ui radix-nova preset, oklch light/dark tokens, `next-themes`) shipped in Sprint 0 (F2A/F2B); payments, AI, SSE, social, and admin are not implemented.
 - Items the docs themselves mark as future ("futuro", "planejado", "V1+") are additionally labeled **[planned]**.
 - The docs target an MVP as a **modular monolith** (single Next.js app) with a documented evolution path to a **Turborepo monorepo with microservices** (ADR-005, `docs/02-architecture/monorepo.md`).
 
@@ -27,7 +27,7 @@ Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), nume
 
 ## Technology Stack
 
-Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest) and the Auth.js v5 login layer (M0) — see "Implementation status" — all entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
+Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest), the Auth.js v5 login layer (M0/F2A), and the design system (shadcn/ui + Tailwind CSS 4 — F2B) — see "Implementation status" — all entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
 
 | Technology | Role | Status | Source of truth |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest) and the Au
 | Prisma ORM | Data access; PostgreSQL (Docker Postgres 16 dev / Neon prod); migrations | MVP | ADR-002; `docs/03-database/*` |
 | Zustand | Client-side state (UI, reading session, auth) | MVP | ADR-003; `.specs/003-tarot-engine/design.md` §7 |
 | TanStack Query | Server-state cache, invalidation, mutations | MVP | ADR-003 |
-| shadcn/ui (New York style) | Design system (Radix-based, copied into repo) | MVP | ADR-006; `docs/02-architecture/architecture.md` §3.1 |
+| shadcn/ui (radix-nova preset — formerly "New York") | Design system (Radix-based, copied into repo) | MVP | ADR-006; `docs/02-architecture/architecture.md` §3.1 |
 | Tailwind CSS 4 | Utility-first styling | MVP | `docs/02-architecture/architecture.md` §3.1; `docs/00-overview/glossary.md` |
 | Framer Motion | Card reveal/flip animations | MVP | `docs/02-architecture/architecture.md` §3.1; `.specs/003-tarot-engine/design.md` §8 |
 | Auth.js v5 (`next-auth@5.0.0-beta.32`) | Auth: JWT strategy; Google OAuth + magic link (MVP); Facebook + credentials (Sprint 1) | MVP | ADR-010; `docs/04-api/authentication.md` |
@@ -61,7 +61,7 @@ From `docs/02-architecture/architecture.md` §2.1 and `docs/02-architecture/mono
 
 ```
 src/
-├── app/            # App Router: (auth)/, (main)/, api/ route groups
+├── app/            # App Router: (auth)/, (app)/, api/ route groups
 ├── components/     # ui/ (shadcn), cards/, social/, layout/
 ├── auth/           # Auth.js v5 (ADR-010): auth.config.ts (edge), auth.ts (node), prisma-adapter.ts
 ├── lib/            # prisma.ts, ai.ts, validators/ (Zod)
@@ -96,7 +96,7 @@ ADR-005 + `docs/02-architecture/monorepo.md`: `apps/` (web, mobile, admin), `pac
 
 ### Authentication flow
 
-Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) as the MVP login layer: magic link 15 min single-use (`EmailProvider` → `VerificationToken`) + Google OAuth (binding via `User.provider`/`providerId`, no `Account` model), JWT strategy — the session is the Auth.js JWT cookie via `/api/auth/*` (`src/app/api/auth/[...nextauth]`). Sprint 1: Custom JWT Layer (access 15 min RS256 + refresh 30 days opaque, httpOnly cookie, rotation + reuse detection revokes the token family, anchored at the `jwt`/`session` callbacks in `src/auth/auth.config.ts`); credentials (bcrypt 12 rounds; 5 failed attempts → 15 min lockout) and Facebook OAuth. RBAC roles `USER → PROFESSIONAL → ADMIN` (implemented in `prisma/schema.prisma`) plus `SUPER_ADMIN` **[planned]**; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension from role. Permission matrix enforced by middleware (`docs/07-security/permissions.md`).
+Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) as the MVP login layer: magic link 15 min single-use (`EmailProvider` → `VerificationToken`) + Google OAuth (binding via `User.provider`/`providerId`, no `Account` model), JWT strategy — the session is the Auth.js JWT cookie via `/api/auth/*` (`src/app/api/auth/[...nextauth]`). Route protection is two-layered: `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`) + the route-group guard at `src/app/(app)/layout.tsx` (`auth()` → `redirect("/login")`, F2B defense-in-depth). Sprint 1: Custom JWT Layer (access 15 min RS256 + refresh 30 days opaque, httpOnly cookie, rotation + reuse detection revokes the token family, anchored at the `jwt`/`session` callbacks in `src/auth/auth.config.ts`); credentials (bcrypt 12 rounds; 5 failed attempts → 15 min lockout) and Facebook OAuth. RBAC roles `USER → PROFESSIONAL → ADMIN` (implemented in `prisma/schema.prisma`) plus `SUPER_ADMIN` **[planned]**; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension from role. Permission matrix enforced by middleware (`docs/07-security/permissions.md`).
 
 ### AI reading flow (SSE)
 
@@ -122,7 +122,7 @@ These are documented decisions that must not be broken without a new ADR:
 2. **Socket.io is a separate mini-service on :3003**, communicating via Event Bus — never embedded in the Next.js app (ADR-007).
 3. **Prisma is the only ORM**; schema lives in `prisma/schema.prisma`; PostgreSQL in dev (Docker Postgres 16) and prod (Neon) (ADR-002). Schema changes require the documented migration discipline (`docs/03-database/migrations.md`).
 4. **State split is fixed**: Zustand for client state, TanStack Query for server state (ADR-003).
-5. **shadcn/ui (New York) is the design-system base** (ADR-006); **Tailwind CSS 4** for styling.
+5. **shadcn/ui (radix-nova preset — formerly "New York") is the design-system base** (ADR-006); **Tailwind CSS 4** for styling.
 6. **Mercado Pago is the payment gateway** (ADR-008).
 7. **Every API input is validated with Zod**; **RBAC middleware** enforces the permission matrix; **rate limits** are per-role (`docs/07-security/security.md`, `docs/07-security/permissions.md`).
 8. **Repository pattern**: services depend on interfaces, never on Prisma directly (`architecture.md` §4.1).

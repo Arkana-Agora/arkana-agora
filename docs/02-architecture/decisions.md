@@ -204,6 +204,10 @@ O projeto precisa de um sistema de design consistente, acessível e personalizá
 ### Decisão
 Utilizar **shadcn/ui** (estilo **New York**) como base do sistema de design.
 
+> **Nota de implementação (F2B, 2026-08-13):** o CLI do shadcn 4.17 renomeou o preset
+> "New York" para **radix-nova** (`components.json` → `"style": "radix-nova"`). A decisão
+> (shadcn/ui + Radix, minimalista) permanece inalterada.
+
 ### Consequências
 
 **Positivas:**
@@ -446,6 +450,9 @@ ADR-009 Gate A). Os models `Session`/`VerificationToken` são cópia fiel de
 7. **Proteção de rotas**: `src/proxy.ts` (Next 16) com matcher segmentado
    (`/dashboard/:path*`), validando o JWT via `getToken({ secret: AUTH_SECRET })` com
    `secureCookie` em protocolo `https:` (nome de cookie/salt do Auth.js diferem sob HTTPS).
+   > **Nota de implementação (F2B, 2026-08-13):** adicionada segunda camada como
+   > defesa-em-profundidade — guard de grupo de rotas `src/app/(app)/layout.tsx`
+   > (server component com `auth()` → `redirect("/login")`). A decisão permanece inalterada.
 8. **Provider Google condicional**: registrado somente quando `AUTH_GOOGLE_ID` e
    `AUTH_GOOGLE_SECRET` estão definidos — em dev sem credenciais, o magic link segue funcional.
 9. **Normalização (H-2)**: `providerId` EMAIL = e-mail minúsculo, aplicada em `createUser` e

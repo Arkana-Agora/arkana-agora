@@ -70,7 +70,7 @@ src/
 │   │   ├── login/
 │   │   ├── register/
 │   │   └── callback/
-│   ├── (main)/             # Rotas autenticadas
+│   ├── (app)/              # Rotas autenticadas (guard de auth em layout.tsx — F2B)
 │   │   ├── dashboard/
 │   │   ├── readings/
 │   │   ├── feed/
@@ -86,7 +86,7 @@ src/
 │   ├── layout.tsx
 │   └── page.tsx            # Landing page
 ├── components/
-│   ├── ui/                 # shadcn/ui (New York style)
+│   ├── ui/                 # shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI)
 │   ├── cards/              # Componentes de cartas
 │   ├── social/             # Feed, posts, comentários
 │   └── layout/             # Header, sidebar, footer
@@ -148,7 +148,7 @@ Serviços complementares que rodam em portas separadas:
 - **React Server Components** para renderização no servidor (SEO, performance)
 - **Client Components** para interatividade (formulários, modais, animações)
 - **Framer Motion** para transições e animações de cartas
-- **shadcn/ui** (estilo New York) como sistema de design base
+- **shadcn/ui** (preset radix-nova — "New York" na nomenclatura antiga da CLI) como sistema de design base
 - **Tailwind CSS 4** para estilização utility-first
 
 ```typescript

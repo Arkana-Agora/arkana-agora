@@ -23,7 +23,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 | US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Pendente** — sem `docker-compose.yml` no repo |
 | US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com 5 models (User, UserProfile, Subscription, Session, VerificationToken); dev PostgreSQL (Docker Postgres 16) via `bunx prisma migrate dev`; init migration `20260813000605_init` aplicada |
 | US-005 | Como desenvolvedor, preciso que o Auth.js v5 esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010); Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link; ver task 9 |
-| US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Pendente** — sem shadcn/ui/Tailwind configurados ainda |
+| US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Entregue (F2B)** — Tailwind v4 + shadcn/ui configurados; tokens oklch centralizados em `src/app/globals.css` (`:root`/`.dark`); claro/escuro via `next-themes`; ver tasks 12-14 |
 
 ---
 
@@ -45,13 +45,13 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 
 ### Autenticação
 - [x] 9. Setup Auth.js v5 (Google OAuth, magic link, JWT strategy) — **entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010, supersede a cláusula v4 do ADR-009); `src/auth/auth.config.ts` (edge: Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link), adapter mínimo `src/auth/prisma-adapter.ts` (VerificationToken/User; sem model `Account`), `src/auth/auth.ts` (node, JWT strategy), handler `src/app/api/auth/[...nextauth]`; `providerId` EMAIL = e-mail minúsculo (H-2, ver `prisma/schema.prisma` header)
-- [x] 10. Configurar middleware de proteção de rotas — **entregue (F2A)** — `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`
+- [x] 10. Configurar middleware de proteção de rotas — **entregue (F2A)** — `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`; **F2B** adicionou defesa em profundidade: guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` + `redirect("/login")` sem sessão)
 - [x] 11. Páginas de login/callback funcionais — **entregue (F2A)** — `src/app/(auth)/login` (Google + magic link) e `src/app/(app)/dashboard` (sessão + sign out); callbacks nos caminhos fixos do Auth.js (`/api/auth/callback/*`)
 
 ### Design System
-- [ ] 12. Configurar shadcn/ui (New York style, dark/light theme) — **pendente**
-- [ ] 13. Definir design tokens — **pendente**
-- [ ] 14. Criar componentes base — **pendente**
+- [x] 12. Configurar shadcn/ui (dark/light theme) — **entregue (F2B)** — `shadcn init` (shadcn@4.17, preset **radix-nova** — "New York" na CLI atual via `-b radix` + `-p nova`); `components.json` (style `radix-nova`, alias `@/components/ui`); Tailwind v4 via `postcss.config.mjs` (plugin `@tailwindcss/postcss`)
+- [x] 13. Definir design tokens — **entregue (F2B)** — tokens oklch `:root`/`.dark` em `src/app/globals.css` (`@custom-variant dark`, `tw-animate-css` + `shadcn/tailwind.css`; fonte `--font-geist-sans`)
+- [x] 14. Criar componentes base — **entregue (F2B)** — `src/components/ui/`: Button, Card, Input, Label, Skeleton, Alert (CLI radix-nova) + `form.tsx` escrito à mão (o registry radix-nova não inclui `form`; adaptado do fonte New York); `src/lib/utils.ts` (`cn`)
 - [ ] 15. Setup Storybook para documentação visual — **pendente**
 
 ### CI/CD e Observabilidade
@@ -78,9 +78,9 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 
 - [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
 - [ ] Deploy automático em staging via GitHub Actions → Vercel — **pendente** (sem pipeline criado)
-- [x] Autenticação funcionando com Google OAuth — **entregue (F2A)** — Auth.js v5 (ADR-010); login `/login` (Google + magic link), sessão JWT do Auth.js, proteção de `/dashboard` via `src/proxy.ts`
+- [x] Autenticação funcionando com Google OAuth — **entregue (F2A)** — Auth.js v5 (ADR-010); login `/login` (Google + magic link), sessão JWT do Auth.js, proteção de `/dashboard` via `src/proxy.ts` + guard de grupo `src/app/(app)/layout.tsx` (F2B)
 - [ ] Banco de dados conectado com migrations aplicadas — **parcial** (5 models + init `20260813000605_init` aplicada em dev PostgreSQL/Docker)
-- [ ] Design system com tema claro/escuro operacional — **pendente**
+- [x] Design system com tema claro/escuro operacional — **entregue (F2B)** — Tailwind v4 + shadcn/ui (preset radix-nova), tokens oklch em `src/app/globals.css` (`:root`/`.dark`), `next-themes` (ThemeProvider/ThemeToggle), componentes base em `src/components/ui/`; ver tasks 12-14
 - [x] Health check endpoint presente — 200 quando o check de DB passa; 503 apenas em falha dura; `status` do corpo derivado dos checks (`ok`/`degraded`)
 - [x] Documentação de setup local completa
 
@@ -92,9 +92,11 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 arkana-agora/                  # Raiz = monolito MVP (bun)
 ├── src/
 │   ├── app/                   # App Router (layout pt-BR, page, error/loading/not-found, globals.css)
+│   │   ├── (auth)/login/      # Página de login (Card + toggle de tema)
+│   │   ├── (app)/layout.tsx   # Guard de auth do route group (auth() + redirect("/login"))
 │   │   └── api/health/        # GET /api/health (envelope; 200 quando DB ok, 503 em falha)
-│   ├── components/            # (placeholder vazio)
-│   ├── lib/                   # src/lib/prisma.ts (Prisma singleton)
+│   ├── components/            # providers.tsx (SessionProvider + ThemeProvider), theme-provider.tsx, theme-toggle.tsx, ui/ (shadcn radix-nova)
+│   ├── lib/                   # src/lib/prisma.ts (Prisma singleton), src/lib/utils.ts (cn)
 │   ├── services/              # (placeholder vazio)
 │   ├── stores/                # (placeholder vazio)
 │   └── types/                 # (placeholder vazio)
@@ -103,7 +105,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 │   ├── migrations/            # init 20260813000605_init (aplicada; lock postgresql)
 │   └── seed.ts                # Seed admin + test (idempotente)
 ├── public/                    # Assets estáticos (vazio)
-├── tests/                     # tests/health.test.ts (vitest)
+├── tests/                     # tests/health.test.ts + tests/ui-utils.test.ts (vitest)
 ├── package.json               # Scripts bun: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test
 ├── next.config.ts             # output: "standalone" + serverExternalPackages
 ├── tsconfig.json
@@ -153,6 +155,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - App único Next.js 16 (App Router) na raiz, toolchain `bun` — documentado em `docs/02-architecture/monorepo.md` §1
 - Prisma schema com 5 models (User, UserProfile, Subscription, Session, VerificationToken) + init migration `20260813000605_init` aplicada; seed idempotente (admin + test); dev DB Docker Postgres 16 via `bunx prisma migrate dev`
 - Rota `/api/health` (envelope `{status,timestamp,version,services:{database}}`; 200 quando DB ok, 503 em falha dura; Redis/IA adicionados quando conectados, per `observability.md` §6.3) + teste vitest
+- Design system shadcn/ui (claro/escuro) — Tailwind v4 via `postcss.config.mjs` (`@tailwindcss/postcss`), `components.json` (style radix-nova), tokens oklch `:root`/`.dark` em `src/app/globals.css`, `src/lib/utils.ts` (`cn`), componentes `src/components/ui/` (Button, Card, Input, Label, Skeleton, Alert + `form.tsx` manual), `next-themes` (`providers.tsx`/`theme-provider.tsx`/`theme-toggle.tsx`), fonte Geist (`--font-geist-sans`) + `suppressHydrationWarning` no `layout.tsx`; `ThemeToggle` em `/login` e `/dashboard`
 - `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `next.config.ts`, `.env.example`
 - Documentação de estrutura e setup local
 
@@ -161,7 +164,6 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - Infraestrutura Docker Compose
 - Migrations Prisma versionadas + tabelas completas (18 entidades, `docs/03-database/entities.md`)
 - Autenticação Sprint 1: e-mail/senha (credentials), Facebook OAuth, Custom JWT Layer (access RS256 + refresh rotation) e rotas `/api/v1/auth/*` (rate limit de magic link, LGPD delete)
-- Design system shadcn/ui (claro/escuro)
 - Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
 
 **Decisões rastreadas para a Sprint 1 (não reversíveis de forma barata — ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3):**
