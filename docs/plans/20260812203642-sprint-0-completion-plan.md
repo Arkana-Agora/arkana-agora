@@ -291,16 +291,16 @@ Por entregável (checklist de verificação do plano — não substitui ACs de c
 - [x] F1: seed dev mínimo (T06)
 - [x] F1: `.env.example` DATABASE_URL postgres (T07)
 - [x] F1: verificação build+docker+health (T08)
-- [ ] F2A: `next-auth@5.0.0-beta.32` pinado (T09)
-- [ ] F2A: auth.config edge + EmailProvider magic link (T10)
-- [ ] F2A: adapter mínimo `prisma-adapter.ts` (T11)
-- [ ] F2A: auth.ts node JWT strategy (T11b)
-- [ ] F2A: handler `[...nextauth]` (T12)
-- [ ] F2A: `proxy.ts` protege `/dashboard` (T13)
-- [ ] F2A: `/login` + `/dashboard` funcionais (T14-T15)
-- [ ] F2A: `.env.example` `AUTH_*` (T16)
-- [ ] F2A: **ADR-010** + docs auth sync (T17)
-- [ ] F2A: testes auth unit (T18) + verificação (T19)
+- [x] F2A: `next-auth@5.0.0-beta.32` pinado (T09)
+- [x] F2A: auth.config edge + EmailProvider magic link (T10)
+- [x] F2A: adapter mínimo `prisma-adapter.ts` (T11)
+- [x] F2A: auth.ts node JWT strategy (T11b)
+- [x] F2A: handler `[...nextauth]` (T12)
+- [x] F2A: `proxy.ts` protege `/dashboard` (T13)
+- [x] F2A: `/login` + `/dashboard` funcionais (T14-T15)
+- [x] F2A: `.env.example` `AUTH_*` (T16)
+- [x] F2A: **ADR-010** + docs auth sync (T17)
+- [x] F2A: testes auth unit (T18) + verificação (T19)
 - [ ] F2B: Tailwind v4 + postcss (T20-T21)
 - [ ] F2B: shadcn init New York (T22)
 - [ ] F2B: cn + componentes base (T23) + restyle pages (T23b)
@@ -345,3 +345,4 @@ Por entregável (checklist de verificação do plano — não substitui ACs de c
 - 2026-08-12 — Review iteração 3: NEEDS_WORK (1 HIGH: entrada "NextAuth v4 referências" remanescente; 3 LOW). Removida entrada, D2 absorveu doc-shepherd; LOWs de wording/runner corrigidos.
 - 2026-08-12 — Review iteração 4: **APPROVED** (0 CRITICAL/HIGH/MEDIUM; 1 LOW não-bloqueante — log histórico).
 - 2026-08-13 — Fase 1 executada (T01–T08): docker-compose.yml (postgres/redis/migrate/web), Dockerfile multi-stage bun + .dockerignore, next.config.ts standalone + serverExternalPackages, schema postgresql com 5 models autorizados [D3], init migration 20260813000605_init (lock postgresql, SQL revisado), seed dev (admin + test), .env.example DATABASE_URL postgres. Verificação: compose up ~32s (<60s), migrate status up-to-date, health 200/503, bun build/lint/type-check/test verdes, docker build OK. Nota: porta 5432 conflitava com Postgres nativo Windows (P1000) — serviço nativo parado pelo usuário; DATABASE_URL mantida em 5432.
+- 2026-08-13 — Fase 2A executada (T09–T19): `next-auth@5.0.0-beta.32` + nodemailer/@types pinados; `src/auth/auth.config.ts` (edge, Google condicional + EmailProvider magic link, SMTP_* com guard dev `AUTH_EMAIL_SKIP_SEND`); adapter mínimo `src/auth/prisma-adapter.ts` (VerificationToken/User/Account-mapping, sem métodos de Session); `src/auth/auth.ts` (JWT strategy); handler `src/app/api/auth/[...nextauth]`; `src/proxy.ts` (Next 16) protegendo `/dashboard`; páginas `/login` (Google + magic link) e `/dashboard` (sessão + sign out); `.env`/`.env.example` migrados p/ `AUTH_*`; ADR-010 + supersessão ADR-009 + sync docs (04-api, 06-features, overview, deployment §2.4, .specs/001-auth). Verificação: build/lint/type-check verdes; 13 testes vitest verdes; smoke dev — `/api/auth/providers` 200 (google+email), `/login` 200, `/dashboard` sem sessão → 307 `/login?callbackUrl=%2Fdashboard`. Nota ADR-010: sem model `Account` no MVP, vínculo OAuth usa `User.provider`/`providerId` (provedor único por usuário); `unlinkAccount` no-op. **Review pass pós-entrega:** fixes aplicados — filtros `isActive` nas queries de auth, `deleteMany` idempotente na redenção de token, `trustHost` env-driven (`AUTH_TRUST_HOST`), `secureCookie` no proxy, `AUTH_URL` setado. Suíte final: **16 testes vitest verdes**.

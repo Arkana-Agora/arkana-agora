@@ -1,6 +1,11 @@
 # API de Autenticação — arkana-agora
 
-> **Módulo**: `src/app/api/v1/auth/` | **Auth Provider**: NextAuth.js v4 (camada de login) + Custom JWT (ADR-009) | **Session**: Custom JWT (access/refresh)
+> **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
+> ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
+> rotação) abaixo **não estão implementadas** — são o estado-alvo da **Sprint 1** (ADR-009 Gate B).
+> O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
+
+> **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
 
 ## Sumário
 
@@ -27,8 +32,9 @@
 
 ```
 ┌─────────┐   ┌──────────────┐   ┌──────────┐   ┌─────────┐
-│ Cliente │──>│ NextAuth.js  │──>│  Prisma  │──>│  Banco  │
-│         │   │ v4 (login)   │   │   ORM    │   │   DB    │
+│ Cliente │──>│  Auth.js v5  │──>│  Prisma  │──>│  Banco  │
+│         │   │ (camada de   │   │ adapter  │   │   DB    │
+│         │   │  login, JWT) │   │  mínimo  │   │         │
 │         │   └──────────────┘   └──────────┘   └─────────┘
 │         │          │ confirma identidade (callback)
 │         │          ▼
@@ -177,7 +183,7 @@ Content-Type: application/json
 
 ## POST /auth/social
 
-> **Deprecated**: o fluxo OAuth é delegado ao NextAuth.js v4 em `/api/auth/*` (ADR-009). Mantido apenas para compatibilidade; não usar em implementações novas.
+> **Deprecated**: o fluxo OAuth é delegado ao Auth.js v5 em `/api/auth/*` (ADR-010, supersede a cláusula v4 do ADR-009). Mantido apenas para compatibilidade; não usar em implementações novas.
 
 Login via provedor social (Google, Facebook).
 

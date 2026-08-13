@@ -111,20 +111,21 @@
                                           + Set-Cookie: novo refreshToken
 
 
-    GOOGLE OAUTH (NextAuth.js v4)
-    ===============================
+    GOOGLE OAUTH (Auth.js v5 — ADR-010)
+    =====================================
 
     [1] Clica "Entrar com Google"
          |
          v
-    GET /api/auth/signin/google  ------>  [2] NextAuth redireciona para
+    GET /api/auth/signin/google  ------>  [2] Auth.js redireciona para
          |                                   Google Consent Screen
          v                                   |
     [3] Google redireciona de volta   <----- [4] Consentimento concedido
          |                                   (callback /api/auth/callback/google)
          v
-    [5] NextAuth valida o code com Google
-         |  +-> Busca/cria usuario via callbacks signIn/jwt
+    [5] Auth.js valida o code com Google
+         |  +-> Busca/cria usuario via adapter minimo
+         |      (getUserByAccount / getUserByEmail / createUser + linkAccount)
          v
     [6] Custom JWT layer emite access token RS256
          +-> Rotaciona refresh token (Session/familyId)
@@ -167,8 +168,14 @@
 **Response 401**: `{ error: "INVALID_CREDENTIALS" }`
 **Response 429**: `{ error: "TOO_MANY_ATTEMPTS", retryAfter: 900 }`
 
-### OAuth Google/Facebook e Magic Link (via NextAuth.js v4)
-**Descricao**: Os fluxos OAuth (Google/Facebook) e magic link sao delegados ao NextAuth.js v4, que possui endpoints internos fixos em `/api/auth/*` (`signin`, `callback`, `session`, `csrf`, `providers`). **Nao re-implementar o fluxo OAuth em `/api/v1/auth/*`.**
+### OAuth Google/Facebook e Magic Link (via Auth.js v5 — ADR-010)
+**Descricao**: Os fluxos OAuth (Google/Facebook) e magic link sao delegados ao Auth.js v5
+(`next-auth@5.0.0-beta.32`, adapter Prisma minimo, estrategia de sessao JWT), que possui
+endpoints internos fixos em `/api/auth/*` (`signin`, `callback`, `session`, `csrf`,
+`providers`). **Nao re-implementar o fluxo OAuth em `/api/v1/auth/*`.**
+O magic link usa `EmailProvider` (id `email`, callback `/api/auth/callback/email`, token
+single-use 15 min via `VerificationToken`). O vinculo OAuth usa `User.provider`/`providerId`
+(sem model `Account` no MVP). **Nao alterar os schemas de `Session`/`VerificationToken` do §4.**
 
 Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite o access token RS256 e rotaciona o refresh token (tabela `Session`), definindo o cookie `refreshToken` httpOnly. O redirect final vai para `/dashboard` **sem tokens na URL**.
 

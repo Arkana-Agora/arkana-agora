@@ -8,7 +8,7 @@
 
 - **Minimal skeleton implemented** at the repo root (first application code, per ADR-001/ADR-002): Next.js 16 (App Router) monolith with `bun` toolchain (`package.json`: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test), strict `tsconfig.json` (`@/*` → `./src/*`), `eslint.config.mjs` (eslint-config-next flat), `vitest.config.ts` (tsconfig-paths), `src/app/` (layout.tsx pt-BR, page.tsx, error/loading/not-found, globals.css, `src/app/api/health/route.ts` — envelope `{status,timestamp,version,services:{database}}`, version from `src/lib/version.ts` (`APP_VERSION`), `database` probed via `SELECT 1` with a 5s timeout, top-level `status` derived from the check (`ok`/`degraded`), returns 200 when the DB check passes and 503 only on a hard DB failure, per `docs/02-architecture/observability.md` §6.3), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken — Session/VerificationToken per `.specs/001-auth/design.md` §4), `prisma/migrations/` (init `20260813000605_init` applied, lock `postgresql`), `prisma/seed.ts` (idempotent upsert: admin + test user), `tests/health.test.ts` (vitest), `.env.example` (names only), `.gitignore` (+`prisma/dev.db*`), `Dockerfile` (multi-stage bun: deps/builder/runner, standalone), `docker-compose.yml` (postgres/redis/migrate/web), `.dockerignore`. Dev DB: Docker Postgres 16 via `docker compose up -d postgres` + `bunx prisma migrate dev`. Full tree: `docs/02-architecture/monorepo.md` §1.
 - `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
-- **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. Auth, payments, AI, SSE, social, and admin are not implemented.
+- **No business logic exists yet.** Everything else in this document describes the **documented design** (SDD, ADRs, `.specs/`) — i.e. the **planned** architecture. The Auth.js v5 login layer (magic link + Google OAuth, ADR-010) shipped in M0; payments, AI, SSE, social, and admin are not implemented.
 - Items the docs themselves mark as future ("futuro", "planejado", "V1+") are additionally labeled **[planned]**.
 - The docs target an MVP as a **modular monolith** (single Next.js app) with a documented evolution path to a **Turborepo monorepo with microservices** (ADR-005, `docs/02-architecture/monorepo.md`).
 
@@ -27,7 +27,7 @@ Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), nume
 
 ## Technology Stack
 
-Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest — see "Implementation status"), all entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
+Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest) and the Auth.js v5 login layer (M0) — see "Implementation status" — all entries are **documented design, not yet implemented**. Status column: **MVP** = documented target for the MVP monolith; **[planned]** = explicitly future in the docs.
 
 | Technology | Role | Status | Source of truth |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest — see "Im
 | shadcn/ui (New York style) | Design system (Radix-based, copied into repo) | MVP | ADR-006; `docs/02-architecture/architecture.md` §3.1 |
 | Tailwind CSS 4 | Utility-first styling | MVP | `docs/02-architecture/architecture.md` §3.1; `docs/00-overview/glossary.md` |
 | Framer Motion | Card reveal/flip animations | MVP | `docs/02-architecture/architecture.md` §3.1; `.specs/003-tarot-engine/design.md` §8 |
-| NextAuth.js v4 | Auth: JWT sessions, Google/Facebook OAuth, magic link | MVP | `docs/02-architecture/architecture.md` §8; `docs/04-api/authentication.md` |
+| Auth.js v5 (`next-auth@5.0.0-beta.32`) | Auth: JWT strategy; Google OAuth + magic link (MVP); Facebook + credentials (Sprint 1) | MVP | ADR-010; `docs/04-api/authentication.md` |
 | z-ai-web-dev-sdk + GPT-4o | AI interpretations, SSE streaming, model router (GPT-4o / GPT-4o-mini fallback) | MVP | `docs/05-ai/architecture.md`; `docs/05-ai/prompts.md` |
 | Mercado Pago | Payments: PIX, credit card, boleto; split payment; PLUS subscription | MVP | ADR-008; `docs/04-api/marketplace.md` |
 | PostgreSQL (Docker Postgres 16 dev → Neon prod) | Local dev DB → serverless prod DB (same engine since F1) | MVP | ADR-002; `docs/02-architecture/deployment.md` §1 |
@@ -63,13 +63,14 @@ From `docs/02-architecture/architecture.md` §2.1 and `docs/02-architecture/mono
 src/
 ├── app/            # App Router: (auth)/, (main)/, api/ route groups
 ├── components/     # ui/ (shadcn), cards/, social/, layout/
-├── lib/            # prisma.ts, auth.ts (NextAuth v4), ai.ts, validators/ (Zod)
+├── auth/           # Auth.js v5 (ADR-010): auth.config.ts (edge), auth.ts (node), prisma-adapter.ts
+├── lib/            # prisma.ts, ai.ts, validators/ (Zod)
 ├── services/       # reading.service.ts, social.service.ts, payment.service.ts, ai.service.ts
 ├── stores/         # Zustand: reading.store.ts, ui.store.ts, user.store.ts
 └── types/          # domain contracts
 ```
 
-**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (NextAuth), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming route: `POST /api/v1/ai/reading/stream` (`docs/05-ai/architecture.md`).
+**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming route: `POST /api/v1/ai/reading/stream` (`docs/05-ai/architecture.md`).
 
 ### Mini-services (separate ports)
 
@@ -81,7 +82,7 @@ src/
 
 ### Layered architecture
 
-`docs/02-architecture/architecture.md` §3 defines four layers: **Presentation** (RSC + client components, Framer Motion, shadcn/ui, Tailwind 4), **Application** (API Routes as controllers, Zod validation, SSE, NextAuth v4), **Domain** (`src/services/` business rules, e.g. plan limits on spreads, arcano calculation), **Infrastructure** (Prisma, z-ai-web-dev-sdk, Mercado Pago SDK, Upstash Redis, Cloudflare R2).
+`docs/02-architecture/architecture.md` §3 defines four layers: **Presentation** (RSC + client components, Framer Motion, shadcn/ui, Tailwind 4), **Application** (API Routes as controllers, Zod validation, SSE, Auth.js v5 — ADR-010), **Domain** (`src/services/` business rules, e.g. plan limits on spreads, arcano calculation), **Infrastructure** (Prisma, z-ai-web-dev-sdk, Mercado Pago SDK, Upstash Redis, Cloudflare R2).
 
 ### Design patterns (documented)
 
@@ -95,7 +96,7 @@ ADR-005 + `docs/02-architecture/monorepo.md`: `apps/` (web, mobile, admin), `pac
 
 ### Authentication flow
 
-NextAuth.js v4 with JWT sessions (`docs/04-api/authentication.md`, `.specs/001-auth/design.md`): access token 15 min, refresh token 30 days (opaque, httpOnly cookie, rotation + reuse detection revokes the token family), magic link 15 min; bcrypt (12 rounds); 5 failed attempts → 15 min lockout. Providers: credentials, Google, Facebook. RBAC roles `USER → PROFESSIONAL → ADMIN` (implemented in `prisma/schema.prisma`) plus `SUPER_ADMIN` **[planned]**; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension from role. Permission matrix enforced by middleware (`docs/07-security/permissions.md`).
+Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) as the MVP login layer: magic link 15 min single-use (`EmailProvider` → `VerificationToken`) + Google OAuth (binding via `User.provider`/`providerId`, no `Account` model), JWT strategy — the session is the Auth.js JWT cookie via `/api/auth/*` (`src/app/api/auth/[...nextauth]`). Sprint 1: Custom JWT Layer (access 15 min RS256 + refresh 30 days opaque, httpOnly cookie, rotation + reuse detection revokes the token family, anchored at the `jwt`/`session` callbacks in `src/auth/auth.config.ts`); credentials (bcrypt 12 rounds; 5 failed attempts → 15 min lockout) and Facebook OAuth. RBAC roles `USER → PROFESSIONAL → ADMIN` (implemented in `prisma/schema.prisma`) plus `SUPER_ADMIN` **[planned]**; plan tier (`UserPlan`: FREE/PLUS) is a separate dimension from role. Permission matrix enforced by middleware (`docs/07-security/permissions.md`).
 
 ### AI reading flow (SSE)
 

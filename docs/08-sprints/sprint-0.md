@@ -44,9 +44,9 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [x] 8. Configurar seed script — `prisma/seed.ts` (admin + test user, upsert idempotente), `bun run seed` (`bunx tsx prisma/seed.ts` em `scripts.seed` e `prisma.seed`)
 
 ### Autenticação
-- [ ] 9. Setup NextAuth.js (Google OAuth, magic link, JWT strategy) — **pendente** — **TODO rastreado:** reinstalar `next-auth` com versão compatível com Next 16 (v4 não instala/roda: peer range exclui Next 16; `cookies()`/`headers()` síncronos quebram no App Router; `middleware.ts` virou `proxy.ts`). Preferir Auth.js v5 beta. Também decidir a convenção de `providerId` para contas EMAIL (ver `prisma/schema.prisma` header)
-- [ ] 10. Configurar middleware de proteção de rotas — **pendente**
-- [ ] 11. Páginas de login/callback funcionais — **pendente**
+- [x] 9. Setup Auth.js v5 (Google OAuth, magic link, JWT strategy) — **entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010, supersede a cláusula v4 do ADR-009); `src/auth/auth.config.ts` (edge: Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link), adapter mínimo `src/auth/prisma-adapter.ts` (VerificationToken/User; sem model `Account`), `src/auth/auth.ts` (node, JWT strategy), handler `src/app/api/auth/[...nextauth]`; `providerId` EMAIL = e-mail minúsculo (H-2, ver `prisma/schema.prisma` header)
+- [x] 10. Configurar middleware de proteção de rotas — **entregue (F2A)** — `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`
+- [x] 11. Páginas de login/callback funcionais — **entregue (F2A)** — `src/app/(auth)/login` (Google + magic link) e `src/app/(app)/dashboard` (sessão + sign out); callbacks nos caminhos fixos do Auth.js (`/api/auth/callback/*`)
 
 ### Design System
 - [ ] 12. Configurar shadcn/ui (New York style, dark/light theme) — **pendente**

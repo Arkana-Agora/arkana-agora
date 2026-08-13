@@ -106,13 +106,21 @@ NEXT_PUBLIC_WS_URL=ws://localhost:3003
 # Banco (dev) — Docker Postgres 16 via docker compose (db/user/pass: arkana)
 DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
 
-# Auth
-NEXTAUTH_SECRET=dev-secret-change-me
-NEXTAUTH_URL=http://localhost:3000
-GOOGLE_CLIENT_ID=dev-google-id
-GOOGLE_CLIENT_SECRET=dev-google-secret
-FACEBOOK_CLIENT_ID=dev-fb-id
-FACEBOOK_CLIENT_SECRET=dev-fb-secret
+# Auth (Auth.js v5 — ADR-010; não usar NEXTAUTH_*/GOOGLE_CLIENT_*)
+AUTH_URL=http://localhost:3000
+AUTH_SECRET=dev-secret-change-me
+AUTH_TRUST_HOST=true
+AUTH_GOOGLE_ID=dev-google-id
+AUTH_GOOGLE_SECRET=dev-google-secret
+AUTH_EMAIL_SKIP_SEND=true
+EMAIL_FROM=Arkana Agora <nao-responda@arkanaagora.dev>
+# SMTP (opcional em dev — sem SMTP + AUTH_EMAIL_SKIP_SEND=true loga o link no console)
+SMTP_URL=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
 
 # IA
 AI_PRIMARY_API_KEY=dev-ai-key

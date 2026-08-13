@@ -25,8 +25,8 @@ O sistema deve permitir o cadastro de novos usuarios utilizando endereco de emai
 
 Apos o cadastro, o usuario deve receber um email de verificacao com link valido por 24 horas.
 
-### RF-AUTH-002: Login Social (Google/Facebook OAuth via NextAuth)
-O sistema deve delegar o fluxo OAuth ao **NextAuth.js v4** (endpoints fixos `/api/auth/*`), sem re-implementar o fluxo em `/api/v1/auth/*` (ADR-009). O fluxo deve:
+### RF-AUTH-002: Login Social (Google/Facebook OAuth via Auth.js)
+O sistema deve delegar o fluxo OAuth ao **Auth.js v5** (`next-auth@5.0.0-beta.32`, endpoints fixos `/api/auth/*`, adapter Prisma minimo, JWT strategy — ADR-010 supersede a clausula v4 do ADR-009), sem re-implementar o fluxo em `/api/v1/auth/*`. O fluxo deve:
 - Redirecionar para a tela de consentimento do Google/Facebook (via NextAuth)
 - Extrair email, nome e foto do perfil do provedor
 - Criar a conta automaticamente caso o email nao exista no sistema
@@ -61,7 +61,7 @@ O sistema deve exigir verificacao de endereco de email antes de conceder acesso 
 - Envio automatico de novo token se o anterior expirar
 
 ### RF-AUTH-006: Gerenciamento de Sessao JWT
-O sistema deve gerenciar sessoes utilizando um fluxo hibrido (ADR-009): NextAuth.js v4 como camada de login (OAuth, magic link) + Custom JWT Layer para a sessao autenticada:
+O sistema deve gerenciar sessoes utilizando um fluxo hibrido (ADR-009, camada de login atualizada pelo ADR-010): Auth.js v5 (beta.32, adapter minimo, JWT strategy) como camada de login (OAuth, magic link) + Custom JWT Layer para a sessao autenticada:
 - **Access Token**: JWT assinado com RS256, validade de 15 minutos, conteudo: `{ sub, role, plan, tokenVersion, iat, exp }` (permissoes derivadas server-side a partir do role; claim `tokenVersion` validada contra Redis a cada requisicao para revogacao imediata de role/plan/suspensao)
 - **Refresh Token**: opaco, validade de 30 dias, persistido em banco **com hash SHA-256** (nunca em texto plano; Redis para cache/blacklist)
 - Access token enviado no header `Authorization: Bearer <token>`
@@ -121,7 +121,7 @@ O sistema deve implementar limitacao de requisicoes para prevenir abuso:
 
 | Dependencia | Versao | Proposito |
 |---|---|---|
-| NextAuth.js | v4 | Framework de autenticacao para Next.js |
+| NextAuth.js (Auth.js) | v5 beta.32 (pinado) | Framework de autenticacao para Next.js (ADR-010) |
 | Google OAuth 2.0 | - | Login social via conta Google |
 | bcryptjs | >=2.4.3 | Hashing de senhas |
 | jose | >=4.x | Manipulacao de tokens JWT (Edge Runtime compatible) |

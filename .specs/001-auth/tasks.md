@@ -11,7 +11,7 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 1 | Instalar e configurar NextAuth.js v4 com adaptador Prisma | pending | 2 | - |
+| 1 | Instalar e configurar Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) com adapter Prisma mínimo | pending | 2 | - |
 | 2 | Configurar Google OAuth no Google Cloud Console e obter credentials | pending | 1 | - |
 | 3 | Configurar provedor de email (Resend) com template transacional | pending | 2 | - |
 | 4 | Criar schema Prisma para User, Session, VerificationToken | pending | 2 | 1 |
@@ -23,7 +23,7 @@
 |---|---|---|---|---|
 | 6 | Implementar POST /api/v1/auth/register com validacao Zod | pending | 3 | 4, 5 |
 | 7 | Implementar POST /api/v1/auth/login com hashing bcrypt | pending | 3 | 4, 5 |
-| 8 | Configurar Google/Facebook OAuth via NextAuth (/api/auth/*) + emissao de tokens custom no callback | pending | 3 | 1, 2 |
+| 8 | Configurar Google/Facebook OAuth via Auth.js (/api/auth/*, adapter mínimo) + emissao de tokens custom no callback | pending | 3 | 1, 2 |
 | 9 | Implementar POST /api/v1/auth/magic-link (geracao e envio) | pending | 2 | 3, 4 |
 | 10 | Implementar POST /api/v1/auth/magic-link/verify (single-use, 15 min) | pending | 2 | 9 |
 | 11 | Implementar POST /api/v1/auth/forgot-password | pending | 2 | 3, 4 |
