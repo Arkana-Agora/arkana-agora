@@ -12,8 +12,7 @@ export default async function DashboardPage() {
     <main>
       <h1>Dashboard</h1>
       <p>
-        Olá, {session.user.name ?? session.user.email ?? "visitante"} — sessão
-        autenticada.
+        Olá, {session.user.name ?? session.user.email} — sessão autenticada.
       </p>
       <form
         action={async () => {

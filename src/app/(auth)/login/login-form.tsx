@@ -15,16 +15,21 @@ export function LoginForm() {
     event.preventDefault();
     setStatus("loading");
     setError(null);
-    const result = await signIn("email", {
-      email,
-      redirect: false,
-      callbackUrl: "/dashboard",
-    });
-    if (result?.error) {
+    try {
+      const result = await signIn("email", {
+        email,
+        redirect: false,
+        callbackUrl: "/dashboard",
+      });
+      if (result?.error) {
+        setStatus("error");
+        setError("Não foi possível enviar o link de acesso. Tente novamente.");
+      } else {
+        setStatus("sent");
+      }
+    } catch {
       setStatus("error");
       setError("Não foi possível enviar o link de acesso. Tente novamente.");
-    } else {
-      setStatus("sent");
     }
   }
 

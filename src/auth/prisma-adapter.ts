@@ -36,22 +36,49 @@ function toAdapterUser(user: {
   };
 }
 
-export const prismaAdapter: Adapter = {
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+function isNotFound(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2025"
+  );
+}
+
+export const prismaAdapter = {
   async createUser(user) {
     const email = user.email.toLowerCase();
     const name = user.name ?? email.split("@")[0];
-    const created = await prisma.user.create({
-      data: {
-        email,
-        name,
-        displayName: name,
-        avatar: user.image ?? null,
-        emailVerified: user.emailVerified ?? null,
-        provider: "EMAIL",
-        providerId: email,
-      },
-    });
-    return toAdapterUser(created);
+    try {
+      const created = await prisma.user.create({
+        data: {
+          email,
+          name,
+          displayName: name,
+          avatar: user.image ?? null,
+          emailVerified: user.emailVerified ?? null,
+          provider: "EMAIL",
+          providerId: email,
+        },
+      });
+      return toAdapterUser(created);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error(
+          `Conta com e-mail ${email} existe, mas está inativa/excluída (janela LGPD).`,
+        );
+      }
+      throw error;
+    }
   },
 
   async getUser(id) {
@@ -123,19 +150,19 @@ export const prismaAdapter: Adapter = {
     return verificationToken;
   },
 
-  async useVerificationToken({ identifier, token }) {
-    const record = await prisma.verificationToken.findFirst({
-      where: { identifier, token },
-    });
-    if (!record) return null;
-    const deleted = await prisma.verificationToken.deleteMany({
-      where: { identifier, token },
-    });
-    if (deleted.count === 0) return null;
-    return {
-      identifier: record.identifier,
-      token: record.token,
-      expires: record.expiresAt,
-    };
+  async useVerificationToken({ token }) {
+    try {
+      const record = await prisma.verificationToken.delete({
+        where: { token },
+      });
+      return {
+        identifier: record.identifier,
+        token: record.token,
+        expires: record.expiresAt,
+      };
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
   },
-};
+} satisfies Adapter;

@@ -43,6 +43,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
       REDIS_URL: redis://redis:6379

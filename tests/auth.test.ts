@@ -3,6 +3,9 @@ import type { AdapterUser } from "next-auth/adapters";
 import { authCallbacks } from "@/auth/auth.config";
 import { prismaAdapter } from "@/auth/prisma-adapter";
 
+type JwtParams = Parameters<NonNullable<typeof authCallbacks.jwt>>[0];
+type SessionParams = Parameters<NonNullable<typeof authCallbacks.session>>[0];
+
 const mockUser = {
   id: "usr_1",
   name: "Maria Silva",
@@ -13,6 +16,7 @@ const mockUser = {
   provider: "EMAIL",
   providerId: "maria@email.com",
   deletedAt: null,
+  isActive: true,
 } as const;
 
 const prismaMock = vi.hoisted(() => ({
@@ -23,12 +27,16 @@ const prismaMock = vi.hoisted(() => ({
   },
   verificationToken: {
     create: vi.fn(),
-    findFirst: vi.fn(),
-    deleteMany: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+
+const notFoundError = Object.assign(new Error("not found"), { code: "P2025" });
+const uniqueViolationError = Object.assign(new Error("unique"), {
+  code: "P2002",
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -45,7 +53,7 @@ describe("prismaAdapter — normalização e mapeamento", () => {
       emailVerified: null,
       image: null,
     };
-    const result = await prismaAdapter.createUser!(user);
+    const result = await prismaAdapter.createUser(user);
 
     expect(prismaMock.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -74,17 +82,31 @@ describe("prismaAdapter — normalização e mapeamento", () => {
       emailVerified: null,
       image: null,
     };
-    await prismaAdapter.createUser!(user);
+    await prismaAdapter.createUser(user);
 
     const data = prismaMock.user.create.mock.calls[0][0].data;
     expect(data.name).toBe("maria");
     expect(data.displayName).toBe("maria");
   });
 
+  it("createUser mapeia violação de unicidade (conta LGPD inativa) para erro explícito", async () => {
+    prismaMock.user.create.mockRejectedValue(uniqueViolationError);
+
+    const user: AdapterUser = {
+      id: "usr_new",
+      name: "Maria Silva",
+      email: "maria@email.com",
+      emailVerified: null,
+      image: null,
+    };
+
+    await expect(prismaAdapter.createUser(user)).rejects.toThrow(/inativa\/excluída/);
+  });
+
   it("getUserByAccount mapeia provider google → GOOGLE e filtra deletedAt null + isActive", async () => {
     prismaMock.user.findFirst.mockResolvedValue(mockUser);
 
-    await prismaAdapter.getUserByAccount!({
+    await prismaAdapter.getUserByAccount({
       provider: "google",
       providerAccountId: "google-subject-123",
     });
@@ -102,7 +124,7 @@ describe("prismaAdapter — normalização e mapeamento", () => {
   it("getUserByEmail busca case-insensitive e filtra deletedAt null + isActive", async () => {
     prismaMock.user.findFirst.mockResolvedValue(mockUser);
 
-    await prismaAdapter.getUserByEmail!("MARIA@EMAIL.COM");
+    await prismaAdapter.getUserByEmail("MARIA@EMAIL.COM");
 
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
       where: {
@@ -116,7 +138,7 @@ describe("prismaAdapter — normalização e mapeamento", () => {
   it("getUser filtra deletedAt null + isActive", async () => {
     prismaMock.user.findFirst.mockResolvedValue(mockUser);
 
-    await prismaAdapter.getUser!("usr_1");
+    await prismaAdapter.getUser("usr_1");
 
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
       where: { id: "usr_1", deletedAt: null, isActive: true },
@@ -125,7 +147,7 @@ describe("prismaAdapter — normalização e mapeamento", () => {
 
   it("provider desconhecido lança erro (não coage para EMAIL)", async () => {
     await expect(
-      prismaAdapter.getUserByAccount!({
+      prismaAdapter.getUserByAccount({
         provider: "github",
         providerAccountId: "github-1",
       }),
@@ -135,12 +157,12 @@ describe("prismaAdapter — normalização e mapeamento", () => {
   it("linkAccount persiste provider GOOGLE + providerId do subject", async () => {
     prismaMock.user.update.mockResolvedValue(mockUser);
 
-    await prismaAdapter.linkAccount!({
+    await prismaAdapter.linkAccount({
       userId: "usr_1",
       type: "oauth",
       provider: "google",
       providerAccountId: "google-subject-123",
-    } as never);
+    });
 
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: "usr_1" },
@@ -154,7 +176,7 @@ describe("prismaAdapter — magic link (VerificationToken)", () => {
     prismaMock.verificationToken.create.mockResolvedValue({});
 
     const expires = new Date("2026-08-12T22:00:00Z");
-    await prismaAdapter.createVerificationToken!({
+    await prismaAdapter.createVerificationToken({
       identifier: "maria@email.com",
       token: "tok_abc",
       expires,
@@ -170,26 +192,23 @@ describe("prismaAdapter — magic link (VerificationToken)", () => {
     });
   });
 
-  it("useVerificationToken é single-use (deleteMany idempotente após redempção)", async () => {
-    prismaMock.verificationToken.findFirst.mockResolvedValue({
+  it("useVerificationToken é single-use (delete atômico no token único)", async () => {
+    const record = {
       id: "vt_1",
       identifier: "maria@email.com",
       token: "tok_abc",
       type: "MAGIC_LINK",
       expiresAt: new Date("2026-08-12T22:00:00Z"),
-    });
-    prismaMock.verificationToken.deleteMany.mockResolvedValue({ count: 1 });
+    };
+    prismaMock.verificationToken.delete.mockResolvedValue(record);
 
-    const result = await prismaAdapter.useVerificationToken!({
+    const result = await prismaAdapter.useVerificationToken({
       identifier: "maria@email.com",
       token: "tok_abc",
     });
 
-    expect(prismaMock.verificationToken.findFirst).toHaveBeenCalledWith({
-      where: { identifier: "maria@email.com", token: "tok_abc" },
-    });
-    expect(prismaMock.verificationToken.deleteMany).toHaveBeenCalledWith({
-      where: { identifier: "maria@email.com", token: "tok_abc" },
+    expect(prismaMock.verificationToken.delete).toHaveBeenCalledWith({
+      where: { token: "tok_abc" },
     });
     expect(result).toEqual({
       identifier: "maria@email.com",
@@ -198,44 +217,38 @@ describe("prismaAdapter — magic link (VerificationToken)", () => {
     });
   });
 
-  it("useVerificationToken retorna null para token inexistente (sem delete)", async () => {
-    prismaMock.verificationToken.findFirst.mockResolvedValue(null);
+  it("useVerificationToken retorna null quando o token já foi usado (P2025)", async () => {
+    prismaMock.verificationToken.delete.mockRejectedValue(notFoundError);
 
-    const result = await prismaAdapter.useVerificationToken!({
+    const result = await prismaAdapter.useVerificationToken({
       identifier: "maria@email.com",
-      token: "tok_desconhecido",
+      token: "tok_ja_usado",
     });
 
     expect(result).toBeNull();
-    expect(prismaMock.verificationToken.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("useVerificationToken retorna null quando deleteMany conta 0 (corrida)", async () => {
-    prismaMock.verificationToken.findFirst.mockResolvedValue({
-      id: "vt_1",
-      identifier: "maria@email.com",
-      token: "tok_abc",
-      type: "MAGIC_LINK",
-      expiresAt: new Date("2026-08-12T22:00:00Z"),
-    });
-    prismaMock.verificationToken.deleteMany.mockResolvedValue({ count: 0 });
+  it("useVerificationToken propaga erros que não sejam P2025", async () => {
+    prismaMock.verificationToken.delete.mockRejectedValue(
+      new Error("db indisponível"),
+    );
 
-    const result = await prismaAdapter.useVerificationToken!({
-      identifier: "maria@email.com",
-      token: "tok_abc",
-    });
-
-    expect(result).toBeNull();
+    await expect(
+      prismaAdapter.useVerificationToken({
+        identifier: "maria@email.com",
+        token: "tok_abc",
+      }),
+    ).rejects.toThrow("db indisponível");
   });
 });
 
 describe("authCallbacks", () => {
   it("jwt anexa userId quando user está presente (sign-in)", async () => {
     const token = { sub: "usr_1" };
-    const result = await authCallbacks.jwt!({
+    const result = await authCallbacks.jwt({
       token,
       user: { id: "usr_1", name: "Maria", email: "maria@email.com" },
-    } as never);
+    });
 
     expect(result.userId).toBe("usr_1");
     expect(result.sub).toBe("usr_1");
@@ -243,24 +256,26 @@ describe("authCallbacks", () => {
 
   it("jwt preserva token quando user não está presente (session refresh)", async () => {
     const token = { sub: "usr_1", userId: "usr_1" };
-    const result = await authCallbacks.jwt!({ token } as never);
+    const result = await authCallbacks.jwt({
+      token,
+    } as unknown as JwtParams);
 
     expect(result.userId).toBe("usr_1");
   });
 
   it("session expõe userId no session.user", async () => {
     const session = { user: { name: "Maria", email: "maria@email.com" } };
-    const result = await authCallbacks.session!({
+    const result = await authCallbacks.session({
       session,
       token: { sub: "usr_1", userId: "usr_1" },
-    } as never);
+    } as unknown as SessionParams);
 
     expect(result.user.id).toBe("usr_1");
     expect(result.user.email).toBe("maria@email.com");
   });
 
   it("signIn permite o fluxo por padrão", async () => {
-    const result = await authCallbacks.signIn!();
+    const result = await authCallbacks.signIn();
     expect(result).toBe(true);
   });
 });

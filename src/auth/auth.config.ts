@@ -2,15 +2,17 @@ import type { NextAuthConfig } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import EmailProvider from "next-auth/providers/email";
 
-declare module "@auth/core/jwt" {
-  interface JWT {
-    userId?: string;
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
+  if (!process.env.AUTH_URL) {
+    throw new Error(
+      "AUTH_URL é obrigatório em produção — previne host-header poisoning do magic link",
+    );
   }
-}
-
-declare module "@auth/core/types" {
-  interface Session {
-    user: { id?: string } & DefaultSession["user"];
+  if (!process.env.AUTH_URL.startsWith("https://")) {
+    throw new Error("AUTH_URL deve usar https:// em produção");
   }
 }
 
@@ -33,6 +35,9 @@ const smtpServer = smtpConfigured
     })
   : { host: "localhost", port: 25, ignoreTLS: true };
 
+const emailFrom =
+  process.env.EMAIL_FROM ?? "Arkana Agora <nao-responda@arkanaagora.dev>";
+
 const callbacks = {
   signIn: () => true,
   jwt({ token, user }) {
@@ -52,7 +57,7 @@ const callbacks = {
 export const authCallbacks = callbacks;
 
 export const authConfig = {
-  trustHost: process.env.AUTH_TRUST_HOST === "true",
+  trustHost: process.env.AUTH_TRUST_HOST !== "false",
   pages: {
     signIn: "/login",
   },
@@ -61,17 +66,19 @@ export const authConfig = {
       ? GoogleProvider({
           clientId: process.env.AUTH_GOOGLE_ID,
           clientSecret: process.env.AUTH_GOOGLE_SECRET,
+          allowDangerousEmailAccountLinking: true,
         })
       : null,
     EmailProvider({
-      from:
-        process.env.EMAIL_FROM ?? "Arkana Agora <nao-responda@arkanaagora.dev>",
+      from: emailFrom,
       maxAge: 15 * 60,
       server: smtpServer,
       sendVerificationRequest: async ({ identifier, url }) => {
         if (process.env.AUTH_EMAIL_SKIP_SEND === "true") {
-          if (process.env.NODE_ENV === "production") {
-            throw new Error("AUTH_EMAIL_SKIP_SEND não é permitido em produção");
+          if (process.env.NODE_ENV !== "development") {
+            throw new Error(
+              "AUTH_EMAIL_SKIP_SEND só é permitido em desenvolvimento",
+            );
           }
           console.log(`[auth:magic-link] ${identifier}: ${url}`);
           return;
@@ -85,7 +92,7 @@ export const authConfig = {
         const transport = createTransport(smtpServer);
         await transport.sendMail({
           to: identifier,
-          from: process.env.EMAIL_FROM ?? "Arkana Agora <nao-responda@arkanaagora.dev>",
+          from: emailFrom,
           subject: "Seu link de acesso — Arkana Agora",
           text: `Acesse este link para entrar na sua conta: ${url}\nO link expira em 15 minutos.`,
           html: `<p>Acesse o link abaixo para entrar na sua conta:</p><p><a href="${url}">${url}</a></p><p>O link expira em 15 minutos.</p>`,
