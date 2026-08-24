@@ -420,6 +420,8 @@ jobs:
         with:
           name: nextjs-build
           path: .next/
+          if-no-files-found: error
+          include-hidden-files: true # obrigatório: .next/ é dot-dir e v4.4+ exclui ocultos por padrão
 
   # Gate: presença dos secrets VERCEL_* checada em step — os contextos
   # `secrets`/`env` NÃO estão disponíveis em `if:` de job-level.
