@@ -30,7 +30,7 @@ Development       http://localhost:3000/api/v1
 
 ## Configuration and Secrets Boundaries
 
-- **Dev**: `.env` (Prisma CLI and `bun` scripts load `.env`, not `.env.local`) with `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana` (Docker Postgres 16), `AUTH_URL=http://localhost:3000`, `AUTH_SECRET=dev-...`, `AUTH_TRUST_HOST=true`, `AUTH_GOOGLE_ID=dev-...`, `AUTH_GOOGLE_SECRET=dev-...` (Auth.js v5, ADR-010 — not `NEXTAUTH_*`/`GOOGLE_CLIENT_*`), `MP_ACCESS_TOKEN=TEST-...`, `REDIS_URL=redis://localhost:6379`, empty `SENTRY_DSN`/`POSTHOG_KEY` (`docs/02-architecture/deployment.md` §2.4).
+- **Dev**: `.env` (Prisma CLI and `bun` scripts load `.env`, not `.env.local`) with `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana` (Docker Postgres 16), `AUTH_URL=http://localhost:3000`, `AUTH_SECRET=dev-...`, `AUTH_TRUST_HOST=true`, `AUTH_GOOGLE_ID=dev-...`, `AUTH_GOOGLE_SECRET=dev-...` (Auth.js v5, ADR-010 — not `NEXTAUTH_*`/`GOOGLE_CLIENT_*`), `MP_ACCESS_TOKEN=TEST-...`, `REDIS_URL=redis://localhost:6379`, empty `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN`/`POSTHOG_KEY` (Sentry desabilitado sem DSN), `LOG_LEVEL=info` (`docs/02-architecture/deployment.md` §2.4).
 - **Staging**: Mercado Pago **sandbox** token, Upstash free tier, Vercel preview env vars.
 - **Production**: live tokens, Neon prod `DATABASE_URL`, `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` (RS256), `MP_ACCESS_TOKEN`, `FCM_SERVER_KEY`, SMTP creds (`docs/07-security/security.md` §Variáveis de Ambiente Críticas).
 - **Rule:** secrets only in provider consoles / secret manager, never in source control. `.env` and `.env*.local` gitignored; only `.env.example` committed. `.gitignore` enforced in CI (build fails if `.env` committed); secret scanner (`git-secrets`/`trufflehog`) on every PR.
@@ -57,7 +57,7 @@ Local stack runs via Docker (`docker-compose.yml` with postgres:16-alpine, redis
 | Alerts | — | Slack | PagerDuty + Slack (warning → Slack 30 min; high → PagerDuty 15 min; critical → PagerDuty+Slack+SMS 5 min) |
 | DB access | Docker Postgres 16 (localhost:5432) | Neon console / staging branch | Neon console (prod), restricted |
 | Deploy permissions | Any developer | Team (Vercel) | Restricted (Vercel Pro owners) + CI |
-| Health check | `http://localhost:3000/api/health` | `https://staging.../api/health` | `https://arkanaagora.com.br/api/health` (DB probed; Redis/AI checks added when configured, per `observability.md` §6.3) |
+| Health check | `http://localhost:3000/api/health` | `https://staging.../api/health` | `https://arkanaagora.com.br/api/health` (DB probed; redis probe ativa quando `REDIS_URL` configurada — sem ela reporta `not-configured`, neutro; IA ainda fora do envelope; per `observability.md` §6.3) |
 
 **Known environmental constraints**
 - Vercel serverless cold starts (~250ms) and invocation limits (1000/min hobby, 3000/min pro).

@@ -296,7 +296,7 @@ app.get('/api/v1/admin/system/health', (req, res) => {
 });
 ```
 
-**Gotcha:** When `src/lib/logger.ts` (Pino) lands, migrate from `console.error` to `logger.error('[health] ...')`. See `docs/solutions/patterns/backend/health-check-envelope.md` for migration notes.
+**Gotcha:** `src/lib/logger.ts` (Pino) has landed (Sprint 0, F4) — always log through `logger` from `@/lib/logger` (`logger.error({ err }, '[health] ...')`), never bare `console.*`. See `docs/solutions/patterns/backend/health-check-envelope.md` for the logging convention.
 
 ## When to Use
 

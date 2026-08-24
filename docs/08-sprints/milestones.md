@@ -28,21 +28,21 @@ Semana  1───3───5──────8──────13────
 |-------|--------|
 | **Data alvo** | Semana 3 |
 | **Sprint** | Sprint 0 |
-| **Status** | Parcial (reescopo) — esqueleto monolítico entregue na raiz (`docs/08-sprints/sprint-0.md`); critérios abaixo refletem o plano original |
+| **Status** | Em fechamento — F1–F4 do plano de conclusão entregues e verificadas localmente (`docs/plans/20260812203642-sprint-0-completion-plan.md`); itens restantes exigem ação remota (push/secrets Vercel) ou configuração de produção |
 
 ### Critérios de Conclusão
 
-- [ ] Monorepo Turborepo + pnpm buildando sem erros — **reescopado**: monolito na raiz (ADR-005 adiado, ver `docs/08-sprints/sprint-0.md`)
-- [ ] `docker compose up` sobe toda a stack em < 60 segundos
-- [ ] CI/CD pipeline verde: lint → test → build → deploy
-- [ ] Deploy automático em staging (Vercel) a cada push na `main`
+- [x] ~~Monorepo Turborepo + pnpm buildando sem erros~~ — **reescopado**: monolito na raiz (ADR-005 adiado, ver `docs/08-sprints/sprint-0.md`); critério satisfeito pelo app único bun
+- [x] `docker compose up` sobe toda a stack em < 60 segundos — **entregue (F1)**: ~32s verificado (postgres+redis+migrate+web)
+- [ ] CI/CD pipeline verde: lint → test → build → deploy — **implementado (F3)**: `ci.yml` com quality → type-check → test (service postgres) → build → gate-deploy → deploy-staging; verde E2E pendente de push remoto com secrets `VERCEL_*`
+- [ ] Deploy automático em staging (Vercel) a cada push na `main` — **configurado (F3)**: job gated por secrets; aguarda cadastro de `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` + primeiro push em `main`
 - [x] Auth.js v5: login com Google OAuth redirecionando corretamente — entregue (F2A, ADR-010)
 - [x] Auth.js v5: magic link enviando email e autenticando — entregue (F2A, ADR-010)
-- [ ] PostgreSQL conectado via Prisma, migrations aplicadas
-- [ ] Tabelas `User`, `UserProfile`, `Subscription` criadas
+- [x] PostgreSQL conectado via Prisma, migrations aplicadas — **entregue (F1)**: dev Docker Postgres 16; init `20260813000605_init` aplicada (lock postgresql)
+- [x] Tabelas `User`, `UserProfile`, `Subscription` criadas — **entregue (F1)**: incl. `Session`/`VerificationToken` (5 models do init)
 - [x] Design system shadcn/ui renderizando em tema claro e escuro — entregue (F2B, Sprint 0): Tailwind v4 + shadcn/ui (preset radix-nova), tokens oklch claro/escuro em `src/app/globals.css`, `next-themes` (ThemeProvider/ThemeToggle)
-- [x] Health check (`/api/health`) retornando 200 com status dos serviços — entregue no esqueleto (`src/app/api/health/route.ts`; contrato em `docs/02-architecture/observability.md` §6.3)
-- [ ] Sentry capturando erros de produção
+- [x] Health check (`/api/health`) retornando 200 com status dos serviços — entregue no esqueleto, estendido na F4 (probes paralelas `allSettled`; envelope `{status,timestamp,version,services:{database,redis}}`; contrato em `docs/02-architecture/observability.md` §6.3)
+- [ ] Sentry capturando erros de produção — **integrado (F4)**: SDK condicional (sem DSN = disabled), `global-error.tsx`, `withSentryConfig`; captura efetiva requer `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` no dashboard
 - [ ] Documentação de setup local completa e testada por terceiro
 
 ### Métricas a Acompanhar
@@ -252,7 +252,7 @@ Semana  1───3───5──────8──────13────
 
 | Marco | Nome | Semana | Sprint | Status |
 |-------|------|--------|--------|--------|
-| M0 | Chão Tá Preparado | 3 | Sprint 0 | Planejamento |
+| M0 | Chão Tá Preparado | 3 | Sprint 0 | Em fechamento (F1–F4 entregues; pendências remotas/produção) |
 | M1 | MVP Funcional | 8 | Sprint 1 | Planejamento |
 | M2 | Comunidade Ativa | 13 | Sprint 2 | Planejamento |
 | M3 | Monetização Ativa | 18 | Sprint 3 | Planejamento |

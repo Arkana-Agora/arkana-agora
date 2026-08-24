@@ -11,6 +11,8 @@ build
 # env / secrets (nunca entrar no build context)
 .env
 .env.*
+sentry.properties
+.sentryclirc
 
 # prisma dev artifacts
 prisma/dev.db

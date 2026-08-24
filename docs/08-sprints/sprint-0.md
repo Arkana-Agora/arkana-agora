@@ -19,8 +19,8 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 | # | User Story | Critério de Aceite | Estado real |
 |---|-----------|-------------------|-------------|
 | US-001 | Como desenvolvedor, preciso de um setup base para desenvolvimento paralelo | Monorepo com `pnpm` + Turborepo, builds isolados por pacote, cache funcional | **Adiado** — monorepo é futuro (ADR-005); MVP é app único `bun` na raiz |
-| US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push | **Parcial** — scripts `lint`/`type-check`/`test`/`build` existem; pipeline GH Actions ainda não criado |
-| US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Pendente** — sem `docker-compose.yml` no repo |
+| US-002 | Como devOps, preciso que o CI/CD esteja configurado no GitHub Actions para automação de testes e deploy | Pipeline executando lint → test → build → deploy em cada push | **Entregue (F3)** — `.github/workflows/ci.yml` (quality → type-check → test c/ service postgres → build → gate-deploy → deploy-staging); validação E2E pendente de secrets `VERCEL_*` + push remoto |
+| US-003 | Como desenvolvedor, preciso que o Docker Compose suba toda a stack (web, db, redis, ws) com um comando | `docker compose up` sobe todos os serviços sem erros | **Entregue (F1)** — `docker-compose.yml` (postgres:16-alpine + redis:7-alpine + migrate one-shot + web); stack sobe em ~32s (<60s, métrica M0); ws/caddy adiados p/ Sprint 1 (chat) |
 | US-004 | Como DBA, preciso que o Prisma schema defina as tabelas base (User, Profile, Subscription) | Migrations aplicáveis, dados persistindo no PostgreSQL | **Parcial** — `prisma/schema.prisma` com 5 models (User, UserProfile, Subscription, Session, VerificationToken); dev PostgreSQL (Docker Postgres 16) via `bunx prisma migrate dev`; init migration `20260813000605_init` aplicada |
 | US-005 | Como desenvolvedor, preciso que o Auth.js v5 esteja configurado com Google OAuth e magic link | Login funcional com Google e envio de magic link por email | **Entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010); Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link; ver task 9 |
 | US-006 | Como designer, preciso que o design system (shadcn/ui) esteja padronizado com temas claro/escuro | Componentes renderizando em ambos os temas, tokens centralizados | **Entregue (F2B)** — Tailwind v4 + shadcn/ui configurados; tokens oklch centralizados em `src/app/globals.css` (`:root`/`.dark`); claro/escuro via `next-themes`; ver tasks 12-14 |
@@ -38,7 +38,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [x] 4. Definir estrutura de pastas padrão (feature-based) — raiz do app
 
 ### Banco de Dados
-- [ ] 5. Setup Docker Compose (web, postgres, redis) — **pendente**
+- [x] 5. Setup Docker Compose (web, postgres, redis) — **entregue (F1)** — `docker-compose.yml` (postgres:16-alpine, redis:7-alpine, migrate one-shot `prisma migrate deploy`, web); sem ws/caddy (adiados, Sprint 1 chat)
 - [x] 6. Configurar Prisma ORM — `src/lib/prisma.ts` (singleton), schema stub `User` + enums (`UserRole`, `UserPlan`, `AuthProvider`)
 - [x] 7. Stub inicial: model `User` — demais entidades (18, 5 domínios) documentadas em `docs/03-database/entities.md`; migrations versionadas pendentes
 - [x] 8. Configurar seed script — `prisma/seed.ts` (admin + test user, upsert idempotente), `bun run seed` (`bunx tsx prisma/seed.ts` em `scripts.seed` e `prisma.seed`)
@@ -57,9 +57,9 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 ### CI/CD e Observabilidade
 - [x] 16. GitHub Actions: pipeline lint → test → build → deploy — **entregue (F3)**
 - [x] 17. Vercel project setup com ambiente de staging — **entregue (F3)**
-- [ ] 18. Error tracking (Sentry) setup — **pendente (F4)**
-- [ ] 19. Logging (Pino.js) configuration — **pendente (F4)**
-- [x] 20. Health check endpoint (`/api/health`) — `src/app/api/health/route.ts` (envelope `{status,timestamp,version,services:{database}}`; DB com timeout 5s, 200 quando o check de DB passa, 503 só em falha dura)
+- [x] 18. Error tracking (Sentry) setup — **entregue (F4)** — `@sentry/nextjs@10.71.0`; init condicional (sem DSN = disabled): server/edge `src/instrumentation.ts` (`SENTRY_DSN`, `onRequestError`), client `src/instrumentation-client.ts` (`NEXT_PUBLIC_SENTRY_DSN`, replay mascarado); `global-error.tsx`; `withSentryConfig`; `sentry.properties`/`.sentryclirc` fora do git e do build context. Captura em produção requer DSN no dashboard Vercel/Sentry
+- [x] 19. Logging (Pino.js) configuration — **entregue (F4)** — `src/lib/logger.ts` (`pino@10.3.1` + pino-pretty em dev), redact de secrets, nível via `LOG_LEVEL`, helper `newReqId()`; health route migrada de `console.error` para o logger
+- [x] 20. Health check endpoint (`/api/health`) — probes **paralelas** (`Promise.allSettled`), envelope `{status,timestamp,version,services:{database,redis}}`; DB time-boxed 5s; redis opcional (gate `REDIS_URL`: ausente → `not-configured` neutro; presente e falho → degrada 503); logging via Pino (`[health]`)
 
 ### Documentação e Padrões
 - [x] 21. Environment variables documentadas — `.env.example` (nomes apenas, sem segredos)
@@ -79,7 +79,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 - [x] Setup funcional do app único `bun` na raiz (esqueleto) — monorepo com builds isolados **adiado** (ADR-005)
 - [x] Deploy automático em staging via GitHub Actions → Vercel — **entregue (F3)**
 - [x] Autenticação funcionando com Google OAuth — **entregue (F2A)** — Auth.js v5 (ADR-010); login `/login` (Google + magic link), sessão JWT do Auth.js, proteção de `/dashboard` via `src/proxy.ts` + guard de grupo `src/app/(app)/layout.tsx` (F2B)
-- [ ] Banco de dados conectado com migrations aplicadas — **parcial** (5 models + init `20260813000605_init` aplicada em dev PostgreSQL/Docker)
+- [x] Banco de dados conectado com migrations aplicadas — **entregue (F1)** — dev Docker Postgres 16; init `20260813000605_init` aplicada (5 models, lock postgresql); demais entidades (13) nos seus sprints
 - [x] Design system com tema claro/escuro operacional — **entregue (F2B)** — Tailwind v4 + shadcn/ui (preset radix-nova), tokens oklch em `src/app/globals.css` (`:root`/`.dark`), `next-themes` (ThemeProvider/ThemeToggle), componentes base em `src/components/ui/`; ver tasks 12-14
 - [x] Health check endpoint presente — 200 quando o check de DB passa; 503 apenas em falha dura; `status` do corpo derivado dos checks (`ok`/`degraded`)
 - [x] Documentação de setup local completa
@@ -94,26 +94,26 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 │   ├── app/                   # App Router (layout pt-BR, page, error/loading/not-found, globals.css)
 │   │   ├── (auth)/login/      # Página de login (Card + toggle de tema)
 │   │   ├── (app)/layout.tsx   # Guard de auth do route group (auth() + redirect("/login"))
-│   │   └── api/health/        # GET /api/health (envelope; 200 quando DB ok, 503 em falha)
-│   ├── components/            # providers.tsx (SessionProvider + ThemeProvider), theme-provider.tsx, theme-toggle.tsx, ui/ (shadcn radix-nova)
-│   ├── lib/                   # src/lib/prisma.ts (Prisma singleton), src/lib/utils.ts (cn)
-│   ├── services/              # (placeholder vazio)
-│   ├── stores/                # (placeholder vazio)
-│   └── types/                 # (placeholder vazio)
+│   │   ├── global-error.tsx   # Captura erros de render raiz → Sentry (F4)
+│   │   └── api/               # health/ (envelope paralelo; 200/503) + auth/[...nextauth]/
+│   ├── auth/                  # Auth.js v5 (F2A): auth.config.ts (edge), prisma-adapter.ts, auth.ts
+│   ├── components/            # providers.tsx, theme-provider/toggle, ui/ (shadcn radix-nova)
+│   ├── lib/                   # prisma.ts, utils.ts (cn), logger.ts (Pino, F4), version.ts
+│   ├── instrumentation.ts     # Sentry server/edge init condicional + onRequestError (F4)
+│   ├── instrumentation-client.ts # Sentry client init condicional (F4)
+│   ├── proxy.ts               # Proteção /dashboard (Next 16)
+│   ├── services/, stores/, types/  # (placeholders)
 ├── prisma/
-│   ├── schema.prisma          # 5 models (User, UserProfile, Subscription, Session, VerificationToken) — PostgreSQL (Docker Postgres 16 dev / Neon prod)
+│   ├── schema.prisma          # 5 models — PostgreSQL (Docker Postgres 16 dev / Neon prod)
 │   ├── migrations/            # init 20260813000605_init (aplicada; lock postgresql)
 │   └── seed.ts                # Seed admin + test (idempotente)
-├── public/                    # Assets estáticos (vazio)
-├── tests/                     # tests/health.test.ts + tests/ui-utils.test.ts (vitest)
-├── package.json               # Scripts bun: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test
-├── next.config.ts             # output: "standalone" só fora da Vercel (#96646) + serverExternalPackages
-├── tsconfig.json
-├── eslint.config.mjs
-├── vitest.config.ts
-├── Dockerfile                 # multi-stage bun (deps → builder → runner)
-├── docker-compose.yml         # postgres + redis + migrate + web
-├── .dockerignore
+├── tests/                     # vitest: auth (16) + ui-utils (8) + health (3) + instrumentation (2)
+├── .github/workflows/ci.yml   # quality → type-check → test (postgres) → build → gate-deploy → deploy-staging (F3)
+├── package.json               # Scripts bun: dev, build, start, lint, type-check, test, format, seed
+├── next.config.ts             # standalone só fora da Vercel (#96646) + serverExternalPackages + withSentryConfig
+├── docker-compose.yml         # postgres + redis + migrate + web | Dockerfile multi-stage bun
+├── prettier.config.mjs        # Prettier + Husky pre-commit (lint-staged + tsc) — F3
+├── vercel.json                # preset mínimo (framework nextjs + security headers) — F3
 └── .env.example               # Nomes de env vars documentados (sem segredos)
 
 # Monorepo futuro (ADR-005, planejado): apps/web + packages/{ui,types,config,utils,api-client}
@@ -151,20 +151,22 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 
 ## Entregáveis
 
-**Entregues no esqueleto:**
+**Entregues (esqueleto + F1–F4):**
 - App único Next.js 16 (App Router) na raiz, toolchain `bun` — documentado em `docs/02-architecture/monorepo.md` §1
-- Prisma schema com 5 models (User, UserProfile, Subscription, Session, VerificationToken) + init migration `20260813000605_init` aplicada; seed idempotente (admin + test); dev DB Docker Postgres 16 via `bunx prisma migrate dev`
-- Rota `/api/health` (envelope `{status,timestamp,version,services:{database}}`; 200 quando DB ok, 503 em falha dura; Redis/IA adicionados quando conectados, per `observability.md` §6.3) + teste vitest
-- Design system shadcn/ui (claro/escuro) — Tailwind v4 via `postcss.config.mjs` (`@tailwindcss/postcss`), `components.json` (style radix-nova), tokens oklch `:root`/`.dark` em `src/app/globals.css`, `src/lib/utils.ts` (`cn`), componentes `src/components/ui/` (Button, Card, Input, Label, Skeleton, Alert + `form.tsx` manual), `next-themes` (`providers.tsx`/`theme-provider.tsx`/`theme-toggle.tsx`), fonte Geist (`--font-geist-sans`) + `suppressHydrationWarning` no `layout.tsx`; `ThemeToggle` em `/login` e `/dashboard`
-- `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `next.config.ts`, `.env.example`
+- **F1** — Docker: `docker-compose.yml` (postgres/redis/migrate/web), `Dockerfile` multi-stage bun + `.dockerignore`; Prisma schema postgresql com 5 models + init migration `20260813000605_init` aplicada; seed idempotente; dev DB Docker Postgres 16
+- **F2A** — Auth login layer: Auth.js v5 beta.32 (ADR-010), Google OAuth + magic link, adapter mínimo, `proxy.ts`, `/login` + `/dashboard`
+- **F2B** — Design system shadcn/ui (claro/escuro) — Tailwind v4, preset radix-nova, tokens oklch em `src/app/globals.css`, `next-themes`, componentes `src/components/ui/`, fonte Geist
+- **F3** — CI/CD: `.github/workflows/ci.yml` (quality → type-check → test c/ postgres → build → gate-deploy → deploy-staging), Prettier + Husky + lint-staged, `vercel.json` mínimo
+- **F4** — Observabilidade: `src/lib/logger.ts` (Pino), health probes paralelas + redis opcional, Sentry condicional (`instrumentation*.ts`, `global-error.tsx`, `withSentryConfig`)
+- Rota `/api/health` (contrato em `observability.md` §6.3) + testes vitest (**29**: auth 16, ui-utils 8, health 3, instrumentation 2)
 - Documentação de estrutura e setup local
 
 **Pendentes (planejados):**
-- Pipeline CI/CD (GitHub Actions) → Vercel
-- Infraestrutura Docker Compose
-- Migrations Prisma versionadas + tabelas completas (18 entidades, `docs/03-database/entities.md`)
+- Validação E2E do pipeline (push remoto → PR verde + staging Vercel responde; requer secrets `VERCEL_TOKEN`/`ORG_ID`/`PROJECT_ID`)
+- Sentry capturando em produção (requer DSN configurado no dashboard)
+- Tabelas completas (18 entidades, `docs/03-database/entities.md`) — demais sprints
 - Autenticação Sprint 1: e-mail/senha (credentials), Facebook OAuth, Custom JWT Layer (access RS256 + refresh rotation) e rotas `/api/v1/auth/*` (rate limit de magic link, LGPD delete)
-- Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
+- Storybook (adiado, risco aceito) e Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
 
 **Decisões rastreadas para a Sprint 1 (não reversíveis de forma barata — ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3):**
 - Banco de dados de dev: **Resolvido (F1)** — escolhido Docker Postgres 16 (`docker-compose.yml`); listas escalares (`String[]`) suportadas no dev; init migration gerada com datasource `postgresql`. See docs/infrastructure.md → Known Constraints.

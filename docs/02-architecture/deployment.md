@@ -92,7 +92,7 @@ bun run dev:all
 
 > **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados (adiados para o Sprint 1 de chat). O banco de dev é o container `postgres` do compose (db/user/pass `arkana`, porta 5432); `docker compose up -d postgres redis` sobe banco + Redis.
 
-> **Logger note:** Until `src/lib/logger.ts` (Pino) is implemented, health-check pattern uses `console.error` with `[health]` prefix as a stopgap. See `docs/solutions/patterns/backend/health-check-envelope.md` for details.
+> **Logger note:** `src/lib/logger.ts` (Pino) is implemented (Sprint 0, F4) — the health route logs via `logger.error({ err }, "[health] ...")`. Remaining known stopgap: `console.log("[auth:magic-link] ...")` at `src/auth/auth.config.ts:88` (see `docs/solutions/patterns/observability/logger-migration-stopgap.md`; pattern details in `docs/solutions/patterns/backend/health-check-envelope.md`).
 
 ### 2.4 Variáveis de Ambiente (`.env`)
 
@@ -553,3 +553,4 @@ railway up --rollback
 - **2026-08-12:** Dockerfile §5.1 updated — `COPY package.json bun.lockb ./` → `bun.lock ./` to match the bun text lockfile actually committed in the repo (the old `bun.lockb` binary format is not used). Consistent with `docs/07-security/security.md` (bun.lock mandatory). No other drift found.
 - **2026-08-12 (F1 — Banco de dados + Docker):** dev DB SQLite → Docker Postgres 16 — §1 env table, §2.1 skeleton status, §2.2 stack diagram, §2.3 dev commands (`db push` → `docker compose up -d postgres` + `bunx prisma migrate dev`), §2.4 `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana`. §5.1 Dockerfile aligned to the real file (named stages deps/builder/runner; `groupadd`/`useradd` because oven/bun:1 is Debian-based; `bun install --frozen-lockfile`; standalone prerequisite note on `next.config.ts`). §5.2 docker-compose replaced with the committed file (postgres/redis/migrate/web; db `arkana`; no `version:` key; no ws/caddy — deferred to Sprint 1 chat).
 - **2026-08-24:** §5.1 standalone prerequisite note rewritten — `output: "standalone"` agora é condicional (`if (!process.env.VERCEL)`). Primeiro deploy na Vercel falhava com `ENOENT .next/next-server.js.nft.json` em `onBuildComplete` (Next 16.3 + adapter + standalone, upstream #96646). Docker/CI preservam o standalone.
+- **2026-08-24 (F4 sync):** §2.3 Logger note atualizada — `src/lib/logger.ts` (Pino) já está implementado; a health route loga via `logger.error({ err }, "[health] ...")` e o stopgap restante conhecido é o `console.log("[auth:magic-link] ...")` em `src/auth/auth.config.ts:88` (ver `docs/solutions/patterns/observability/logger-migration-stopgap.md`).
