@@ -6,7 +6,9 @@ Operational runbooks catalog for Arkana Agora.
 
 | Runbook | Operation | Owner | Updated |
 |---|---|---|---|
-| | | | |
+| `vercel-deploy-github-token.md` | Deploy staging Vercel - Missing GitHub Token | DevOps | 2026-08-24 |
+| `vercel-deploy-project-settings.md` | Deploy staging Vercel - "Could not retrieve Project Settings" | DevOps | 2026-08-24 |
+| `vercel-build-nft-enoent.md` | Deploy staging Vercel - "ENOENT .next/next-server.js.nft.json" (standalone + adapter) | DevOPS | 2026-08-24 |
 
 ## Ownership and escalation
 
