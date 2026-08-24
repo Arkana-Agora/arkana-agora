@@ -2,7 +2,6 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: "standalone",
   serverExternalPackages: ["@prisma/client"],
   images: {
     remotePatterns: [
@@ -15,6 +14,10 @@ const nextConfig: NextConfig = {
     ],
     minimumCacheTTL: 60,
   },
+}
+
+if (!process.env.VERCEL) {
+  nextConfig.output = "standalone"
 }
 
 export default nextConfig

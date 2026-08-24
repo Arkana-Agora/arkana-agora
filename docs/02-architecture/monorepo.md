@@ -26,7 +26,7 @@ arkana-agora/                   # Raiz do projeto (monolito)
 ├── public/                    # Assets estáticos (vazio)
 ├── tests/                     # Testes (tests/health.test.ts, vitest)
 ├── package.json               # Scripts bun: dev, build, lint, type-check, test, seed
-├── next.config.ts             # output: "standalone" + serverExternalPackages
+├── next.config.ts             # output: "standalone" só fora da Vercel (#96646) + serverExternalPackages
 ├── tsconfig.json
 ├── eslint.config.mjs
 ├── vitest.config.ts

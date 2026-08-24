@@ -279,7 +279,7 @@ ENV HOSTNAME="0.0.0.0"
 CMD ["bun", "server.js"]
 ```
 
-> **Pré-requisito standalone:** `next.config.ts` define `output: "standalone"` e `serverExternalPackages: ["@prisma/client"]`. Sem `output: "standalone"` não existe `.next/standalone` para o runner copiar; `serverExternalPackages` mantém o Prisma Client como dependência externa (incluída pelo trace standalone), por isso o runner não copia `node_modules` inteiro.
+> **Pré-requisito standalone (fora da Vercel):** `next.config.ts` ativa `output: "standalone"` somente quando `VERCEL` **não** está no ambiente (`if (!process.env.VERCEL) nextConfig.output = "standalone"`). Motivo: no Next 16.3, com o adapter da Vercel ativo o build não emite `.next/next-server.js.nft.json`, mas o finalizador do modo standalone lê esse arquivo sem guard e falha com `ENOENT` em `onBuildComplete` (regressão upstream vercel/next.js#96646; workaround oficial da issue). Na Vercel o standalone sequer é usado (o adapter empacota a saída). Docker/CI (sem `VERCEL`) mantêm `.next/standalone` para o runner copiar. `serverExternalPackages: ["@prisma/client"]` mantém o Prisma Client como dependência externa (incluída pelo trace standalone), por isso o runner não copia `node_modules` inteiro. Reavaliar a condição quando o fix upstream (PR #97287) chegar em versão estável do `next`.
 
 ### 5.2 Docker Compose (Stack Completa — estado real, F1)
 
@@ -420,6 +420,8 @@ jobs:
         with:
           name: nextjs-build
           path: .next/
+          if-no-files-found: error
+          include-hidden-files: true # obrigatório: .next/ é dot-dir e v4.4+ exclui ocultos por padrão
 
   # Gate: presença dos secrets VERCEL_* checada em step — os contextos
   # `secrets`/`env` NÃO estão disponíveis em `if:` de job-level.
@@ -550,3 +552,4 @@ railway up --rollback
 
 - **2026-08-12:** Dockerfile §5.1 updated — `COPY package.json bun.lockb ./` → `bun.lock ./` to match the bun text lockfile actually committed in the repo (the old `bun.lockb` binary format is not used). Consistent with `docs/07-security/security.md` (bun.lock mandatory). No other drift found.
 - **2026-08-12 (F1 — Banco de dados + Docker):** dev DB SQLite → Docker Postgres 16 — §1 env table, §2.1 skeleton status, §2.2 stack diagram, §2.3 dev commands (`db push` → `docker compose up -d postgres` + `bunx prisma migrate dev`), §2.4 `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana`. §5.1 Dockerfile aligned to the real file (named stages deps/builder/runner; `groupadd`/`useradd` because oven/bun:1 is Debian-based; `bun install --frozen-lockfile`; standalone prerequisite note on `next.config.ts`). §5.2 docker-compose replaced with the committed file (postgres/redis/migrate/web; db `arkana`; no `version:` key; no ws/caddy — deferred to Sprint 1 chat).
+- **2026-08-24:** §5.1 standalone prerequisite note rewritten — `output: "standalone"` agora é condicional (`if (!process.env.VERCEL)`). Primeiro deploy na Vercel falhava com `ENOENT .next/next-server.js.nft.json` em `onBuildComplete` (Next 16.3 + adapter + standalone, upstream #96646). Docker/CI preservam o standalone.

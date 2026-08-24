@@ -107,7 +107,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 ├── public/                    # Assets estáticos (vazio)
 ├── tests/                     # tests/health.test.ts + tests/ui-utils.test.ts (vitest)
 ├── package.json               # Scripts bun: dev, build, start, dev:ws, dev:all, lint, type-check, seed, test
-├── next.config.ts             # output: "standalone" + serverExternalPackages
+├── next.config.ts             # output: "standalone" só fora da Vercel (#96646) + serverExternalPackages
 ├── tsconfig.json
 ├── eslint.config.mjs
 ├── vitest.config.ts
