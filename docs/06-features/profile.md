@@ -87,7 +87,7 @@ Algoritmo:
 | Dependência | Tipo | Descrição |
 |---|---|---|
 | Autenticação | Módulo interno | Usuário deve estar autenticado |
-| Armazenamento de arquivos | Infraestrutura | Upload de avatar (S3/R2) |
+| Armazenamento de arquivos | Infraestrutura | Upload de avatar (Cloudflare R2) |
 | Banco de dados | Infraestrutura | Tabelas `users`, `profiles`, `privacy_settings` |
 | Módulo de cálculos | Módulo interno | Biblioteca de cálculos esotéricos |
 

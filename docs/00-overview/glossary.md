@@ -113,9 +113,9 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **CI/CD** | Pipeline de Integracao Continua e Entrega Continua, automatizando testes e deploy. |
 | **Mercado Pago** | Gateway de pagamento brasileiro, utilizado para processar assinaturas e transacoes do marketplace. |
 | **Monorepo** | Repositorio unico contendo multiplos pacotes/aplicacoes, gerenciado com ferramentas como Turborepo. |
-| **SQLite** | Banco de dados relacional embarcado, utilizado em desenvolvimento. Em producao, migra para PostgreSQL. |
-| **PostgreSQL** | Banco de dados relacional robusto, utilizado em ambiente de producao do arkana-agora. |
-| **NextAuth.js v4** | Biblioteca de autenticacao para Next.js, com suporte a OAuth, credenciais e JWT. |
+| **SQLite** | Banco de dados relacional embarcado; foi usado em desenvolvimento até a Fase 1 do Sprint 0, quando o dev migrou para Docker Postgres 16 (`docs/03-database/migrations.md`). |
+| **PostgreSQL** | Banco de dados relacional robusto do arkana-agora: Docker Postgres 16 em desenvolvimento e Neon em producao. |
+| **Auth.js v5** | Biblioteca de autenticacao para Next.js (sucessora do NextAuth.js v4), com `next-auth@5.0.0-beta.32` pinado e suporte a OAuth, magic link e JWT (ADR-010). |
 | **Tailwind CSS 4** | Framework CSS utility-first, utilizado para estilizacao da interface. |
 
 ---
@@ -128,7 +128,7 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **Feed** | Linha do tempo com versos de usuarios seguidos e conteudo sugerido. |
 | **Marketplace** | Espaco para profissionais oferecerem servicos de leitura, consultoria e produtos esotericos. |
 | **Gift (Presente)** | Item virtual que usuarios podem enviar uns aos outros como forma de apreciacao. |
-| **Akasha Plus** | Plano de assinatura premium da plataforma, com beneficios como tiragens ilimitadas e acessos exclusivos. |
+| **Arkana Plus** | Plano de assinatura premium da plataforma, com beneficios como 10 tiragens por dia e acessos exclusivos. |
 | **Freemium** | Modelo de negocio onde funcionalidades basicas sao gratuitas e avancadas requerem assinatura. |
 | **Tarot do Dia** | Tiragem diaria automatica com uma unica carta, disponivel gratuitamente para todos os usuarios. |
 | **Historico** | Registro de todas as tiragens e leituras realizadas pelo usuario na plataforma. |

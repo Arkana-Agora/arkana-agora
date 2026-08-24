@@ -69,7 +69,7 @@
 
 ### 1.9 DailyLimitBanner
 - Banner sutil no topo da pagina quando o usuario Free esta perto do limite
-- Formato: "Voce fez 2 de 3 tiragens hoje. Considere o plano Plus para tiragens ilimitadas."
+- Formato: "Voce fez 2 de 3 tiragens hoje. Considere o plano Plus para 10 tiragens por dia."
 - Cor de alerta amarela quando restar apenas 1 tiragem
 - Cor vermelha e CTA bloqueante quando o limite e atingido
 

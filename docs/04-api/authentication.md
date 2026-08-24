@@ -1,14 +1,20 @@
 # API de Autenticação — arkana-agora
 
-> **Módulo**: `src/app/api/v1/auth/` | **Auth Provider**: NextAuth.js v4 | **Session**: JWT
+> **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
+> ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
+> rotação) abaixo **não estão implementadas** — são o estado-alvo da **Sprint 1** (ADR-009 Gate B).
+> O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
+
+> **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
 
 ## Sumário
 
 - [Visão Geral](#visão-geral)
 - [POST /auth/register](#post-authregister)
 - [POST /auth/login](#post-authlogin)
-- [POST /auth/social](#post-authsocial)
+- [POST /auth/social](#post-authsocial) _(deprecated)_
 - [POST /auth/magic-link](#post-authmagic-link)
+- [POST /auth/magic-link/verify](#post-authmagic-linkverify)
 - [POST /auth/refresh](#post-authrefresh)
 - [POST /auth/logout](#post-authlogout)
 - [POST /auth/forgot-password](#post-authforgot-password)
@@ -20,22 +26,32 @@
 
 ## Visão Geral
 
+> **providerId Convention (from sprint-0.clarifications.md):** For EMAIL provider, set `providerId = email` normalized to lowercase (e.g., "Maria@email.com" → "maria@email.com"). For OAuth providers (GOOGLE/FACEBOOK), set `providerId = OAuth subject ID`. This aligns with the `email @unique` constraint.
+
 ### Fluxo de Autenticação
 
 ```
-┌─────────┐    ┌──────────────┐    ┌──────────┐    ┌─────────┐
-│ Cliente │───>│ NextAuth.js  │───>│ Prisma   │───>│  Banco  │
-│         │<───│  v4 (JWT)    │<───│ ORM      │<───│   DB    │
-└─────────┘    └──────────────┘    └──────────┘    └─────────┘
+┌─────────┐   ┌──────────────┐   ┌──────────┐   ┌─────────┐
+│ Cliente │──>│  Auth.js v5  │──>│  Prisma  │──>│  Banco  │
+│         │   │ (camada de   │   │ adapter  │   │   DB    │
+│         │   │  login, JWT) │   │  mínimo  │   │         │
+│         │   └──────────────┘   └──────────┘   └─────────┘
+│         │          │ confirma identidade (callback)
+│         │          ▼
+│         │   ┌──────────────┐
+│         │   │ Custom JWT   │──> gera access (RS256, 15min) + refresh (30d, rotação)
+│         │   │ Layer        │
+│         │   └──────────────┘
+└─────────┘<── Bearer access_token → POST /auth/refresh (rotação)
 ```
 
 ### Tipos de sessão
 
 | Tipo | Duração | Uso |
 |------|---------|-----|
-| Access Token | 15 min | Requisições à API |
-| Refresh Token | 7 dias | Renovação do access token |
-| Magic Link | 10 min | Login sem senha |
+| Access Token | 15 min | Requisições à API (Bearer, RS256) |
+| Refresh Token | 30 dias | Renovação com rotação (cookie httpOnly) |
+| Magic Link | 15 min | Login sem senha |
 
 ### Estratégia de senhas
 
@@ -87,11 +103,10 @@ Accept-Language: pt-BR
       "name": "Maria Silva",
       "email": "maria@email.com",
       "avatar": null,
-      "plan": "free",
+      "plan": "FREE",
       "createdAt": "2025-01-15T10:30:00Z"
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "rt_abc123def456"
+    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
   },
   "meta": {
     "requestId": "req_f8a7b6c5",
@@ -145,14 +160,15 @@ Content-Type: application/json
       "name": "Maria Silva",
       "email": "maria@email.com",
       "avatar": "/avatars/usr_a1b2c3d4.jpg",
-      "plan": "plus",
+      "plan": "PLUS",
       "createdAt": "2024-06-01T00:00:00Z"
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "rt_abc123def456"
+    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
+
+> **Nota**: o `refreshToken` nunca é retornado no body — é definido via `Set-Cookie` httpOnly (`path=/api/v1/auth`).
 
 ### Erros
 
@@ -166,6 +182,8 @@ Content-Type: application/json
 ---
 
 ## POST /auth/social
+
+> **Deprecated**: o fluxo OAuth é delegado ao Auth.js v5 em `/api/auth/*` (ADR-010, supersede a cláusula v4 do ADR-009). Mantido apenas para compatibilidade; não usar em implementações novas.
 
 Login via provedor social (Google, Facebook).
 
@@ -241,12 +259,14 @@ Content-Type: application/json
 ```json
 {
   "data": {
-    "message": "Link mágico enviado para maria@email.com. Válido por 10 minutos."
+    "message": "Link mágico enviado para maria@email.com. Válido por 15 minutos."
   }
 }
 ```
 
 > **Nota**: Sempre retorna 200 para evitar enumeração de e-mails.
+
+> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration endpoint (future) sets `deletedAt = NULL` and `isActive = true` within 30-day window per sprint-0.clarifications.md.
 
 ### Erros
 
@@ -256,34 +276,61 @@ Content-Type: application/json
 
 ---
 
-## POST /auth/refresh
+## POST /auth/magic-link/verify
 
-Renova o access token usando o refresh token.
+Redime o token do magic link (single-use, expira em 15 minutos).
 
 ### Requisição
 
 ```http
-POST /api/v1/auth/refresh
+POST /api/v1/auth/magic-link/verify
 Content-Type: application/json
 ```
 
 ```json
 {
-  "refreshToken": "rt_abc123def456"
+  "token": "magic_abc123def456"
 }
 ```
+
+### Resposta — 200 OK
+
+Mesmo formato de `/auth/login` (access token no body + refresh token em cookie httpOnly).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_MAGIC_TOKEN_INVALID` | Token inválido (já usado) |
+| 410 | `AUTH_MAGIC_TOKEN_EXPIRED` | Token expirado (15 min) |
+
+---
+
+## POST /auth/refresh
+
+Renova o access token usando o refresh token do cookie httpOnly.
+
+### Requisição
+
+```http
+POST /api/v1/auth/refresh
+Cookie: refreshToken=<rt_token>
+```
+
+> **Nota**: o refresh token é enviado **somente** via cookie httpOnly (`path=/api/v1/auth`) — nunca em body ou query string.
 
 ### Resposta — 200 OK
 
 ```json
 {
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "rt_new456ghi789",
+    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
     "expiresIn": 900
   }
 }
 ```
+
+> O novo refresh token rotacionado é entregue via `Set-Cookie` (mesmo `familyId`). Se um token já rotacionado for reenviado, toda a família é revogada.
 
 ### Erros
 
@@ -416,7 +463,7 @@ Authorization: Bearer <accessToken>
       "avatar": "/avatars/usr_a1b2c3d4.jpg",
       "bio": "Apaixonada por tarot desde 2018",
       "birthDate": "1995-03-15",
-      "plan": "plus",
+      "plan": "PLUS",
       "personalArcana": "A Imperatriz",
       "stats": {
         "totalReadings": 42,

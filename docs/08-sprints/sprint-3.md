@@ -11,7 +11,7 @@
 
 ## Objetivo
 
-Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mercado Pago (PIX e cartão de crédito), assinatura Akasha Plus, perfis profissionais para consultórios e painel administrativo.
+Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mercado Pago (PIX e cartão de crédito), assinatura Arkana Plus, perfis profissionais para consultórios e painel administrativo.
 
 ---
 
@@ -22,7 +22,7 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 | US-030 | Como vendedor, quero listar produtos no marketplace | CRUD de produtos com fotos, preço, descrição e categorias | Alta |
 | US-031 | Como comprador, quero comprar com PIX ou cartão de crédito | Checkout funcional, confirmação de pagamento, webhook recebido | Crítica |
 | US-032 | Como profissional, quero oferecer consultas personalizadas | Perfil profissional com agenda, tipos de consulta e preços | Média |
-| US-033 | Como usuário, quero assinar o Akasha Plus para recursos premium | Assinatura recorrente, recursos desbloqueados, cancelamento funcional | Alta |
+| US-033 | Como usuário, quero assinar o Arkana Plus para recursos premium | Assinatura recorrente, recursos desbloqueados, cancelamento funcional | Alta |
 | US-034 | Como usuário, quero usar o baralho cigano (Lenormand) | 36 cartas ciganas com tiragens e interpretações IA | Alta |
 | US-035 | Como administrador, quero gerenciar a plataforma | Dashboard com métricas, gestão de usuários e conteúdo | Média |
 | US-036 | Como comprador, quero avaliar produtos e vendedores | Sistema de estrelas + comentário pós-compra | Média |
@@ -36,7 +36,7 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 - [ ] 1. Modelo de dados: `Product` (name, description, price, images, category, seller_id)
 - [ ] 2. Modelo de dados: `ProductCategory` (hierarquia de categorias)
 - [ ] 3. CRUD de produtos: criação, edição, exclusão (soft delete)
-- [ ] 4. Upload de imagens de produto (Cloudinary/S3)
+- [ ] 4. Upload de imagens de produto (Cloudflare R2)
 - [ ] 5. Catálogo: listagem com filtros (categoria, preço, avaliação)
 - [ ] 6. Busca de produtos (full-text search)
 - [ ] 7. Página de detalhe do produto
@@ -51,11 +51,11 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 - [ ] 14. Modelo `OrderItem`: itens do pedido
 - [ ] 15. Página de confirmação e histórico de pedidos
 
-### Assinatura Akasha Plus
-- [ ] 16. Plano de assinatura: mensal R$ 29,90 (preço sugerido)
+### Assinatura Arkana Plus
+- [ ] 16. Plano de assinatura: mensal R$ 19,90
 - [ ] 17. Integração assinatura recorrente Mercado Pago
 - [ ] 18. Middleware de verificação de assinatura ativa
-- [ ] 19. Gating de recursos premium: leituras ilimitadas, baralhos exclusivos, sem anúncios
+- [ ] 19. Gating de recursos premium: 10 tiragens/dia, leituras IA ilimitadas (soft limit), baralhos exclusivos, sem anúncios
 - [ ] 20. Página de pricing com comparação Free vs Plus
 - [ ] 21. Fluxo de cancelamento de assinatura
 - [ ] 22. Período trial de 7 dias
@@ -93,7 +93,7 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 - [x] Marketplace funcional com CRUD de produtos e carrinho
 - [x] Pagamentos processando via PIX e cartão de crédito
 - [x] Webhooks recebendo e processando eventos corretamente
-- [x] Assinatura Akasha Plus com trial, renovação e cancelamento
+- [x] Assinatura Arkana Plus com trial, renovação e cancelamento
 - [x] Recursos premium acessíveis apenas para assinantes
 - [x] Baralho Cigano (Lenormand) com 36 cartas e tiragens
 - [x] Perfil profissional com agenda e avaliações
@@ -125,13 +125,23 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 
 ---
 
+## Decisões rastreadas para esta sprint (contradições `.specs` vs modelo alinhado)
+
+> O modelo alinhado (fonte da verdade: `prisma/schema.prisma`, `docs/03-database/entities.md`, `docs/07-security/permissions.md`) separa **role** (`UserRole`: USER/PROFESSIONAL/ADMIN, SUPER_ADMIN planejado) de **plano** (`UserPlan`: FREE/PLUS). Os `.specs` abaixo ainda usam o modelo antigo e devem ser revisados no planejamento desta sprint:
+
+- `.specs/009-payments/design.md` + `tasks.md` — webhook de assinatura `atualiza User.role = 'plus'`: ativação deve setar `plan = PLUS` (UserPlan), não `role`.
+- `.specs/010-admin/design.md` — métrica `prisma.user.count({ where: { role: 'plus' } })`: filtrar por `plan = 'plus'`.
+- `.specs/009-payments/design.md` — rota do webhook Mercado Pago: **decidido** — adotar o caminho do `.specs` `/api/v1/webhooks/mercadopago` como canônico; `docs/` e `.env.example` já alinhados a este caminho.
+
+---
+
 ## Estimativa
 
 | Módulo | Horas | Dias Úteis |
 |--------|-------|-------------|
 | Marketplace (CRUD + catálogo) | 48h | 6d |
 | Pagamentos Mercado Pago | 56h | 7d |
-| Assinatura Akasha Plus | 40h | 5d |
+| Assinatura Arkana Plus | 40h | 5d |
 | Baralho Cigano (Lenormand) | 32h | 4d |
 | Perfil Profissional | 32h | 4d |
 | Admin Dashboard | 48h | 6d |
@@ -145,7 +155,7 @@ Implementar o marketplace de produtos esotéricos, sistema de pagamentos via Mer
 
 - Marketplace completo com catálogo e carrinho
 - Sistema de pagamentos PIX e cartão (Mercado Pago)
-- Assinatura Akasha Plus com trial e gating
+- Assinatura Arkana Plus com trial e gating
 - Baralho Cigano Lenormand (36 cartas)
 - Perfis profissionais com agenda e avaliações
 - Admin dashboard com métricas e gestão

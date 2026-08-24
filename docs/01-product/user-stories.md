@@ -529,9 +529,9 @@ User stories do projeto `arkana-agora` no formato padrao: "Como [persona], quero
 
 ## Pagamentos (US-044 a US-048)
 
-### US-044: Assinar Akasha Plus
+### US-044: Assinar Arkana Plus
 
-**Como** usuario, **quero** assinar o plano Akasha Plus, **para** ter acesso a funcionalidades premium.
+**Como** usuario, **quero** assinar o plano Arkana Plus, **para** ter acesso a funcionalidades premium.
 
 **Criterios de Aceitacao:**
 - Dado que o usuario seleciona o plano mensal ou anual, quando inicia o checkout, entao e redirecionado ao Mercado Pago
@@ -543,7 +543,7 @@ User stories do projeto `arkana-agora` no formato padrao: "Como [persona], quero
 
 ### US-045: Iniciar Trial de 7 Dias
 
-**Como** usuario gratuito, **quero** iniciar um trial de 7 dias do Akasha Plus, **para** testar os beneficios antes de pagar.
+**Como** usuario gratuito, **quero** iniciar um trial de 7 dias do Arkana Plus, **para** testar os beneficios antes de pagar.
 
 **Criterios de Aceitacao:**
 - Dado que o usuario acessa uma feature Plus pela primeira vez, quando o trial e oferecido, entao pode aceitar ou recusar
@@ -578,10 +578,10 @@ User stories do projeto `arkana-agora` no formato padrao: "Como [persona], quero
 
 ### US-048: Ver Beneficios Plus
 
-**Como** usuario gratuito, **quero** ver o que esta incluso no Akasha Plus, **para** decidir se vale a pena assinar.
+**Como** usuario gratuito, **quero** ver o que esta incluso no Arkana Plus, **para** decidir se vale a pena assinar.
 
 **Criterios de Aceitacao:**
-- Dado que o usuario acessa a pagina de beneficios, quando a tela carrega, entao ve lista completa com: tiragens ilimitadas, espalhamentos exclusivos, leituras avancadas, horoscopo personalizado completo, sem anuncios
+- Dado que o usuario acessa a pagina de beneficios, quando a tela carrega, entao ve lista completa com: 10 tiragens por dia, espalhamentos exclusivos, leituras avancadas, horoscopo personalizado completo, sem anuncios
 
 **Prioridade:** Alto | **Versao:** V1
 

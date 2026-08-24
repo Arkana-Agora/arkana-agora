@@ -1,0 +1,37 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next.js
+.next
+out
+build
+
+# env / secrets (nunca entrar no build context)
+.env
+.env.*
+
+# prisma dev artifacts
+prisma/dev.db
+prisma/dev.db-journal
+
+# testing
+coverage
+
+# git / tooling
+.git
+.github
+.husky
+.opencode
+
+# docs / specs (não necessários no runtime)
+docs
+.specs
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
+next-env.d.ts
+.vercel

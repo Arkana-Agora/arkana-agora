@@ -1,0 +1,138 @@
+// Prisma schema — datasource: PostgreSQL (dev Docker Postgres 16 / prod Neon)
+// Source of truth: docs/03-database/entities.md (18 entities across 5 domains)
+// ADR-002: Prisma only ORM. Init migration (Sprint 0, plan D3) = 5 models:
+// User, UserProfile, Subscription, Session, VerificationToken.
+// Session/VerificationToken = copy of .specs/001-auth/design.md §4 (JWT strategy,
+// Session custom reserved for Sprint 1 refresh rotation).
+// Remaining 17 entities migrate in their SPEC sprints.
+//
+// Conventions (from sprint-0.clarifications.md):
+// - providerId for EMAIL provider: set to email normalized to lowercase
+//   (e.g., "Maria@email.com" → "maria@email.com"). Aligns with email @unique constraint.
+// - providerId for OAuth providers (GOOGLE/FACEBOOK): OAuth subject ID.
+// - LGPD 30-day soft-delete: deletedAt DateTime? on User; auth queries filter
+//   isActive = true AND deletedAt IS NULL (restoration window).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  passwordHash     String?
+  name             String
+  displayName      String
+  avatar           String?
+  role             UserRole     @default(USER)
+  plan             UserPlan     @default(FREE)
+  provider         AuthProvider @default(EMAIL)
+  providerId       String       // EMAIL → email lowercase; GOOGLE/FACEBOOK → OAuth subject ID
+  birthDate        DateTime?
+  astrologicalSign String?
+  mayanKin         String?
+  personalArcana   Int?
+  emailVerified    DateTime?
+  isActive         Boolean      @default(true)
+  deletedAt        DateTime?    // LGPD 30-day restoration window
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  profile      UserProfile?
+  subscription Subscription?
+  sessions     Session[]
+
+  @@unique([provider, providerId])
+}
+
+model UserProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  bio             String?
+  location        String?
+  website         String?
+  socialLinks     Json?
+  skills          String[] @default([])
+  specialties     String[] @default([])
+  rating          Decimal  @default(0) @db.Decimal(3, 2)
+  reviewCount     Int      @default(0)
+  pricePerReading Decimal? @db.Decimal(10, 2)
+  available       Boolean  @default(true)
+  languages       String[] @default(["pt-BR"])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id         String             @id @default(uuid())
+  userId     String             @unique
+  plan       String             @default("PLUS")
+  status     SubscriptionStatus
+  startDate  DateTime
+  endDate    DateTime?
+  trialEnd   DateTime?
+  externalId String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id                String    @id @default(uuid())
+  userId            String
+  tokenHash         String    @unique // SHA-256 do refresh token — nunca em texto plano (Sprint 1)
+  familyId          String    // família do refresh token (rotação mantém o mesmo familyId)
+  tokenId           String    // identifica cada rotação dentro da família
+  replacedByTokenId String?   // token que substituiu este (detecção de reuso)
+  revokedAt         DateTime?
+  userAgent         String?
+  ipAddress         String?
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model VerificationToken {
+  id         String   @id @default(uuid())
+  identifier String   // email do usuário
+  token      String   @unique
+  type       String   // "EMAIL" | "PASSWORD_RESET" | "MAGIC_LINK"
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+enum UserRole {
+  USER
+  PROFESSIONAL
+  ADMIN
+}
+
+enum UserPlan {
+  FREE
+  PLUS
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}

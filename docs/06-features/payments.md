@@ -6,17 +6,17 @@
 
 ## Descrição
 
-O módulo de Pagamentos do **Arkana Agora** é o sistema financeiro central da plataforma, processando todas as transações através da integração com o **Mercado Pago**. O módulo cobre dois fluxos principais: **assinaturas** do plano Akasha Plus e **transações pontuais** do Marketplace (compra de produtos, consultas e presentes). Todas as transações são processadas em Reais (BRL) com suporte a PIX, cartão de crédito e boleto bancário.
+O módulo de Pagamentos do **Arkana Agora** é o sistema financeiro central da plataforma, processando todas as transações através da integração com o **Mercado Pago**. O módulo cobre dois fluxos principais: **assinaturas** do plano Arkana Plus e **transações pontuais** do Marketplace (compra de produtos, consultas e presentes). Todas as transações são processadas em Reais (BRL) com suporte a PIX, cartão de crédito e boleto bancário.
 
-O plano Akasha Plus oferece leituras ilimitadas, tiragens premium, interpretações IA avançadas e acesso antecipado a novos recursos. O sistema de gestão de assinaturas controla renovações, cancelamentos e reativações, com período de teste de 7 dias para novos assinantes. O histórico de cobranças e a geração de recibos ficam disponíveis na área de configurações do usuário. A política de reembolso prevê devolução integral em até 7 dias para assinaturas e análise caso a caso para produtos do Marketplace.
+O plano Arkana Plus oferece 10 tiragens por dia, tiragens premium, interpretações IA avançadas e acesso antecipado a novos recursos. O sistema de gestão de assinaturas controla renovações, cancelamentos e reativações, com período de teste de 7 dias para novos assinantes. O histórico de cobranças e a geração de recibos ficam disponíveis na área de configurações do usuário. A política de reembolso prevê devolução integral em até 7 dias para assinaturas e análise caso a caso para produtos do Marketplace.
 
 ---
 
-## Planos Akasha Plus
+## Planos Arkana Plus
 
 | Recurso | Gratuito | Plus (R$ 19,90/mês) |
 |---|---|---|
-| Leituras por dia | 3 | Ilimitadas |
+| Leituras por dia | 3 | 10 |
 | Tiragens disponíveis | Simples (1, 3, Sim/Não) | Todas (Cruz Celta, Amor, GT) |
 | Interpretação IA | Básica | Avançada com contexto |
 | Tarot Diário | Sim | Sim (interpretação estendida) |
@@ -32,7 +32,7 @@ O plano Akasha Plus oferece leituras ilimitadas, tiragens premium, interpretaç�
 ## Funcionalidades
 
 - **Integração Mercado Pago** (PIX, cartão de crédito até 12x, boleto)
-- **Gestão de assinaturas** Akasha Plus (ativação, renovação, cancelamento, reativação)
+- **Gestão de assinaturas** Arkana Plus (ativação, renovação, cancelamento, reativação)
 - **Período de teste** de 7 dias (não requer cartão)
 - **Checkout simplificado** para transações pontuais do Marketplace
 - **Histórico de cobranças** com detalhes e recibos em PDF
@@ -71,7 +71,7 @@ O plano Akasha Plus oferece leituras ilimitadas, tiragens premium, interpretaç�
 
 | Feature | Versão |
 |---|---|
-| Assinatura Akasha Plus (trial + cobrança) | MVP |
+| Assinatura Arkana Plus (trial + cobrança) | MVP |
 | Checkout Marketplace via PIX | V1 |
 | Checkout Marketplace via cartão/boleto | V1 |
 | Histórico de cobranças e recibos | V1 |

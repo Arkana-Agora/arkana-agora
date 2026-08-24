@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-13
 
 ---
 
@@ -8,15 +8,38 @@
 
 | Ambiente | Propósito | URL | Banco de Dados |
 |----------|-----------|-----|----------------|
-| **Development** | Desenvolvimento local | `http://localhost:3000` | SQLite local |
-| **Staging** | Testes e QA | `staging.akashaverso.com.br` | Neon PostgreSQL (staging) |
-| **Production** | Produção | `akashaverso.com.br` | Neon PostgreSQL (prod) |
+| **Development** | Desenvolvimento local | `http://localhost:3000` | Docker Postgres 16 (`arkana`, localhost:5432) |
+| **Staging** | Testes e QA | `staging.arkanaagora.com.br` | Neon PostgreSQL (staging) |
+| **Production** | Produção | `arkanaagora.com.br` | Neon PostgreSQL (prod) |
 
 ---
 
 ## 2. Desenvolvimento Local
 
-### 2.1 Stack Local
+### 2.0 Toolchain (regra canônica)
+
+- **MVP / app único (este documento)**: package manager **`bun`** (instalação, scripts, Dockerfile, CI).
+- **Monorepo futuro (ADR-005, proposto)**: quando a migração iniciar, usa-se **`pnpm`** + Turborepo (ver `monorepo.md`).
+- Não misturar: aplicações do monorepo futuro devem usar `pnpm`; o app MVP continua `bun` até a migração.
+
+### 2.1 Backend e Frontend (frameworks e onde fica o código)
+
+> A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
+>
+> **Status (esqueleto + F1 DB/Docker + F2A auth login + F2B design system):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init` aplicada), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Dev DB: Docker Postgres 16 (`docker compose up -d postgres`) via `bunx prisma migrate dev`. **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth** em `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`, `src/auth/`; credenciais e-mail/senha e Facebook OAuth ficam para o Sprint 1. **Design system implementado (Sprint 0, F2B):** Tailwind CSS 4 via `postcss.config.mjs` (plugin `@tailwindcss/postcss`), `components.json` (style radix-nova), tokens oklch claro/escuro em `src/app/globals.css`, `src/components/ui/` (Button, Card, Input, Label, Skeleton, Alert + `form.tsx` manual), `src/lib/utils.ts` (`cn`), `next-themes` (`providers.tsx`/`theme-provider.tsx`/`theme-toggle.tsx`), `layout.tsx` com fonte Geist (`--font-geist-sans`) + `suppressHydrationWarning`, guard de auth em `src/app/(app)/layout.tsx`. Ainda não existe: IA, pagamentos, social, Custom JWT Layer (Sprint 1) — veja `docs/architecture.md` → "Implementation status".
+
+| Projeto/Parte | Framework | Onde fica (documentado) | Porta | Iniciar |
+|---|---|---|---|---|
+| **Frontend (web)** | Next.js 16 (App Router) + TypeScript | `apps/web` (monorepo futuro) / raiz do app (MVP) | 3000 | `bun run dev` |
+| **Backend (API)** | Next.js API Routes + Prisma + Auth.js v5 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
+| **Backend — WebSocket** | Node.js + Socket.io | `services/ws-service` | 3003 | `bun run dev:ws` |
+| **Backend — IA** (futuro) | Node.js | `services/ai-service` | 3004 | — |
+| **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
+| **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
+
+Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
+
+### 2.2 Stack Local
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -31,20 +54,25 @@
 └────┬─────┘ └────┬─────┘ └──────┬───────┘
      │            │              │
      ▼            ▼              ▼
-┌──────────┐ ┌──────────┐ ┌──────────┐
-│ SQLite   │ │ Redis    │ │ File     │
-│ (Prisma) │ │ :6379    │ │ Storage  │
-└──────────┘ └──────────┘ └──────────┘
+┌────────────┐ ┌──────────┐ ┌──────────┐
+│ PostgreSQL │ │ Redis    │ │ File     │
+│ (Docker)   │ │ :6379    │ │ Storage  │
+└────────────┘ └──────────┘ └──────────┘
 ```
 
-### 2.2 Comandos de Desenvolvimento
+> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** (sem ws/caddy — adiados para o Sprint 1 de chat). O diagrama acima é o stack local completo documentado; Socket.io e Caddy serão adicionados ao compose quando o serviço de chat for scaffoldado.
+
+### 2.3 Comandos de Desenvolvimento
 
 ```bash
 # Instalar dependências
 bun install
 
-# Rodar migrações (dev usa db push para simplicidade)
-bunx prisma db push
+# Subir banco de dev (Docker Postgres 16 + Redis)
+docker compose up -d postgres redis
+
+# Rodar migrações (dev: gera/aplica migrations versionadas)
+bunx prisma migrate dev
 
 # Gerar tipos Prisma
 bunx prisma generate
@@ -62,30 +90,45 @@ bun run dev:ws       # Socket.io na porta 3003
 bun run dev:all
 ```
 
-### 2.3 Variáveis de Ambiente (`.env.local`)
+> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados (adiados para o Sprint 1 de chat). O banco de dev é o container `postgres` do compose (db/user/pass `arkana`, porta 5432); `docker compose up -d postgres redis` sobe banco + Redis.
+
+> **Logger note:** Until `src/lib/logger.ts` (Pino) is implemented, health-check pattern uses `console.error` with `[health]` prefix as a stopgap. See `docs/solutions/patterns/backend/health-check-envelope.md` for details.
+
+### 2.4 Variáveis de Ambiente (`.env`)
+
+> Copie `.env.example` → **`.env`** na raiz do repo. O Prisma CLI e os scripts `bun` carregam `.env` (não `.env.local`); o Next.js e o Bun também carregam `.env.local` com maior precedência. Nunca commite `.env`/`.env*.local`.
 
 ```env
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_WS_URL=ws://localhost:3003
 
-# Banco (dev)
-DATABASE_URL=file:./dev.db
+# Banco (dev) — Docker Postgres 16 via docker compose (db/user/pass: arkana)
+DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
 
-# Auth
-NEXTAUTH_SECRET=dev-secret-change-me
-NEXTAUTH_URL=http://localhost:3000
-GOOGLE_CLIENT_ID=dev-google-id
-GOOGLE_CLIENT_SECRET=dev-google-secret
-FACEBOOK_CLIENT_ID=dev-fb-id
-FACEBOOK_CLIENT_SECRET=dev-fb-secret
+# Auth (Auth.js v5 — ADR-010; não usar NEXTAUTH_*/GOOGLE_CLIENT_*)
+AUTH_URL=http://localhost:3000
+AUTH_SECRET=dev-secret-change-me
+AUTH_TRUST_HOST=true
+AUTH_GOOGLE_ID=dev-google-id
+AUTH_GOOGLE_SECRET=dev-google-secret
+AUTH_EMAIL_SKIP_SEND=true
+EMAIL_FROM=Arkana Agora <nao-responda@arkanaagora.dev>
+# SMTP (opcional em dev — sem SMTP + AUTH_EMAIL_SKIP_SEND=true loga o link no console)
+SMTP_URL=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
 
 # IA
-Z_AI_API_KEY=dev-ai-key
+AI_PRIMARY_API_KEY=dev-ai-key
+AI_FALLBACK_API_KEY=dev-ai-fallback-key
 
 # Mercado Pago (sandbox)
 MP_ACCESS_TOKEN=TEST-xxxxx
-MP_WEBHOOK_URL=http://localhost:3000/api/payments/webhook
+MP_WEBHOOK_URL=http://localhost:3000/api/v1/webhooks/mercadopago
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -133,7 +176,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 ```
                     ┌─────────────────────────────┐
                     │     Cloudflare CDN           │
-                    │  akashaverso.com.br          │
+                    │  arkanaagora.com.br          │
                     │  Cache estático, DDoS, WAF   │
                     └──────────┬──────────────────┘
                                │
@@ -174,10 +217,10 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 ### 4.3 Domínios e DNS
 
 ```
-akashaverso.com.br          → Vercel (web app)
-api.akashaverso.com.br     → Vercel (API routes) — alias para o mesmo deploy
-ws.akashaverso.com.br      → Railway (Socket.io service)
-assets.akashaverso.com.br  → Cloudflare R2 (imagens)
+arkanaagora.com.br          → Vercel (web app)
+api.arkanaagora.com.br     → Vercel (API routes) — alias para o mesmo deploy
+ws.arkanaagora.com.br      → Railway (Socket.io service)
+assets.arkanaagora.com.br  → Cloudflare R2 (imagens)
 ```
 
 **Configuração Cloudflare**:
@@ -199,8 +242,8 @@ assets.akashaverso.com.br  → Cloudflare R2 (imagens)
 # ====================
 FROM oven/bun:1 AS deps
 WORKDIR /app
-COPY package.json bun.lockb ./
-RUN bun install --frozen-lockfile --production=false
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 # ====================
 # Estágio 2: Build
@@ -213,15 +256,16 @@ RUN bunx prisma generate
 RUN bun run build
 
 # ====================
-# Estágio 3: Produção
+# Estágio 3: Produção (standalone)
 # ====================
 FROM oven/bun:1 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# oven/bun:1 é Debian-based → usar groupadd/useradd (não addgroup/adduser do Alpine)
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 --gid nodejs --no-create-home nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
@@ -235,13 +279,52 @@ ENV HOSTNAME="0.0.0.0"
 CMD ["bun", "server.js"]
 ```
 
-### 5.2 Docker Compose (Stack Completa)
+> **Pré-requisito standalone:** `next.config.ts` define `output: "standalone"` e `serverExternalPackages: ["@prisma/client"]`. Sem `output: "standalone"` não existe `.next/standalone` para o runner copiar; `serverExternalPackages` mantém o Prisma Client como dependência externa (incluída pelo trace standalone), por isso o runner não copia `node_modules` inteiro.
+
+### 5.2 Docker Compose (Stack Completa — estado real, F1)
+
+> **Alinhado ao `docker-compose.yml` commitado (2026-08-12):** serviços `postgres` (db/user/pass `arkana`, porta 5432, healthcheck), `redis`, `migrate` (one-shot `bunx prisma migrate deploy`, build target `builder`) e `web` (porta 3000, `DATABASE_URL` + `REDIS_URL`). **Não há** chave `version:` (obsoleta no Compose v2) nem serviços `ws`/`caddy` — adiados para o Sprint 1 de chat.
 
 ```yaml
-# docker-compose.yml
-version: '3.9'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arkana-postgres
+    environment:
+      POSTGRES_USER: arkana
+      POSTGRES_PASSWORD: arkana
+      POSTGRES_DB: arkana
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkana -d arkana"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: arkana-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   web:
     build:
       context: .
@@ -249,64 +332,19 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://akasha:senha@postgres:5432/akasha_verso
-      - REDIS_URL=redis://redis:6379
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      DATABASE_URL: postgresql://arkana:arkana@postgres:5432/arkana
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
-
-  ws:
-    build:
-      context: ./services/ws-service
-    ports:
-      - "3003:3003"
-    environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: akasha
-      POSTGRES_PASSWORD: senha
-      POSTGRES_DB: akasha_verso
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U akasha"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-    depends_on:
-      - web
-      - ws
 
 volumes:
   pg_data:
   redis_data:
-  caddy_data:
 ```
 
 ---
@@ -383,18 +421,36 @@ jobs:
           name: nextjs-build
           path: .next/
 
-  deploy-staging:
-    name: Deploy Staging
+  # Gate: presença dos secrets VERCEL_* checada em step — os contextos
+  # `secrets`/`env` NÃO estão disponíveis em `if:` de job-level.
+  # Sem creds → has_creds=false → deploy skipado, workflow permanece verde.
+  gate-deploy:
+    name: Gate (secrets Vercel)
     runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'pull_request'
-    # Deploy automático via Vercel (PR preview)
+    outputs:
+      has_creds: ${{ steps.check.outputs.has_creds }}
+    steps:
+      - id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  deploy-production:
-    name: Deploy Produção
+  # Staging/preview a cada push na `main` (M0); prod via promoção manual no painel da Vercel.
+  deploy-staging:
+    name: Deploy Staging (Vercel preview)
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build, gate-deploy]
+    if: >-
+      needs.gate-deploy.outputs.has_creds == 'true' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: amondnet/vercel-action@v25
@@ -402,7 +458,6 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
 ```
 
 ### 6.2 Fluxo de Deploy
@@ -410,15 +465,18 @@ jobs:
 ```
 PR para main
   │
-  ├─ CI: Lint → Type Check → Test → Build
+  ├─ CI: Quality (lint+format) → Type Check → Test (Postgres service) → Build
+  │     └─ Deploy staging: SKIPADO (evento pull_request)
   │
-  ├─ ✅ Sucesso → Preview Deploy (Vercel)
-  │    └── URL: pr-42-arkana-agora.vercel.app
+Push na main
   │
-  └─ Code Review → Merge
-       │
-       └─ Deploy Produção (Vercel --prod)
-            └── URL: akashaverso.com.br
+  ├─ CI completo (mesma cadeia acima)
+  │
+  └─ ✅ Sucesso + secrets VERCEL_* presentes (gate)
+       ├─ Deploy Staging/preview automático (Vercel)
+       │    └── URL: projeto-*.vercel.app / domínio de staging
+       └─ Produção: promoção manual no painel da Vercel
+            └── URL: arkanaagora.com.br (M0)
 ```
 
 ---
@@ -485,3 +543,10 @@ railway up --rollback
 ---
 
 *Documento parte do SDD (Software Design Document) do arkana-agora.*
+
+---
+
+## Refresh Notes
+
+- **2026-08-12:** Dockerfile §5.1 updated — `COPY package.json bun.lockb ./` → `bun.lock ./` to match the bun text lockfile actually committed in the repo (the old `bun.lockb` binary format is not used). Consistent with `docs/07-security/security.md` (bun.lock mandatory). No other drift found.
+- **2026-08-12 (F1 — Banco de dados + Docker):** dev DB SQLite → Docker Postgres 16 — §1 env table, §2.1 skeleton status, §2.2 stack diagram, §2.3 dev commands (`db push` → `docker compose up -d postgres` + `bunx prisma migrate dev`), §2.4 `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana`. §5.1 Dockerfile aligned to the real file (named stages deps/builder/runner; `groupadd`/`useradd` because oven/bun:1 is Debian-based; `bun install --frozen-lockfile`; standalone prerequisite note on `next.config.ts`). §5.2 docker-compose replaced with the committed file (postgres/redis/migrate/web; db `arkana`; no `version:` key; no ws/caddy — deferred to Sprint 1 chat).

@@ -104,7 +104,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 
 const io = new Server(3003, {
   cors: {
-    origin: process.env.NEXTAUTH_URL!,
+    origin: process.env.AUTH_URL!,
     methods: ['GET', 'POST'],
   },
 });

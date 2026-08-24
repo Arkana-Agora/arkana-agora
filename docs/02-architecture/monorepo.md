@@ -1,31 +1,42 @@
 # Estratégia de Monorepo — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-13
 
 ---
 
 ## 1. Estrutura Atual (MVP — Monolito)
 
-O MVP do arkana-agora é uma aplicação **Next.js 16 monolítica** com toda a lógica em um único projeto:
+O MVP do arkana-agora é uma aplicação **Next.js 16 monolítica** com toda a lógica em um único projeto na **raiz do repo**:
 
 ```
 arkana-agora/                   # Raiz do projeto (monolito)
 ├── src/
 │   ├── app/                   # App Router (páginas + API)
-│   ├── components/            # Componentes React
-│   ├── lib/                   # Utilitários, Prisma, auth
-│   ├── services/              # Lógica de negócio
-│   ├── stores/                # Zustand stores
-│   └── types/                 # Tipos TypeScript
+│   │   └── api/health/        # GET /api/health (envelope; 200 quando DB ok, 503 em falha)
+│   ├── components/            # providers.tsx (SessionProvider + ThemeProvider), theme-provider.tsx, theme-toggle.tsx, ui/ (shadcn/ui radix-nova)
+│   ├── lib/                   # Utilitários, Prisma (src/lib/prisma.ts; src/lib/utils.ts — cn)
+│   │   └── version.ts         # APP_VERSION constant
+│   ├── services/              # Lógica de negócio (placeholder — vazio)
+│   ├── stores/                # Zustand stores (placeholder — vazio)
+│   └── types/                 # Tipos TypeScript (placeholder — vazio)
 ├── prisma/
-│   └── schema.prisma          # Schema do banco
-├── public/                    # Assets estáticos
-├── tests/                     # Testes
-├── package.json
-├── next.config.ts
-├── tailwind.config.ts
-└── tsconfig.json
+│   ├── schema.prisma          # Schema (5 models; datasource postgresql)
+│   ├── migrations/            # init 20260813000605_init (aplicada)
+│   └── seed.ts                # Seed admin + test user (idempotente)
+├── public/                    # Assets estáticos (vazio)
+├── tests/                     # Testes (tests/health.test.ts, vitest)
+├── package.json               # Scripts bun: dev, build, lint, type-check, test, seed
+├── next.config.ts             # output: "standalone" + serverExternalPackages
+├── tsconfig.json
+├── eslint.config.mjs
+├── vitest.config.ts
+├── Dockerfile                 # multi-stage bun (deps → builder → runner)
+├── docker-compose.yml         # postgres + redis + migrate + web
+├── .dockerignore
+└── .env.example               # Nomes de env vars documentados (sem segredos)
 ```
+
+**Status:** o esqueleto acima já existe na raiz (bun, Prisma PostgreSQL dev via Docker — `docker compose up -d postgres` + `bunx prisma migrate dev`, rota `/api/health`, vitest, ESLint, Dockerfile + docker-compose + .dockerignore desde a F1; F2A: camada de login Auth.js v5 — ADR-010; F2B: design system). **Tailwind CSS 4 está configurado (F2B)** via `postcss.config.mjs` (plugin `@tailwindcss/postcss`) com tokens oklch `:root`/`.dark` em `src/app/globals.css` — o Tailwind v4 é CSS-first e **não usa** `tailwind.config.ts` (por isso o arquivo não existe, e não é esperado; ver `docs/02-architecture/architecture.md` §3.1). `backend/` e `frontend/` na raiz são placeholders vazios e não fazem parte desta estrutura.
 
 **Racional**: Para o MVP, a simplicidade do monolito permite iteração rápida. Não há overhead de configuração de múltiplos pacotes, e o deploy é direto na Vercel.
 
@@ -215,13 +226,13 @@ packages:
 
 | Pacote | web | mobile | admin | ws-service | ai-service |
 |--------|:---:|:------:|:-----:|:----------:|:----------:|
-| `@akasha/types` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `@akasha/ui` | ✅ | ❌* | ✅ | ❌ | ❌ |
-| `@akasha/api-client` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| `@akasha/utils` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `@akasha/config` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/types` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/ui` | ✅ | ❌* | ✅ | ❌ | ❌ |
+| `@arkana/api-client` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `@arkana/utils` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `@arkana/config` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-> \* Mobile utilizará componentes nativos (Tamagui ou NativeWind), mas pode importar lógica de `@akasha/ui/primitives`
+> \* Mobile utilizará componentes nativos (Tamagui ou NativeWind), mas pode importar lógica de `@arkana/ui/primitives`
 
 ### 4.2 Versionamento
 
@@ -239,7 +250,7 @@ pnpm changeset publish  # Publica pacotes no registry
 
 ### 4.3 Convenções de Nomenclatura
 
-- **Pacotes**: `@akasha/{nome}` — ex: `@akasha/types`, `@akasha/ui`
+- **Pacotes**: `@arkana/{nome}` — ex: `@arkana/types`, `@arkana/ui`
 - **Apps**: sem prefixo — ex: `web`, `mobile`, `admin`
 - **Services**: sem prefixo — ex: `ai-service`, `ws-service`
 
@@ -262,8 +273,8 @@ pnpm changeset publish  # Publica pacotes no registry
 
 ### Fase 2: Api Client Compartilhado (Sprint 5-6)
 - [ ] Extrair `packages/api-client` com lógica de fetch e endpoints
-- [ ] Refatorar web app para usar `@akasha/api-client`
-- [ ] Adicionar `apps/mobile/` (Expo) consumindo `@akasha/api-client`
+- [ ] Refatorar web app para usar `@arkana/api-client`
+- [ ] Adicionar `apps/mobile/` (Expo) consumindo `@arkana/api-client`
 
 ### Fase 3: Microsserviços (Sprint 7-8)
 - [ ] Mover ws-service para `services/ws-service/`

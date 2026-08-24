@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-10
 
 ---
 
@@ -132,9 +132,9 @@ O Sentry captura erros tanto no **browser** (client) quanto no **servidor** (API
 import * as Sentry from '@sentry/nextjs';
 
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV,
-  release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
+  release: process.env.SENTRY_RELEASE,
   tracesSampleRate: 0.1, // 10% das transações
   profilesSampleRate: 0.1, // 10% dos perfis de performance
   integrations: [
@@ -214,7 +214,7 @@ Sentry.setContext('reading', {
 import posthog from 'posthog-js';
 
 export const analytics = typeof window !== 'undefined'
-  ? posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+  ? posthog.init(process.env.POSTHOG_KEY!, {
       api_host: 'https://us.i.posthog.com',
       capture_pageviews: true,
       capture_pageleave: true,
@@ -382,22 +382,24 @@ export const metrics = {
 
 ```typescript
 // app/api/health/route.ts
+import { NextResponse } from 'next/server';
+import { APP_VERSION } from '@/lib/version';
+// ...
+
 export async function GET() {
+  const database = await checkDatabase(); // SELECT 1, 5s timeout
   const checks = {
-    status: 'ok',
+    status: database.status === 'ok' ? 'ok' : 'degraded', // derived from checks, never hardcoded
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version,
-    services: {
-      database: await checkDatabase(),
-      redis: await checkRedis(),
-      ai: await checkAI(),
-    },
+    version: APP_VERSION,
+    services: { database },
   };
 
-  const isHealthy = Object.values(checks.services).every(s => s.status === 'ok');
-  return Response.json(checks, { status: isHealthy ? 200 : 503 });
+  return NextResponse.json(checks, { status: database.status === 'ok' ? 200 : 503 });
 }
 ```
+
+> **Contrato (implementado no esqueleto):** `database` é a única dependência dura do envelope `{status, timestamp, version, services: { database }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura (ex.: banco fora do ar). `status` no corpo é derivado do check (`ok`/`degraded`) e nunca contradiz o código HTTP. Redis e IA **ainda não fazem parte do envelope** — quando forem adicionados como serviços reais, implemente `checkRedis()`/`checkAI()` seguindo `docs/solutions/patterns/backend/health-check-envelope.md` e estenda `services`. Serviços opcionais não configurados reportam `{ status: 'not-configured' }`, neutro — não derrubam o endpoint.
 
 ---
 

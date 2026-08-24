@@ -1,0 +1,8 @@
+# Folder placeholders — documented structure (docs/02-architecture/architecture.md §2.1)
+#
+# src/components/ - React components (ui/, cards/, social/, layout/)
+# src/services/   - business logic (reading.service.ts, social.service.ts, ...)
+# src/stores/     - Zustand stores (reading.store.ts, ui.store.ts, user.store.ts)
+# src/types/      - domain contracts
+# public/         - static assets
+# tests/          - automated tests

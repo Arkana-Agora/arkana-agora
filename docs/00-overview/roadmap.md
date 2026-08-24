@@ -41,7 +41,7 @@ Estabelecer a infraestrutura tecnica, ferramentas de desenvolvimento e pipelines
 | 0.3 | Setup do Tailwind CSS 4 + shadcn/ui | 1 | 0.2 |
 | 0.4 | Docker Compose (app + PostgreSQL + Redis) | 1 | 0.1 |
 | 0.5 | Prisma schema inicial + migrations | 2 | 0.4 |
-| 0.6 | NextAuth.js v4 com providers (Google, Facebook) | 2 | 0.2 |
+| 0.6 | Auth.js v5 com providers (Google, magic link — ADR-010; Facebook na Sprint 1) | 2 | 0.2 |
 | 0.7 | CI/CD pipeline (GitHub Actions: lint, test, build) | 2 | 0.1 |
 | 0.8 | ESLint + Prettier + Husky (pre-commit) | 1 | 0.1 |
 | 0.9 | Banco de dados de referencia (cartas, selos, tons) | 2 | 0.5 |
@@ -51,9 +51,9 @@ Estabelecer a infraestrutura tecnica, ferramentas de desenvolvimento e pipelines
 
 ### Milestones
 
-- **M0.1** (Semana 1): Monorepo rodando localmente com Docker
-- **M0.2** (Semana 2): Auth funcional com Google/Facebook + DB populado
-- **M0.3** (Semana 3): Pipeline CI verde, deploy de preview automatico
+- **M0.1** (Semana 1, ~2026-08-24): Monorepo rodando localmente com Docker
+- **M0.2** (Semana 2, ~2026-08-31): Auth funcional com Google/Facebook + DB populado
+- **M0.3** (Semana 3, ~2026-09-07): Pipeline CI verde, deploy de preview automatico
 
 ### Riscos da Fase
 
@@ -92,9 +92,9 @@ Entregar o fluxo principal do produto: cadastro, leitura de cartas com IA e hist
 
 ### Milestones
 
-- **M1.1** (Semana 5): Usuario consegue se cadastrar e fazer primeira tiragem
-- **M1.2** (Semana 7): Leitura IA com streaming funcional
-- **M1.3** (Semana 8): Historico + Arcano Pessoal + Tarot do Dia -- MVP funcional
+- **M1.1** (Semana 5, ~2026-09-14): Usuario consegue se cadastrar e fazer primeira tiragem
+- **M1.2** (Semana 7, ~2026-09-28): Leitura IA com streaming funcional
+- **M1.3** (Semana 8, ~2026-10-05): Historico + Arcano Pessoal + Tarot do Dia -- MVP funcional
 
 ### Riscos da Fase
 
@@ -132,9 +132,9 @@ Adicionar camada social basica: feed, seguimento, compartilhamento e sistema de 
 
 ### Milestones
 
-- **M2.1** (Semana 10): Feed funcional com versos e seguimento
-- **M2.2** (Semana 12): Gifts e interacoes (curtir, comentar)
-- **M2.3** (Semana 13): Discovery + moderacao basica -- social completo
+- **M2.1** (Semana 10, ~2026-10-19): Feed funcional com versos e seguimento
+- **M2.2** (Semana 12, ~2026-11-02): Gifts e interacoes (curtir, comentar)
+- **M2.3** (Semana 13, ~2026-11-09): Discovery + moderacao basica -- social completo
 
 ### Riscos da Fase
 
@@ -150,7 +150,7 @@ Adicionar camada social basica: feed, seguimento, compartilhamento e sistema de 
 > "Sustentabilidade para que a plataforma cresca."
 
 ### Objetivo
-Implementar marketplace para profissionais, sistema de pagamentos e assinatura Akasha Plus.
+Implementar marketplace para profissionais, sistema de pagamentos e assinatura Arkana Plus.
 
 ### Entregaveis
 
@@ -162,10 +162,10 @@ Implementar marketplace para profissionais, sistema de pagamentos e assinatura A
 | 3.4 | Integracao com Mercado Pago (sandbox) | 15 | -- |
 | 3.5 | Fluxo de compra de servico (checkout) | 16 | 3.3, 3.4 |
 | 3.6 | Sistema de avaliacoes pos-compra | 16 | 3.5 |
-| 3.7 | Plano Akasha Plus (R$19,90/mes, R$179,90/ano) | 17 | 3.4 |
+| 3.7 | Plano Arkana Plus (R$19,90/mes, R$179,90/ano) | 17 | 3.4 |
 | 3.8 | Trial de 7 dias com cancelamento facilitado | 17 | 3.7 |
 | 3.9 | Tela de checkout de assinatura | 17 | 3.7 |
-| 3.10 | Beneficios Plus: tiragens ilimitadas, espalhamentos exclusivos | 18 | 3.7 |
+| 3.10 | Beneficios Plus: 10 tiragens/dia, espalhamentos exclusivos | 18 | 3.7 |
 | 3.11 | Saque de profissionais via Mercado Pago | 18 | 3.5 |
 | 3.12 | Dispute automatica (7 dias) | 19 | 3.5 |
 | 3.13 | Baralho Cigano (Lenormand 36 cartas) | 19 | 1.4 |
@@ -175,9 +175,9 @@ Implementar marketplace para profissionais, sistema de pagamentos e assinatura A
 
 ### Milestones
 
-- **M3.1** (Semana 16): Marketplace funcional com primeira compra
-- **M3.2** (Semana 18): Akasha Plus com trial ativo
-- **M3.3** (Semana 20): Baralho Cigano + Kin Maya + Horoscopo Chines -- conteudo expandido
+- **M3.1** (Semana 16, ~2026-11-16): Marketplace funcional com primeira compra
+- **M3.2** (Semana 18, ~2026-11-30): Arkana Plus com trial ativo
+- **M3.3** (Semana 20, ~2026-12-14): Baralho Cigano + Kin Maya + Horoscopo Chines -- conteudo expandido
 
 ### Riscos da Fase
 
@@ -217,9 +217,9 @@ Recursos avancados: notificacoes push, chat real-time, IA generativa avancada, a
 
 ### Milestones
 
-- **M4.1** (Semana 22): Notificacoes push funcionais
-- **M4.2** (Semana 24): Chat real-time + analytics admin
-- **M4.3** (Semana 26): IA avancada + moderacao IA + PWA completo
+- **M4.1** (Semana 22, ~2026-12-28): Notificacoes push funcionais
+- **M4.2** (Semana 24, ~2027-01-11): Chat real-time + analytics admin
+- **M4.3** (Semana 26, ~2027-01-25): IA avancada + moderacao IA + PWA completo
 
 ### Riscos da Fase
 

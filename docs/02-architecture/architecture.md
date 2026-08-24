@@ -1,6 +1,6 @@
 # Arquitetura do Sistema — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-12
 
 ---
 
@@ -22,7 +22,7 @@ O **arkana-agora** é uma plataforma brasileira de Tarot, Cartas Ciganas (Lenorm
           ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        API GATEWAY (Caddy)                              │
-│            api.akashaverso.com.br / akashaverso.com.br                  │
+│            api.arkanaagora.com.br / arkanaagora.com.br                  │
 │         SSL, Rate Limiting, Static Assets (Cloudflare CDN)               │
 └────────┬──────────────────┬──────────────────┬──────────────────────────┘
          │ REST/SSR         │ SSE              │ WebSocket
@@ -70,28 +70,29 @@ src/
 │   │   ├── login/
 │   │   ├── register/
 │   │   └── callback/
-│   ├── (main)/             # Rotas autenticadas
+│   ├── (app)/              # Rotas autenticadas (guard de auth em layout.tsx — F2B)
 │   │   ├── dashboard/
 │   │   ├── readings/
 │   │   ├── feed/
 │   │   ├── marketplace/
 │   │   └── profile/
 │   ├── api/                # API Routes
-│   │   ├── auth/           # NextAuth.js endpoints
-│   │   ├── readings/       # CRUD de leituras
-│   │   ├── social/         # Feed, follows, posts
-│   │   ├── marketplace/    # Produtos, pedidos
-│   │   └── payments/       # Integração Mercado Pago
+│   │   ├── auth/           # Auth.js v5 endpoints internos (callbacks, session, csrf) — ADR-010
+│   │   ├── v1/auth/        # Auth REST custom (ADR-009): register, login, refresh, logout
+│   │   ├── v1/readings/    # CRUD de leituras
+│   │   ├── v1/social/      # Feed, follows, posts
+│   │   ├── v1/marketplace/ # Produtos, pedidos
+│   │   └── v1/payments/    # Integração Mercado Pago
 │   ├── layout.tsx
 │   └── page.tsx            # Landing page
 ├── components/
-│   ├── ui/                 # shadcn/ui (New York style)
+│   ├── ui/                 # shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI)
 │   ├── cards/              # Componentes de cartas
 │   ├── social/             # Feed, posts, comentários
 │   └── layout/             # Header, sidebar, footer
 ├── lib/
 │   ├── prisma.ts           # Cliente Prisma singleton
-│   ├── auth.ts             # Configuração NextAuth.js v4
+│   ├── auth.ts             # Configuração Auth.js v5 (ADR-010)
 │   ├── ai.ts               # Cliente z-ai-web-dev-sdk
 │   └── validators/         # Zod schemas
 ├── services/               # Lógica de negócio
@@ -112,16 +113,19 @@ As rotas de API seguem o padrão RESTful:
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `POST` | `/api/auth/...` | Autenticação (NextAuth.js) |
-| `GET` | `/api/readings` | Listar leituras do usuário |
-| `POST` | `/api/readings` | Criar nova leitura |
-| `GET` | `/api/readings/[id]` | Buscar leitura específica |
-| `GET` | `/api/feed` | Feed social do usuário |
-| `POST` | `/api/posts` | Criar postagem |
-| `POST` | `/api/follows` | Seguir usuário |
-| `GET` | `/api/marketplace/products` | Listar produtos |
-| `POST` | `/api/payments/create` | Criar pagamento |
-| `POST` | `/api/payments/webhook` | Webhook Mercado Pago |
+| `POST` | `/api/auth/...` | Endpoints internos Auth.js v5 (callbacks, session, csrf) — não renomeáveis |
+| `POST` | `/api/v1/auth/...` | Auth REST custom (ADR-009): register, login, refresh, logout |
+| `GET` | `/api/v1/readings` | Listar leituras do usuário |
+| `POST` | `/api/v1/readings` | Criar nova leitura |
+| `GET` | `/api/v1/readings/[id]` | Buscar leitura específica |
+| `GET` | `/api/v1/feed` | Feed social do usuário |
+| `POST` | `/api/v1/posts` | Criar postagem |
+| `POST` | `/api/v1/follows` | Seguir usuário |
+| `GET` | `/api/v1/marketplace/products` | Listar produtos |
+| `POST` | `/api/v1/payments/create` | Criar pagamento |
+| `POST` | `/api/v1/webhooks/mercadopago` | Webhook Mercado Pago |
+
+> **Divisão de rotas de auth (ADR-009; camada de login atualizada pelo ADR-010):** `/api/auth/*` é reservado aos endpoints internos do Auth.js v5 (caminho fixo da biblioteca). Todas as rotas REST próprias — incluindo auth — ficam versionadas em `/api/v1/*`. `/api/v1/auth/refresh` é a rota de rotação do refresh token (Sprint 1).
 
 ### 2.3 Mini Services
 
@@ -144,7 +148,7 @@ Serviços complementares que rodam em portas separadas:
 - **React Server Components** para renderização no servidor (SEO, performance)
 - **Client Components** para interatividade (formulários, modais, animações)
 - **Framer Motion** para transições e animações de cartas
-- **shadcn/ui** (estilo New York) como sistema de design base
+- **shadcn/ui** (preset radix-nova — "New York" na nomenclatura antiga da CLI) como sistema de design base
 - **Tailwind CSS 4** para estilização utility-first
 
 ```typescript
@@ -162,17 +166,17 @@ export default async function ReadingPage({ params }: { params: { id: string } }
 - **API Routes** do Next.js como controladores HTTP
 - **Zod** para validação de entrada/saída
 - **SSE** para streaming de interpretações IA
-- **NextAuth.js v4** para sessão e autenticação
+- **Auth.js v5** (`next-auth@5.0.0-beta.32`, ADR-010) como camada de login do MVP (Google OAuth + magic link, JWT strategy) + **Custom JWT Layer** (access RS256 / refresh rotativo) como sessão autenticada da Sprint 1 (ADR-009 Gate B)
 
 ```typescript
-// Exemplo: API Route com validação
+// Exemplo: API Route com validação (autenticação via access token custom — ADR-009)
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const payload = await verifyToken(req); // jwt.verify(..., { algorithms: ['RS256'] }) + tokenVersion check
+  if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
   const data = CreateReadingSchema.parse(body);
-  const reading = await readingService.create(session.user.id, data);
+  const reading = await readingService.create(payload.sub, data);
   return NextResponse.json(reading, { status: 201 });
 }
 ```
@@ -406,14 +410,14 @@ export class InMemoryCache {
 
 - **Protocolo**: HTTP/2, JSON
 - **Uso**: Todas as operações CRUD padrão
-- **Autenticação**: JWT via NextAuth.js (cookie `next-auth.session-token`)
+- **Autenticação**: Custom JWT Bearer (access RS256 15min; refresh rotativo 30d) — Sprint 1 (ADR-009 Gate B), emitido após login via Auth.js v5 (ADR-010)
 - **Versionamento**: URI path `/api/v1/...` (futuro)
 
 ### 6.2 SSE (Server-Sent Events) — Leituras IA
 
 - **Protocolo**: `text/event-stream`
 - **Uso**: Streaming de interpretações de IA em tempo real
-- **Rota**: `GET /api/readings/[id]/stream`
+- **Rota**: `POST /api/v1/ai/reading/stream`
 - **Formato**:
 
 ```
@@ -487,7 +491,7 @@ packages/api-client/     # Cliente API compartilhado
 | Renderização | SSR + CSR | Apenas CSR (nativo) |
 | Estado | Zustand + TanStack Query | Zustand + TanStack Query (mesmo!) |
 | UI | shadcn/ui + Tailwind | Tamagui (ou NativeWind) |
-| Autenticação | NextAuth.js cookies | NextAuth.js + secure storage |
+| Autenticação | Custom JWT Bearer (login via Auth.js v5) | Custom JWT Bearer + secure storage (mesmo token) |
 | Push Notifications | — | Expo Notifications |
 | Anim. Cartas | Framer Motion | react-native-reanimated |
 
@@ -495,9 +499,9 @@ packages/api-client/     # Cliente API compartilhado
 
 ## 8. Segurança
 
-- **Autenticação**: NextAuth.js v4 com Google, Facebook, email magic link
-- **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN)
-- **CSRF**: Proteção nativa do NextAuth.js
+- **Autenticação**: Auth.js v5 (camada de login do MVP: Google OAuth + magic link, JWT strategy — ADR-010) + Custom JWT Layer (access RS256 / refresh rotativo) — Sprint 1 (ADR-009 Gate B); Facebook e e-mail/senha (credentials) também são Sprint 1. Middleware custom `verifyToken()` valida `Authorization: Bearer` (substitui `getServerSession()`).
+- **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN); permissões derivadas server-side do role (não embutidas no token)
+- **CSRF**: Double-submit token (`__Host-csrf-token` + header `X-Requested-With`) nos endpoints que usam cookies (`/api/v1/auth/*`, callbacks); endpoints apenas-Bearer não exigem. `/api/auth/*` mantém o CSRF nativo do Auth.js v5
 - **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js
 - **Input Validation**: Zod schemas em todas as rotas de API
 - **Content Security Policy**: Headers de segurança configurados no `next.config.ts`

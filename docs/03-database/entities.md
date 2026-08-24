@@ -1,6 +1,10 @@
 # Definição de Entidades — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-12
+
+---
+
+> **Status:** **5 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init migration `20260813000605_init` aplicada em dev PostgreSQL). As outras **13 entidades estão planejadas** e não existem ainda no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
@@ -23,9 +27,10 @@ Entidade principal de autenticação e identidade do usuário.
 | `mayanKin` | `String?` | nullable | Kin maia (Tzolkin) |
 | `personalArcana` | `Int?` | nullable | Número do arcano pessoal |
 | `provider` | `AuthProvider` | NOT NULL | Provedor de autenticação |
-| `providerId` | `String` | NOT NULL, **UQ comp.** com provider | ID do provedor OAuth |
+| `providerId` | `String` | NOT NULL, **UQ comp.** with provider | ID do provedor OAuth (convenção: EMAIL → email normalizado lowercase, GOOGLE/FACEBOOK → OAuth subject ID) |
 | `emailVerified` | `DateTime?` | nullable | Data de verificação do e-mail |
 | `isActive` | `Boolean` | NOT NULL, default `true` | Conta ativa |
+| `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window) |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data de criação |
 | `updatedAt` | `DateTime` | NOT NULL, `@updatedAt` | Data de atualização |
 
@@ -304,7 +309,7 @@ Postagem do feed social, opcionalmente vinculada a uma leitura.
 
 **Exemplo de `images`**:
 ```json
-["https://assets.akashaverso.com.br/posts/img_abc123.webp"]
+["https://assets.arkanaagora.com.br/posts/img_abc123.webp"]
 ```
 
 ---
@@ -438,7 +443,7 @@ Notificação para o usuário.
 {
   "postId": "post_abc123",
   "likerName": "Maria",
-  "likerAvatar": "https://assets.akashaverso.com.br/avatars/maria.webp"
+  "likerAvatar": "https://assets.arkanaagora.com.br/avatars/maria.webp"
 }
 ```
 

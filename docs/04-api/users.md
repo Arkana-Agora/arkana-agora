@@ -38,7 +38,7 @@ GET /api/v1/users/usr_a1b2c3d4
       "avatar": "/avatars/usr_a1b2c3d4.jpg",
       "bio": "Apaixonada por tarot desde 2018",
       "personalArcana": "A Imperatriz",
-      "plan": "plus",
+      "plan": "PLUS",
       "isFollowing": false,
       "stats": {
         "totalReadings": 42,
@@ -254,6 +254,8 @@ GET /api/v1/users/usr_a1b2c3d4/stats
 
 ## DELETE /users/me
 
+> **Canonical:** a deleção de conta (LGPD) pertence ao módulo de auth — **`DELETE /api/v1/auth/account`** (RF-AUTH-008, `.specs/001-auth/design.md`), com confirmação digitando o **email** do usuário. Este endpoint é um alias de conveniência do módulo de perfil e deve delegar ao mesmo serviço; não implementar um fluxo de confirmação divergente.
+
 Deleta a conta do usuário autenticado (conformidade LGPD).
 
 ### Requisição
@@ -265,7 +267,7 @@ Authorization: Bearer <accessToken>
 
 ### Comportamento
 
-1. Valida senha (ou token de confirmação enviado por e-mail)
+1. Valida o email digitado como confirmação
 2. Marca conta para exclusão (grace period de 30 dias)
 3. Dados anonimizados após 30 dias
 4. Dados públicos (comentários, likes) preservados como "Usuário removido"
@@ -275,10 +277,11 @@ Authorization: Bearer <accessToken>
 
 ```json
 {
-  "confirmation": "DELETE_MY_ACCOUNT",
-  "password": "SenhaForte123"
+  "email": "maria@email.com"
 }
 ```
+
+> Confirmação digitada: `email` deve ser idêntico ao do usuário logado (mesmo contrato de `DELETE /api/v1/auth/account`).
 
 ### Resposta — 200 OK
 
@@ -287,7 +290,7 @@ Authorization: Bearer <accessToken>
   "data": {
     "message": "Sua conta será excluída em 30 dias. Para cancelar, acesse sua conta antes do prazo.",
     "scheduledDeletionDate": "2025-02-14T10:30:00Z",
-    "supportEmail": "suporte@akashaverso.com.br"
+    "supportEmail": "suporte@arkanaagora.com.br"
   }
 }
 ```
@@ -297,7 +300,7 @@ Authorization: Bearer <accessToken>
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 400 | `VALIDATION_ERROR` | Confirmação inválida |
-| 401 | `AUTH_INVALID_CREDENTIALS` | Senha incorreta |
+| 401 | `AUTH_INVALID_CREDENTIALS` | Email de confirmação incorreto |
 | 409 | `ACCOUNT_ALREADY_SCHEDULED_FOR_DELETION` | Exclusão já agendada |
 
 ---
@@ -331,7 +334,7 @@ GET /api/v1/users/search?q=maria&page=1&limit=20
       "username": "mariatarot",
       "avatar": "/avatars/usr_a1b2c3d4.jpg",
       "bio": "Apaixonada por tarot desde 2018",
-      "plan": "plus",
+      "plan": "PLUS",
       "stats": {
         "totalReadings": 42,
         "followers": 156

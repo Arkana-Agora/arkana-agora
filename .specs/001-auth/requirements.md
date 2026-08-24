@@ -25,18 +25,19 @@ O sistema deve permitir o cadastro de novos usuarios utilizando endereco de emai
 
 Apos o cadastro, o usuario deve receber um email de verificacao com link valido por 24 horas.
 
-### RF-AUTH-002: Login Social (Google OAuth)
-O sistema deve integrar com o Google Identity Services para autenticacao via conta Google. O fluxo deve:
-- Redirecionar para a tela de consentimento do Google
-- Extrair email, nome e foto do perfil Google
+### RF-AUTH-002: Login Social (Google/Facebook OAuth via Auth.js)
+O sistema deve delegar o fluxo OAuth ao **Auth.js v5** (`next-auth@5.0.0-beta.32`, endpoints fixos `/api/auth/*`, adapter Prisma minimo, JWT strategy — ADR-010 supersede a clausula v4 do ADR-009), sem re-implementar o fluxo em `/api/v1/auth/*`. O fluxo deve:
+- Redirecionar para a tela de consentimento do Google/Facebook (via NextAuth)
+- Extrair email, nome e foto do perfil do provedor
 - Criar a conta automaticamente caso o email nao exista no sistema
-- Vincular a conta Google ao usuario existente caso o email ja esteja cadastrado
-- Armazenar o `googleId` no registro do usuario para futuras autenticacoes
+- Vincular a conta do provedor ao usuario existente caso o email ja esteja cadastrado
+- Armazenar `provider=GOOGLE|FACEBOOK` e `providerId=<OAuth subject ID>` no registro do usuario (ADR-009)
+- Apos o callback, a Custom JWT Layer emite o access token e rotaciona o refresh token (redirect sem tokens na URL)
 
 ### RF-AUTH-003: Magic Link por Email
 O sistema deve permitir login sem senha via magic link. O fluxo deve:
 - Aceitar apenas o email como input
-- Validar se o email esta cadastrado e verificado
+- Não revelar se o email existe: resposta 200 idêntica (no-op) para email não cadastrado ou não verificado
 - Gerar um token aleatorio de 64 caracteres com validade de 15 minutos
 - Enviar email com link contendo o token
 - Ao clicar no link, autenticar o usuario e redirecionar para o dashboard
@@ -60,13 +61,15 @@ O sistema deve exigir verificacao de endereco de email antes de conceder acesso 
 - Envio automatico de novo token se o anterior expirar
 
 ### RF-AUTH-006: Gerenciamento de Sessao JWT
-O sistema deve gerenciar sessoes utilizando tokens JWT no formato access/refresh:
-- **Access Token**: JWT assinado com HS256, validade de 15 minutos, conteudo: `{ sub, email, role, iat, exp }`
-- **Refresh Token**: JWT assinado com HS256, validade de 7 dias, conteudo: `{ sub, tokenId, iat, exp }`
+O sistema deve gerenciar sessoes utilizando um fluxo hibrido (ADR-009, camada de login atualizada pelo ADR-010): Auth.js v5 (beta.32, adapter minimo, JWT strategy) como camada de login (OAuth, magic link) + Custom JWT Layer para a sessao autenticada:
+- **Access Token**: JWT assinado com RS256, validade de 15 minutos, conteudo: `{ sub, role, plan, tokenVersion, iat, exp }` (permissoes derivadas server-side a partir do role; claim `tokenVersion` validada contra Redis a cada requisicao para revogacao imediata de role/plan/suspensao)
+- **Refresh Token**: opaco, validade de 30 dias, persistido em banco **com hash SHA-256** (nunca em texto plano; Redis para cache/blacklist)
 - Access token enviado no header `Authorization: Bearer <token>`
-- Refresh token armazenado em cookie httpOnly, secure, sameSite=strict
-- Rotacao automatica de refresh token a cada renovacao
+- Refresh token armazenado em cookie httpOnly, secure, sameSite=strict (nunca em body/query string)
+- Rotacao automatica de refresh token a cada renovacao (invalida o token anterior, mantendo o mesmo `familyId`)
+- Deteccao de reuso: uso de token ja rotacionado (`replacedByTokenId` definido) revoga toda a familia de refresh tokens (`familyId`)
 - Revogacao de refresh token em caso de suspeita de comprometimento
+- Sessao NextAuth retorna apenas o minimo (`{ user: { id, email } }`); autenticacao real via access token custom
 
 ### RF-AUTH-007: Logout e Revogacao de Token
 O sistema deve implementar logout seguro com revogacao de tokens:
@@ -99,14 +102,14 @@ Todas as senhas devem ser armazenadas utilizando o algoritmo bcrypt com custo mi
 ### RNF-AUTH-003: Expiracao de Tokens
 Os tokens JWT devem seguir rigorosamente as seguintes politicas de expiracao:
 - Access Token: 15 minutos
-- Refresh Token: 7 dias
+- Refresh Token: 30 dias
 - Magic Link Token: 15 minutos
 - Email Verification Token: 24 horas
 - Password Reset Token: 1 hora
 
 ### RNF-AUTH-004: Rate Limiting
 O sistema deve implementar limitacao de requisicoes para prevenir abuso:
-- Login: maximo 5 tentativas por hora por IP/email
+- Login: maximo 5 tentativas em 15 minutos por IP/email; ADMIN/SUPER ADMIN: 20 em 15 minutos (ADR-009 Gate C)
 - Cadastro: maximo 3 contas por IP por hora
 - Magic Link: maximo 3 solicitacoes por hora por email
 - Reset de Senha: maximo 3 solicitacoes por hora por email
@@ -118,7 +121,7 @@ O sistema deve implementar limitacao de requisicoes para prevenir abuso:
 
 | Dependencia | Versao | Proposito |
 |---|---|---|
-| NextAuth.js | v4 | Framework de autenticacao para Next.js |
+| NextAuth.js (Auth.js) | v5 beta.32 (pinado) | Framework de autenticacao para Next.js (ADR-010) |
 | Google OAuth 2.0 | - | Login social via conta Google |
 | bcryptjs | >=2.4.3 | Hashing de senhas |
 | jose | >=4.x | Manipulacao de tokens JWT (Edge Runtime compatible) |
@@ -135,5 +138,5 @@ O sistema deve implementar limitacao de requisicoes para prevenir abuso:
 | CA-AUTH-001 | Um usuario consegue se cadastrar com email/senha, receber o email de verificacao, clicar no link e acessar a plataforma com a sessao ativa | Teste E2E automatizado (Playwright) |
 | CA-AUTH-002 | O login com Google OAuth cria uma nova conta ou vincula a uma existente sem duplicacao | Teste E2E com conta Google de teste |
 | CA-AUTH-003 | O magic link e enviado, e ao ser clicado dentro de 15 minutos, autentica o usuario; apos 15 minutos, retorna erro 410 | Teste unitario com mock de tempo |
-| CA-AUTH-004 | A 6a tentativa de login com credenciais invalidas em 1 hora retorna HTTP 429 com mensagem em portugues | Teste de integracao com rate limiter |
+| CA-AUTH-004 | A 6a tentativa de login com credenciais invalidas em 15 minutos retorna HTTP 429 com mensagem em portugues | Teste de integracao com rate limiter |
 | CA-AUTH-005 | A solicitacao de delecao de conta aplica soft delete imediato e o hard delete apos 30 dias, conforme verificado via banco de dados | Teste de integracao com cron job simulado |

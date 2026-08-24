@@ -1,0 +1,66 @@
+# Environments — Arkana Agora
+
+> Canonical environment matrix and deployment context.
+> **Status: skeleton + F1 (DB/Docker).** A minimal Next.js skeleton runs locally (`bun run dev`, `/api/health` — returns 200 when the DB check passes, 503 only on DB failure; Redis/AI are **not part of the envelope yet** — added when wired, per `docs/02-architecture/observability.md` §6.3); no cloud environment is provisioned/deployed and no provider console is configured — local dev DB (Docker Postgres 16) and Redis run via `docker compose up -d`. Every value below is the **documented target** from `docs/02-architecture/deployment.md`. `.env.example` at the repo root lists all documented var names (no secrets). No AWS usage is documented anywhere in the SDD — providers are Vercel/Railway/Neon/Upstash/Cloudflare.
+
+## Environment Matrix
+
+| Environment | Purpose | URL | Database | Provider footprint |
+|---|---|---|---|---|
+| **Development** | Local development | `http://localhost:3000` | Docker Postgres 16 (`arkana`, localhost:5432) | `docker compose up -d` (postgres + redis), Next.js :3000; Socket.io :3003 + Caddy planejados (Sprint 1 chat) |
+| **Staging** | Tests and QA | `staging.arkanaagora.com.br` | Neon PostgreSQL (staging branch) | Vercel previews, Railway WS, Upstash free tier, Mercado Pago sandbox |
+| **Production** | Production | `arkanaagora.com.br` | Neon PostgreSQL (prod) | Vercel Pro, Railway WS (+ future worker), Upstash, Cloudflare CDN/WAF, Mercado Pago live, Sentry, PostHog |
+
+**Domains (documented, planejado):**
+
+```
+arkanaagora.com.br        → Vercel (web app)
+api.arkanaagora.com.br    → Vercel (API routes, alias of same deploy)
+ws.arkanaagora.com.br     → Railway (Socket.io)
+assets.arkanaagora.com.br → Cloudflare R2 (images)
+```
+
+**API base URLs** (`docs/04-api/overview.md`):
+
+```
+Production        https://arkanaagora.com.br/api/v1
+Staging           https://staging.arkanaagora.com.br/api/v1
+Development       http://localhost:3000/api/v1
+```
+
+## Configuration and Secrets Boundaries
+
+- **Dev**: `.env` (Prisma CLI and `bun` scripts load `.env`, not `.env.local`) with `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana` (Docker Postgres 16), `AUTH_URL=http://localhost:3000`, `AUTH_SECRET=dev-...`, `AUTH_TRUST_HOST=true`, `AUTH_GOOGLE_ID=dev-...`, `AUTH_GOOGLE_SECRET=dev-...` (Auth.js v5, ADR-010 — not `NEXTAUTH_*`/`GOOGLE_CLIENT_*`), `MP_ACCESS_TOKEN=TEST-...`, `REDIS_URL=redis://localhost:6379`, empty `SENTRY_DSN`/`POSTHOG_KEY` (`docs/02-architecture/deployment.md` §2.4).
+- **Staging**: Mercado Pago **sandbox** token, Upstash free tier, Vercel preview env vars.
+- **Production**: live tokens, Neon prod `DATABASE_URL`, `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` (RS256), `MP_ACCESS_TOKEN`, `FCM_SERVER_KEY`, SMTP creds (`docs/07-security/security.md` §Variáveis de Ambiente Críticas).
+- **Rule:** secrets only in provider consoles / secret manager, never in source control. `.env` and `.env*.local` gitignored; only `.env.example` committed. `.gitignore` enforced in CI (build fails if `.env` committed); secret scanner (`git-secrets`/`trufflehog`) on every PR.
+
+## Deployment Differences
+
+| Step | Development | Staging | Production |
+|---|---|---|---|
+| Schema sync | `docker compose up -d postgres` + `bunx prisma migrate dev` | `prisma migrate deploy` (CI) | `prisma migrate deploy` (CI, before deploy) |
+| Deploy trigger | Local commands (`bun run dev`, `dev:ws`, `dev:all`) | PR to `main` → Vercel preview | Merge to `main` → Vercel `--prod` |
+| Payment mode | Sandbox | Sandbox | Live |
+| Rollback | Restart local process | Vercel instant rollback | Vercel rollback (<30s), `prisma migrate resolve --rolled-back`, `railway up --rollback` |
+| CI checks | — | Lint → type-check → test (Postgres service) → build → preview | Same CI, then prod deploy |
+
+Local stack runs via Docker (`docker-compose.yml` with postgres:16-alpine, redis:7-alpine, migrate, web — no `version:` key; ws/caddy deferred to Sprint 1 chat) per `docs/02-architecture/deployment.md` §5.
+
+## Operational Access
+
+| Concern | Development | Staging | Production |
+|---|---|---|---|
+| Logs | Pino JSON stdout | Vercel/Railway logs | Vercel/Railway logs + Sentry |
+| Errors | Console | Sentry (staging DSN) | Sentry release tracking |
+| Metrics | None (or local Prometheus) | Prometheus `/api/metrics` | Prometheus → Grafana; Vercel Analytics (LCP < 2.5s, INP < 200ms, TTFB < 800ms); PostHog |
+| Alerts | — | Slack | PagerDuty + Slack (warning → Slack 30 min; high → PagerDuty 15 min; critical → PagerDuty+Slack+SMS 5 min) |
+| DB access | Docker Postgres 16 (localhost:5432) | Neon console / staging branch | Neon console (prod), restricted |
+| Deploy permissions | Any developer | Team (Vercel) | Restricted (Vercel Pro owners) + CI |
+| Health check | `http://localhost:3000/api/health` | `https://staging.../api/health` | `https://arkanaagora.com.br/api/health` (DB probed; Redis/AI checks added when configured, per `observability.md` §6.3) |
+
+**Known environmental constraints**
+- Vercel serverless cold starts (~250ms) and invocation limits (1000/min hobby, 3000/min pro).
+- WebSocket cannot run on Vercel → separate Railway Socket.io service (port 3003) (ADR-007).
+- SSE streaming requires Caddy `flush_interval -1` and `X-Accel-Buffering: no` in proxy layers.
+- Dev/prod parity (resolved, F1): dev is Docker Postgres 16 — same engine as prod Neon; Postgres-only features (JSONB, scalar lists `String[]`) work in dev. Residual Neon-only features (PgBouncer pooling, `pg_stat_statements`) are validated in CI against `postgres:16-alpine`.

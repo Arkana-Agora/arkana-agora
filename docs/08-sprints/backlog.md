@@ -26,8 +26,8 @@
 | B-002 | Docker Compose stack completa | Crítica | 2d | MVP |
 | B-003 | CI/CD GitHub Actions | Crítica | 2d | MVP |
 | B-004 | Prisma + PostgreSQL setup | Crítica | 2d | MVP |
-| B-005 | NextAuth.js (Google + magic link) | Crítica | 3d | MVP |
-| B-006 | Design system shadcn/ui | Alta | 5d | MVP |
+| B-005 | Auth.js v5 (Google OAuth + magic link) — entregue (F2A/M0, ADR-010) | Crítica | 3d | MVP |
+| B-006 | Design system shadcn/ui — entregue (F2B) | Alta | 5d | MVP |
 | B-007 | Sentry error tracking | Média | 1d | MVP |
 | B-008 | PostHog analytics | Média | 1d | MVP |
 
@@ -39,7 +39,11 @@
 
 | ID | User Story | Prioridade | Estimativa | Versão |
 |----|-----------|-----------|-----------|--------|
-| B-009 | Cadastro/Login social | Crítica | 5d | MVP |
+| B-009 | Cadastro/Login social (magic link + Google OAuth já entregues no Sprint 0/F2A, ADR-010) | Crítica | 2d | MVP |
+| B-009A | Custom JWT Layer: access RS256 (15 min) + refresh rotation (30 dias) + revogação (`tokenVersion`) | Crítica | 3d | MVP |
+| B-009B | Rate limit do magic link (RF-AUTH-003: 3 links/hora) via `/api/v1/auth/magic-link` | Alta | 1d | MVP |
+| B-009C | Credentials e-mail/senha + Facebook OAuth (Sprint 1, ADR-010 §10) | Alta | 2d | MVP |
+| B-009D | Model `Account` + backfill `provider`/`providerId` (multi-provedor, ADR-010 §5) | Média | 2d | MVP |
 | B-010 | Perfil do usuário | Crítica | 3d | MVP |
 | B-011 | Motor de tiragem de tarot | Crítica | 5d | MVP |
 | B-012 | Tarot do dia | Alta | 2d | MVP |
@@ -50,7 +54,7 @@
 | B-017 | Landing page completa | Alta | 3d | MVP |
 | B-018 | Seed data (baralhos) | Média | 1d | MVP |
 
-**Subtotal**: 10 itens | **34 dias úteis**
+**Subtotal**: 14 itens | **44 dias úteis**
 
 ---
 
@@ -80,7 +84,7 @@
 |----|-----------|-----------|-----------|--------|
 | B-030 | Marketplace: listar produtos | Alta | 3d | V1 |
 | B-031 | Mercado Pago: PIX + cartão | Crítica | 5d | V1 |
-| B-032 | Assinatura Akasha Plus | Alta | 4d | V1 |
+| B-032 | Assinatura Arkana Plus | Alta | 4d | V1 |
 | B-033 | Perfil profissional | Média | 3d | V1 |
 | B-034 | Sistema de avaliações | Média | 2d | V1 |
 | B-035 | Admin dashboard | Média | 5d | V1 |

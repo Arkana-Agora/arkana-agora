@@ -1,6 +1,10 @@
 # Estratégia de Indexação — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.0 | Última atualização: 2026-08-12
+
+---
+
+> **Status:** **5 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init migration `20260813000605_init` aplicada em dev PostgreSQL). As outras **13 entidades estão planejadas** e não existem ainda no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 

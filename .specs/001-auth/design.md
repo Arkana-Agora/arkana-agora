@@ -111,30 +111,30 @@
                                           + Set-Cookie: novo refreshToken
 
 
-    GOOGLE OAUTH
-    ============
+    GOOGLE OAUTH (Auth.js v5 — ADR-010)
+    =====================================
 
     [1] Clica "Entrar com Google"
          |
          v
-    GET /api/v1/auth/google/signin  ------>  [2] Redireciona para Google
-                                              Consent Screen
-         |                                      |
-         v                                      v
-    [3] Callback                        [4] Google retorna code
-         |                                      |
-         v                                      v
-    GET /api/v1/auth/google/callback  <--- [5] Troca code por token
-                                              |
-                                              v
-                                         [6] Busca/cria usuario
-                                             com perfil Google
-                                              |
-                                              v
-                                         [7] Gera JWT pair
-                                              |
-                                              v
-    [8] Recebe tokens  <-------------  [9] Redirect com tokens
+    GET /api/auth/signin/google  ------>  [2] Auth.js redireciona para
+         |                                   Google Consent Screen
+         v                                   |
+    [3] Google redireciona de volta   <----- [4] Consentimento concedido
+         |                                   (callback /api/auth/callback/google)
+         v
+    [5] Auth.js valida o code com Google
+         |  +-> Busca/cria usuario via adapter minimo
+         |      (getUserByAccount / getUserByEmail / createUser + linkAccount)
+         v
+    [6] Custom JWT layer emite access token RS256
+         +-> Rotaciona refresh token (Session/familyId)
+         |
+         v
+    [7] Set-Cookie: refreshToken (httpOnly)  <-------  nunca em query string
+         |
+         v
+    [8] Redirect 302 para /dashboard (sem tokens na URL)
 ```
 
 ---
@@ -164,17 +164,20 @@
 | email | string | Sim |
 | password | string | Sim |
 
-**Response 200**: `{ accessToken, user: { id, name, email, role, avatarUrl } }`
+**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }`
 **Response 401**: `{ error: "INVALID_CREDENTIALS" }`
-**Response 429**: `{ error: "TOO_MANY_ATTEMPTS", retryAfter: 3600 }`
+**Response 429**: `{ error: "TOO_MANY_ATTEMPTS", retryAfter: 900 }`
 
-### POST /api/v1/auth/google/signin
-**Descricao**: Inicia o fluxo OAuth com Google.
-**Response 302**: Redirect para Google Consent Screen.
+### OAuth Google/Facebook e Magic Link (via Auth.js v5 — ADR-010)
+**Descricao**: Os fluxos OAuth (Google/Facebook) e magic link sao delegados ao Auth.js v5
+(`next-auth@5.0.0-beta.32`, adapter Prisma minimo, estrategia de sessao JWT), que possui
+endpoints internos fixos em `/api/auth/*` (`signin`, `callback`, `session`, `csrf`,
+`providers`). **Nao re-implementar o fluxo OAuth em `/api/v1/auth/*`.**
+O magic link usa `EmailProvider` (id `email`, callback `/api/auth/callback/email`, token
+single-use 15 min via `VerificationToken`). O vinculo OAuth usa `User.provider`/`providerId`
+(sem model `Account` no MVP). **Nao alterar os schemas de `Session`/`VerificationToken` do §4.**
 
-### GET /api/v1/auth/google/callback
-**Descricao**: Callback do Google OAuth apos consentimento.
-**Response 302**: Redirect para `/dashboard?accessToken=...&refreshToken=...`
+Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite o access token RS256 e rotaciona o refresh token (tabela `Session`), definindo o cookie `refreshToken` httpOnly. O redirect final vai para `/dashboard` **sem tokens na URL**.
 
 ### POST /api/v1/auth/magic-link
 **Descricao**: Envia magic link para o email informado.
@@ -183,9 +186,13 @@
 |---|---|---|
 | email | string | Sim |
 
-**Response 200**: `{ message: "Link de acesso enviado para seu email" }`
-**Response 404**: `{ error: "EMAIL_NOT_FOUND" }`
+**Response 200**: `{ message: "Link de acesso enviado para seu email" }` (idêntico para email existente ou não — anti-enumeração)
 **Response 429**: `{ error: "TOO_MANY_REQUESTS" }`
+
+### POST /api/v1/auth/magic-link/verify
+**Descricao**: Redime o token do magic link (single-use, expira em 15 minutos).
+**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }` + Set-Cookie refreshToken
+**Response 410**: `{ error: "TOKEN_EXPIRED" }`
 
 ### POST /api/v1/auth/verify-email
 **Descricao**: Verifica o endereco de email do usuario.
@@ -204,8 +211,7 @@
 |---|---|---|
 | email | string | Sim |
 
-**Response 200**: `{ message: "Email de recuperacao enviado" }`
-**Response 404**: `{ error: "EMAIL_NOT_FOUND" }` (nao revela existencia)
+**Response 200**: `{ message: "Email de recuperacao enviado" }` (idêntico para email existente ou não — anti-enumeração)
 
 ### POST /api/v1/auth/reset-password
 **Descricao**: Redefine a senha do usuario.
@@ -229,9 +235,14 @@
 **Response 200**: `{ message: "Logout realizado com sucesso" }`
 
 ### DELETE /api/v1/auth/account
-**Descricao**: Solicita exclusao de conta (LGPD).
+**Descricao**: Solicita exclusao de conta (LGPD). Endpoint canônico de deleção — não duplicar em `/api/v1/users/me`.
 **Headers**: `Authorization: Bearer <accessToken>`
-**Response 200**: `{ message: "Conta marcada para exclusao. Voce tem 30 dias para reverter." }`
+
+| Campo | Tipo | Obrigatorio | Validacao |
+|---|---|---|---|
+| email | string | Sim | Deve ser identico ao email do usuario logado (confirmacao digitada, RF-AUTH-008) |
+
+**Response 200**: `{ message: "Conta marcada para exclusao. Voce tem 30 dias para reverter." }` (mensagem idêntica em qualquer caso — anti-enumeração)
 
 ---
 
@@ -240,51 +251,79 @@
 ### Tabela: User
 
 ```prisma
+// Fonte da verdade: prisma/schema.prisma (seguir sempre o schema real)
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-n  emailVerified DateTime?
-  passwordHash  String?
-  role          String    @default("user") // "user" | "plus" | "pro" | "admin" | "superadmin"
-  avatarUrl     String?
-  googleId      String?   @unique
-  birthDate     DateTime?
-  deletedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String       @id @default(uuid())
+  name             String
+  displayName      String
+  email            String       @unique
+  emailVerified    DateTime?
+  passwordHash     String?
+  role             UserRole     @default(USER) // UserRole: USER | PROFESSIONAL | ADMIN
+  plan             UserPlan     @default(FREE) // UserPlan: FREE | PLUS — dimensão separada do role
+  provider         AuthProvider @default(EMAIL) // EMAIL | GOOGLE | FACEBOOK
+  providerId       String       // EMAIL → email normalizado minúsculo; OAuth → subject ID
+  avatar           String?
+  birthDate        DateTime?
+  astrologicalSign String?
+  mayanKin         String?
+  personalArcana   Int?
+  isActive         Boolean      @default(true) // soft delete: filtros usam isActive = true AND deletedAt IS NULL
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
-  sessions      Session[]
-  profiles      Profile?
-  readings      Reading[]
-  posts         Post[]
+  sessions         Session[]
+  userProfile      UserProfile?
+  readings         Reading[]
+  posts            Post[]
 
-  @@map("users")
+  @@unique([provider, providerId])
+}
+
+enum UserRole {
+  USER
+  PROFESSIONAL
+  ADMIN
+}
+
+enum UserPlan {
+  FREE
+  PLUS
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  FACEBOOK
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  userId       String
-  refreshToken String   @unique
-  userAgent    String?
-  ipAddress    String?
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  id                String    @id @default(uuid())
+  userId            String
+  tokenHash         String    @unique // SHA-256 do refresh token — nunca armazenar em texto plano
+  familyId          String    // família do refresh token (rotação mantém o mesmo familyId)
+  tokenId           String    // identifica cada rotação dentro da família
+  replacedByTokenId String?   // token que substituiu este (detecção de reuso)
+  revokedAt         DateTime?
+  userAgent         String?
+  ipAddress         String?
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("sessions")
+  @@index([userId])
+  @@index([familyId])
 }
 
 model VerificationToken {
-  id        String   @id @default(cuid())
-  identifier String  // email do usuario
+  id         String   @id @default(uuid())
+  identifier String   // email do usuario
   token      String   @unique
-n  type      String   // "EMAIL" | "PASSWORD_RESET" | "MAGIC_LINK"
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@map("verification_tokens")
+  type       String   // "EMAIL" | "PASSWORD_RESET" | "MAGIC_LINK"
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 }
 ```
 
@@ -300,9 +339,11 @@ interface AuthState {
   user: {
     id: string;
     name: string;
+    displayName: string;
     email: string;
-    role: 'user' | 'plus' | 'pro' | 'admin' | 'superadmin';
-    avatarUrl: string | null;
+    role: 'USER' | 'PROFESSIONAL' | 'ADMIN';
+    plan: 'FREE' | 'PLUS';
+    avatar: string | null;
     emailVerified: boolean;
   } | null;
   isAuthenticated: boolean;
@@ -338,36 +379,46 @@ interface AuthState {
 | `/auth/magic-link` | MagicLinkForm | Nao | Solicitacao de magic link |
 | `/auth/verify-email` | VerifyEmailPage | Nao | Tela "verifique seu email" |
 | `/auth/reset-password` | ResetPasswordForm | Nao | Redefinicao de senha |
-| `/auth/callback/google` | GoogleCallback | Nao | Callback OAuth Google |
-| `/auth/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link |
+| `/auth/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link (redime token via `POST /api/v1/auth/magic-link/verify`) |
 | `/dashboard` | DashboardPage | Sim | Redirecionamento pos-login |
+
+> O callback OAuth (Google/Facebook) acontece no caminho fixo do NextAuth (`/api/auth/callback/google`) — não há página frontend própria em `/auth/callback/google`.
 
 ---
 
 ## 7. Seguranca
 
 ### 7.1 Protecao CSRF
-- Todos os endpoints de mutacao (POST/PUT/DELETE) exigem header `X-Requested-With: XMLHttpRequest`
-- CSRF token gerado no server e enviado via cookie `__Host-csrf-token`
-- Validacao do token em cada requisicao protegida
+- CSRF aplica-se **apenas aos endpoints que usam cookies** (`/api/v1/auth/login|refresh|logout|register`, callbacks OAuth/magic-link); endpoints apenas-Bearer não exigem
+- Double-submit token: cookie `__Host-csrf-token` + header `X-Requested-With: XMLHttpRequest` (validação: valor do cookie == valor do header)
+- `/api/auth/*` mantém o CSRF nativo do NextAuth.js
+- Em dev (http, localhost), usar variante sem `__Host-` prefix para não derrubar o cookie
 
 ### 7.2 Cookies Seguros
-- `refreshToken`: `httpOnly=true`, `secure=true` (producao), `sameSite=strict`, `path=/api/v1/auth`, `maxAge=604800` (7 dias)
+- `refreshToken`: `httpOnly=true`, `secure=true` (producao), `sameSite=strict`, `path=/api/v1/auth`, `maxAge=2592000` (30 dias)
 - `__Host-csrf-token`: `httpOnly=false`, `secure=true`, `sameSite=strict`, `path=/`
 
 ### 7.3 Protecao de Senha
 - Senhas hasheadas com bcryptjs, custo 12
-- Senhas nunca logadas ou incluidas em respostas de API
+- Senhas nunca logadas ou incluídas em respostas de API
 - Rate limiting por IP e por email simultaneamente
-- Bloqueio temporario apos 5 falhas consecutivas (1 hora)
+- Bloqueio temporario apos 5 falhas consecutivas em 15 minutos (`retryAfter: 900`); ADMIN/SUPER ADMIN: 20 falhas em 15 minutos (ADR-009 Gate C)
 
-### 7.4 Validacao de Input
+### 7.4 Revogacao Imediata (claim `tokenVersion`)
+- O access token carrega a claim `tokenVersion` (payload: `sub`, `role`, `plan`, `tokenVersion`, `iat`, `exp`); **permissoes nao vao no token** — derivadas server-side a partir do `role`
+- `tokenVersion` e incrementada em mudanca de role/plan, suspensao, reset de senha ou "logout all"
+- O middleware `verifyToken` valida `tokenVersion` contra Redis a cada requisicao autenticada — revogacao de role/plan/suspensao aplica em tempo real (nao depende do TTL de 15 min do access token)
+- Requisicoes com privilegio ADMIN fazem re-checagem de `isActive = true AND deletedAt IS NULL` no banco
+
+### 7.5 Validacao de Input
 - Todas as entradas validadas com Zod no servidor (server-side validation)
 - Sanitizacao de inputs contra XSS e injecao SQL (protecao automatica do Prisma)
 - Headers de seguranca: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`
 
-### 7.5 Logging de Seguranca
+### 7.6 Logging de Seguranca
 - Registro de todas as tentativas de login (sucesso e falha)
 - Registro de reset de senha com IP e user agent
 - Registro de criacao e exclusao de contas
 - Logs armazenados com retencao de 90 dias
+
+> **Soft-delete no refresh:** o middleware `verifyToken`/`POST /api/v1/auth/refresh` deve validar `isActive = true AND deletedAt IS NULL` no servidor a cada renovacao — um usuario na janela LGPD (30 dias) nunca re-autentica.

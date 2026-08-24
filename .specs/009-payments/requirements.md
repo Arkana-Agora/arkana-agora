@@ -48,7 +48,7 @@ O sistema deve gerenciar o ciclo de vida completo das assinaturas:
 | Feature | Free | Plus |
 |---|---|---|
 | Preco | R$ 0 | R$ 19,90/mes ou R$ 179,90/ano (25% desconto) |
-| Tiragens diarias | 3 | Ilimitadas |
+| Tiragens diarias | 3 | 10 |
 | Interpretacoes IA diarias | 10 | Ilimitadas |
 | Follow-up chat | 10 msg | 30 msg |
 | Leituras compartilhadas | 5 | Ilimitadas |
