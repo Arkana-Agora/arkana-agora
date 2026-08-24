@@ -34,7 +34,7 @@
 | Upstash | `REDIS_URL` (with token) | Env var |
 | Cloudflare R2 | R2 credentials (S3-compatible) | Env var / secret manager |
 | Vercel / Railway | Platform tokens/CLI auth | Provider console/CI secrets |
-| Sentry / PostHog | `SENTRY_DSN`, `POSTHOG_KEY` | Env var |
+| Sentry / PostHog | `NEXT_PUBLIC_SENTRY_DSN`, `POSTHOG_KEY` | Env var |
 
 **Rule:** no secrets in source control. `.env`/`.env*.local` gitignored; only `.env.example` committed (`docs/07-security/security.md` §Gestão de Segredos).
 
