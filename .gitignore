@@ -41,3 +41,8 @@ prisma/dev.db*
 
 # scripts github cli
 *.cjs
+
+# sentry
+sentry.properties
+.sentryclirc
+.env.sentry-build-plugin
