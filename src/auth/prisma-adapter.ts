@@ -56,18 +56,18 @@ function isNotFound(error: unknown): boolean {
 
 export const prismaAdapter = {
   async createUser(user) {
-    const email = user.email.toLowerCase()
-    const name = user.name ?? email.split("@")[0]
+    const email = user.email?.toLowerCase()
+    const name = user.name ?? email?.split("@")[0] ?? ""
     try {
       const created = await prisma.user.create({
         data: {
-          email,
+          email: email ?? "",
           name,
           displayName: name,
           avatar: user.image ?? null,
           emailVerified: user.emailVerified ?? null,
           provider: "EMAIL",
-          providerId: email,
+          providerId: email ?? "",
         },
       })
       return toAdapterUser(created)

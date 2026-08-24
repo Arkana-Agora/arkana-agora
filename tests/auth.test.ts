@@ -77,16 +77,16 @@ describe("prismaAdapter — normalização e mapeamento", () => {
 
     const user: AdapterUser = {
       id: "usr_new",
-      name: undefined,
+      name: null,
       email: "maria@email.com",
       emailVerified: null,
       image: null,
     }
     await prismaAdapter.createUser(user)
 
-    const data = prismaMock.user.create.mock.calls[0][0].data
-    expect(data.name).toBe("maria")
-    expect(data.displayName).toBe("maria")
+    const data = prismaMock.user.create.mock.calls[0]?.[0]?.data
+    expect(data?.name).toBe("maria")
+    expect(data?.displayName).toBe("maria")
   })
 
   it("createUser mapeia violação de unicidade (conta LGPD inativa) para erro explícito", async () => {
