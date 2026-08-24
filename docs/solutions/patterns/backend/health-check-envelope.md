@@ -19,7 +19,7 @@ established_in: "Health endpoint fixed and hardened in the Next.js 16 skeleton (
 
 # Pattern: Health Check Envelope
 
-> **Logger note:** This pattern currently uses `console.error` with `[health]` prefix as a stopgap. When `src/lib/logger.ts` (Pino) lands, migrate to `logger.error('[health] ...')` to align with observability.md §2.1.
+> **Logger note (updated 2026-08-24):** the stopgap ended — health-route logging now uses Pino via `@/lib/logger` (`logger.error({ err }, '[health] ...')`). New checks must log through `logger`, keeping the `[health]` prefix.
 
 ## Problem / When to Use This
 
@@ -35,18 +35,19 @@ Use this pattern whenever you build or extend a status/health endpoint in this r
 
 ## Current Implementation Snapshot
 
-- `GET /api/health` returns `{ status, timestamp, version, services: { database } }`.
-- `status` is **derived** from the checks: `degraded` if the DB check is `error`, else `ok`. Never hardcoded.
-- `database` is the **only hard dependency** (and currently the only service in the envelope): probed via `prisma.$queryRaw\`SELECT 1\`` wrapped in a `Promise.race` 5s timeout (`DB_CHECK_TIMEOUT_MS = 5_000`); failure is caught, logged with `console.error("[health] database check failed", error)`, and returned as `{ status: "error" }`.
-- **Redis and AI are NOT yet part of the envelope** (the `not-configured` stubs were removed in the route refactor, commit `094082b`). They are added as real checks when those services are wired, per the Complete Example below.
-- HTTP mapping: `200` when the DB check passes, `503` only on hard DB failure.
+- `GET /api/health` returns `{ status, timestamp, version, services: { database, redis } }`.
+- `status` is **derived** from the checks: `degraded` if any configured check reports `error`, else `ok`. Never hardcoded.
+- Probes run **in parallel** via `Promise.allSettled([checkDatabase(), checkRedis()])`; a rejected (crashed) probe is logged and treated as `error` so one crash cannot escape `GET`.
+- `database` is the only **hard dependency**: probed via `prisma.$queryRaw\`SELECT 1\`` time-boxed with the shared `timeBox()` helper (`DB_CHECK_TIMEOUT_MS = 5_000`); failure is caught, logged via Pino (`logger.error({ err }, "[health] database check failed")`), and returned as `{ status: "error" }`.
+- `redis` is an **optional** service: without `REDIS_URL` it returns `{ status: "not-configured" }` (neutral); when configured, a raw TCP `PING` (`node:net`, Redis inline protocol) runs through the same `timeBox()` helper (`REDIS_CHECK_TIMEOUT_MS = 3_000`) and a failure degrades the endpoint.
+- HTTP mapping: `200` when no configured check failed; `503` on hard DB failure or a configured-but-failing optional service.
 - `version` comes from `APP_VERSION` (`src/lib/version.ts`, reads `pkg.version` from `package.json` at module load) — the route never deep-imports `package.json` itself.
 - `export const dynamic = "force-dynamic"` — the endpoint must never be statically cached.
-- `tests/health.test.ts` imports `GET` directly (vitest, `@/` alias via `vitest.config.ts`) and asserts: envelope shape, `version === APP_VERSION`, `services.database.status` ∈ `{ "ok", "error" }`, and the status/HTTP coherence rule (`ok` ⇔ 200, `degraded` ⇔ 503).
+- `tests/health.test.ts` mocks the Prisma singleton (`vi.mock("@/lib/prisma")`) and pins all derivation branches deterministically: db ok + redis not-configured → 200/`ok`; db error → 503/`degraded`; db ok + configured failing redis → 503/`degraded`.
 
 ## Planned / Optional Extensions (NOT implemented yet)
 
-- Real `checkRedis()` / `checkAI()` checks added to `services`, per `observability.md` §6.3 and the Complete Example below. When added, unconfigured optional services report `{ status: "not-configured" }` (neutral — never degrade the endpoint) and configured-but-failing services report `error` (degrade).
+- Real `checkAI()` added to `services`, per `observability.md` §6.3. Unconfigured optional services report `{ status: "not-configured" }` (neutral — never degrade the endpoint) and configured-but-failing services report `error` (degrade).
 - The `GET /admin/system/health` endpoint specified in `docs/04-api/admin.md` — reuse the same envelope shape and derivation rule.
 
 ## Pattern Overview
@@ -166,3 +167,4 @@ And the test asserts: `["not-configured", "ok", "error"]` contains `body.service
 ## Refresh Notes
 
 - **2026-08-12:** Implementation snapshot updated to match the code — the envelope currently ships `services: { database }` only; Redis/AI `not-configured` stubs were removed in the route refactor (commit `094082b`) and are now documented as planned extensions with the neutral-`not-configured` semantics preserved for when they join. Constraint/anti-pattern wording made pattern-generic (`hasFailure` no longer exists in code). Source-of-truth quote synced with `observability.md` §6.3.
+- **2026-08-24:** Redis joined the envelope exactly per this pattern's Complete Example (parallel `Promise.allSettled` probes, `REDIS_URL` gate, neutral `not-configured`, time-boxed TCP PING). Logging migrated from the `console.error` stopgap to Pino (`@/lib/logger`) — the `[health]` prefix is preserved as a message convention. Tests upgraded to deterministic mocked-Prisma branch coverage. Snapshot and logger note updated accordingly.

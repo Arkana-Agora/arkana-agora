@@ -197,3 +197,7 @@ logger.error({
 - `docs/solutions/patterns/backend/health-check-envelope.md` (console.error stopgap note)
 - `docs/02-architecture/deployment.md` (logger note for health checks)
 - `docs/08-sprints/sprint-0.md` (Sprint 1 auth implementation notes)
+
+## Status Update
+
+- **2026-08-24:** Phase 2 landed for the health-check surface — `src/lib/logger.ts` (Pino + pino-pretty em dev, redact de secrets, reqId helper) existe e `src/app/api/health/route.ts` loga via `logger.error({ err }, "[health] ...")`. Remaining known stopgap: `console.log("[auth:magic-link] ...")` em `src/auth/auth.config.ts:88` (fora do escopo da fase de observabilidade; migrar quando o fluxo de auth for tocado).

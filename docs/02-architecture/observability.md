@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-10
+> Versão: 1.1 | Última atualização: 2026-08-24
 
 ---
 
@@ -387,19 +387,24 @@ import { APP_VERSION } from '@/lib/version';
 // ...
 
 export async function GET() {
+  // probes em paralelo (Promise.allSettled), cada uma time-boxed
   const database = await checkDatabase(); // SELECT 1, 5s timeout
+  const redis = await checkRedis();       // TCP PING, 3s timeout; sem REDIS_URL → not-configured
+  const hasFailure = /* database ou redis com status 'error' */;
   const checks = {
-    status: database.status === 'ok' ? 'ok' : 'degraded', // derived from checks, never hardcoded
+    status: hasFailure ? 'degraded' : 'ok', // derived from checks, never hardcoded
     timestamp: new Date().toISOString(),
     version: APP_VERSION,
-    services: { database },
+    services: { database, redis },
   };
 
-  return NextResponse.json(checks, { status: database.status === 'ok' ? 200 : 503 });
+  return NextResponse.json(checks, { status: hasFailure ? 503 : 200 });
 }
 ```
 
-> **Contrato (implementado no esqueleto):** `database` é a única dependência dura do envelope `{status, timestamp, version, services: { database }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 só em falha dura (ex.: banco fora do ar). `status` no corpo é derivado do check (`ok`/`degraded`) e nunca contradiz o código HTTP. Redis e IA **ainda não fazem parte do envelope** — quando forem adicionados como serviços reais, implemente `checkRedis()`/`checkAI()` seguindo `docs/solutions/patterns/backend/health-check-envelope.md` e estenda `services`. Serviços opcionais não configurados reportam `{ status: 'not-configured' }`, neutro — não derrubam o endpoint.
+> **Contrato (implementado):** `database` é a única dependência dura do envelope `{status, timestamp, version, services: { database, redis }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 em falha dura de banco **ou** de um serviço opcional configurado. `status` no corpo é derivado dos checks (`ok`/`degraded`) e nunca contradiz o código HTTP. As probes rodam em paralelo (`Promise.allSettled`) e cada uma é time-boxed. Redis entrou no envelope como serviço **opcional**: com `REDIS_URL` configurada, a probe real falha → `error` (degrada); sem `REDIS_URL`, reporta `{ status: 'not-configured' }`, neutro — não derruba o endpoint. A IA **ainda não faz parte do envelope** — quando for adicionada como serviço real, implemente `checkAI()` seguindo `docs/solutions/patterns/backend/health-check-envelope.md` e estenda `services`. Falhas são logadas via Pino (`@/lib/logger`) com prefixo `[health]`.
+
+> **Integração Sentry (Fase 4 do Sprint 0):** `@sentry/nextjs` inicializado condicionalmente — server/edge via `src/instrumentation.ts` (`SENTRY_DSN`), client via `src/instrumentation-client.ts` (`NEXT_PUBLIC_SENTRY_DSN`). Sem DSN configurado, o SDK permanece desabilitado e o build não depende de credenciais. `next.config.ts` usa `withSentryConfig`; erros globais de render são capturados em `src/app/global-error.tsx`. `sentry.properties`, `.sentryclirc` e `.env.sentry-build-plugin` ficam fora do git e do build context Docker.
 
 ---
 
