@@ -3,9 +3,16 @@ import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 
 export default async function proxy(request: NextRequest) {
+  const authSecret = process.env.AUTH_SECRET
+  if (!authSecret) {
+    throw new Error(
+      "AUTH_SECRET environment variable is required for token validation",
+    )
+  }
+
   const token = await getToken({
     req: request,
-    secret: process.env.AUTH_SECRET,
+    secret: authSecret,
     secureCookie: request.nextUrl.protocol === "https:",
   })
 

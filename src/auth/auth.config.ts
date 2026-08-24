@@ -14,6 +14,11 @@ if (
   if (!process.env.AUTH_URL.startsWith("https://")) {
     throw new Error("AUTH_URL deve usar https:// em produção")
   }
+  if (!process.env.AUTH_SECRET) {
+    throw new Error(
+      "AUTH_SECRET environment variable is required for production operation",
+    )
+  }
 }
 
 const smtpConfigured =
@@ -68,7 +73,7 @@ export const authConfig = {
           clientSecret: process.env.AUTH_GOOGLE_SECRET,
           allowDangerousEmailAccountLinking: true,
         })
-      : null,
+      : undefined,
     EmailProvider({
       from: emailFrom,
       maxAge: 15 * 60,
@@ -99,8 +104,6 @@ export const authConfig = {
         })
       },
     }),
-  ].filter(
-    (provider): provider is NonNullable<typeof provider> => provider !== null,
-  ),
+  ].filter(Boolean) as unknown[] as NextAuthConfig["providers"],
   callbacks,
 } satisfies NextAuthConfig
