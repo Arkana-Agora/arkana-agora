@@ -421,18 +421,36 @@ jobs:
           name: nextjs-build
           path: .next/
 
+  # Gate: presença dos secrets VERCEL_* checada em step — os contextos
+  # `secrets`/`env` NÃO estão disponíveis em `if:` de job-level.
+  # Sem creds → has_creds=false → deploy skipado, workflow permanece verde.
+  gate-deploy:
+    name: Gate (secrets Vercel)
+    runs-on: ubuntu-latest
+    outputs:
+      has_creds: ${{ steps.check.outputs.has_creds }}
+    steps:
+      - id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Staging/preview a cada push na `main` (M0); prod via promoção manual no painel da Vercel.
-  # Sem secrets VERCEL_* configurados, o job é skipado e o workflow permanece verde.
   deploy-staging:
     name: Deploy Staging (Vercel preview)
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, gate-deploy]
     if: >-
+      needs.gate-deploy.outputs.has_creds == 'true' &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      secrets.VERCEL_TOKEN != '' &&
-      secrets.VERCEL_ORG_ID != '' &&
-      secrets.VERCEL_PROJECT_ID != ''
+      github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: amondnet/vercel-action@v25
@@ -447,15 +465,18 @@ jobs:
 ```
 PR para main
   │
-  ├─ CI: Lint → Type Check → Test → Build
+  ├─ CI: Quality (lint+format) → Type Check → Test (Postgres service) → Build
+  │     └─ Deploy staging: SKIPADO (evento pull_request)
   │
-  ├─ ✅ Sucesso → Preview Deploy (Vercel)
-  │    └── URL: pr-42-arkana-agora.vercel.app
+Push na main
   │
-  └─ Code Review → Merge
-       │
-       └─ Deploy Produção (Vercel --prod)
-            └── URL: arkanaagora.com.br
+  ├─ CI completo (mesma cadeia acima)
+  │
+  └─ ✅ Sucesso + secrets VERCEL_* presentes (gate)
+       ├─ Deploy Staging/preview automático (Vercel)
+       │    └── URL: projeto-*.vercel.app / domínio de staging
+       └─ Produção: promoção manual no painel da Vercel
+            └── URL: arkanaagora.com.br (M0)
 ```
 
 ---
