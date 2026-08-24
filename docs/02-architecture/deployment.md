@@ -134,7 +134,7 @@ MP_WEBHOOK_URL=http://localhost:3000/api/v1/webhooks/mercadopago
 REDIS_URL=redis://localhost:6379
 
 # Observabilidade
-SENTRY_DSN=
+NEXT_PUBLIC_SENTRY_DSN=
 POSTHOG_KEY=
 ```
 
