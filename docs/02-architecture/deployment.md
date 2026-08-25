@@ -211,7 +211,50 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
      └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
-### 4.2 Serviços de Produção
+### 4.2 Environment Variables
+
+**Configuração no Vercel (Production)**:
+
+1. Acesse o painel da Vercel: `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-variables`
+2. Adicione as seguintes variáveis de ambiente (globais ou específicas por environment):
+
+| Nome | Valor | Environment | Descrição |
+|------|-------|-------------|-----------|
+| `AUTH_SECRET` | *Sua secret de produção* | Production | Segredo para assinar tokens do Auth.js |
+| `AUTH_TRUST_HOST` | `true` | Production | Confia no header Host fornecido |
+| `AUTH_GOOGLE_ID` | *ID do cliente Google OAuth* | Production | Client ID do Google Cloud Console |
+| `AUTH_GOOGLE_SECRET` | *Secret do cliente Google OAuth* | Production | Client Secret do Google Cloud Console |
+| `EMAIL_FROM` | `Arkana Agora <nao-responda@arkanaagora.dev>` | Production | Remetente dos e-mails (magic link, etc) |
+| `SMTP_HOST` | *Sua configuração SMTP* | Production | Host do servidor SMTP (opcional) |
+| `SMTP_PORT` | `587` | Production | Porta do servidor SMTP |
+| `SMTP_SECURE` | `true` | Production | TLS habilitado |
+| `SMTP_USER` | *Usuário SMTP* | Production | Usuário do SMTP |
+| `SMTP_PASS` | *Senha do SMTP* | Production | Senha do SMTP |
+| `DATABASE_URL` | *URL do Neon PostgreSQL* | Production | Ex: `postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/dbname` |
+| `REDIS_URL` | *URL do Redis Upstash* | Production | Ex: `redis://default:pass@xxx.upstash.io:6379` |
+| `R2_ACCOUNT_ID` | *ID da conta Cloudflare R2* | Production | Conta ID da R2 |
+| `R2_ACCESS_KEY_ID` | *Access Key ID da R2* | Production | Chave de acesso da R2 |
+| `R2_SECRET_ACCESS_KEY` | *Access Key Secret da R2* | Production | Segredo da chave de acesso da R2 |
+| `R2_BUCKET` | *Nome do bucket da R2* | Production | Nome do bucket na R2 |
+| `R2_PUBLIC_URL` | `https://` | Production | URL pública do bucket (ex: `https://your-bucket.r2.dev` se custom domain) |
+| `AI_PRIMARY_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
+| `AI_FALLBACK_API_KEY` | *Chave de fallback de IA* | Production | Chave da API de fallback de IA |
+| `MP_ACCESS_TOKEN` | *Token Mercado Pago* | Production | Token de acesso do Mercado Pago |
+| `MP_WEBHOOK_URL` | *URL do webhook Mercado Pago* | Production | URL de callback do webhook |
+| `SENTRY_DSN` | *DSN do Sentry* | Production | DSN do Sentry (opcional, SDK desabilitado sem DSN) |
+| `LOG_LEVEL` | `info` | Production | Nível de log do Pino |
+| `POSTHOG_KEY` | *Chave do PostHog* | Production | Chave do PostHog (analytics) |
+| `AUTH_URL` | `https://arkanaagora.com.br` | Production | Origem canônica da aplicação (HTTPS obrigatório) |
+
+**Configuração no Vercel (Staging)**:
+
+Acesse `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-variables`:
+1. Crie uma variável `AUTH_URL` com valor `https://arkana-agora.vercel.app` (ou `https://staging.arkanaagora.com.br` se configurado)
+2. Configure as outras variáveis de ambiente conforme a tabela acima
+
+**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, e `SENTRY_DSN` são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
+
+### 4.3 Serviços de Produção
 
 | Serviço | Provedor | Plano Estimado | Custo/mês |
 |---------|----------|----------------|-----------|
