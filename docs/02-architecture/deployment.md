@@ -107,7 +107,8 @@ NEXT_PUBLIC_WS_URL=ws://localhost:3003
 DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
 
 # Auth (Auth.js v5 — ADR-010; não usar NEXTAUTH_*/GOOGLE_CLIENT_*)
-AUTH_URL=http://localhost:3000
+# AUTH_URL: origem canônica da aplicação (impede host-header poisoning do magic link em prod — HTTPS obrigatório)
+AUTH_URL=https://arkanaagora.com.br
 AUTH_SECRET=dev-secret-change-me
 AUTH_TRUST_HOST=true
 AUTH_GOOGLE_ID=dev-google-id
@@ -134,8 +135,19 @@ MP_WEBHOOK_URL=http://localhost:3000/api/v1/webhooks/mercadopago
 REDIS_URL=redis://localhost:6379
 
 # Observabilidade
+# Sentry: sem DSN o SDK permanece desabilitado (build e runtime não exigem credenciais)
+SENTRY_DSN=
 NEXT_PUBLIC_SENTRY_DSN=
+# Nível de log do Pino (default: info)
+LOG_LEVEL=info
 POSTHOG_KEY=
+
+# Cloudflare R2 (S3-compatible)
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_PUBLIC_URL=https
 ```
 
 ---
