@@ -28,6 +28,36 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 
 ---
 
+## Configuração do Google OAuth (credenciais)
+
+O login via Google OAuth (MVP, ADR-010) requer um **OAuth 2.0 Client** no Google Cloud Console. O provider é **condicional**: só é registrado em `src/auth/auth.config.ts` quando as duas vars `AUTH_GOOGLE_ID` e `AUTH_GOOGLE_SECRET` estão definidas (sem elas, o magic link segue funcional).
+
+### Criar as credenciais (Google Cloud Console)
+
+1. Acesse [Google Cloud Console](https://console.cloud.google.com/) e selecione (ou crie) um projeto.
+2. Navegue para **APIs & Services → OAuth consent screen** (`https://console.cloud.google.com/apis/credentials/consent`):
+   - Escolha **External** (aplicação de teste / produção requer verificação publicada).
+   - Preencha app name e e-mail de suporte; salve.
+3. Navegue para **APIs & Services → Credentials → Create credentials → OAuth client ID** (`https://console.cloud.google.com/apis/credentials`):
+   - Application type: **Web application**.
+   - **Authorized redirect URIs**: adicione a URL de callback do Auth.js:
+     - Local dev: `http://localhost:3000/api/auth/callback/google`
+     - Produção: `https://SEU-DOMINIO/api/auth/callback/google` (substitua `SEU-DOMINIO`)
+   - **Authorized JavaScript origins** (opcional, se necessário): origem da aplicação (ex.: `http://localhost:3000`).
+   - Clique em **Create**.
+4. Copie o **Client ID** e o **Client Secret** exibidos.
+
+### Configurar as variáveis de ambiente
+
+Use a convenção `AUTH_GOOGLE_*` (não `GOOGLE_CLIENT_*`):
+
+- `AUTH_GOOGLE_ID` — o **Client ID** (termine com `.apps.googleusercontent.com`).
+- `AUTH_GOOGLE_SECRET` — o **Client Secret**.
+
+Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/staging (nunca no `.env.example`, que só tem nomes, nem em `.env.local`). A URL de callback é derivada por `AUTH_URL`/`AUTH_TRUST_HOST` no Auth.js v5 — não é obrigatório definir `GOOGLE_CALLBACK_URL` explicitamente.
+
+---
+
 ## Fluxo Principal (MVP)
 
 1. O usuário acessa `/login` e escolhe **magic link** ou **Entrar com Google**
