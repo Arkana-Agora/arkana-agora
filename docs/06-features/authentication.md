@@ -67,8 +67,12 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 | Banco de dados | Infraestrutura | Tabelas `users`, `verification_tokens` (adapter mínimo; sem model `Account` no MVP) |
 | Serviço de e-mail (SMTP) | Serviço externo | Envio de magic links (dev: `AUTH_EMAIL_SKIP_SEND=true` loga o link no console) |
 | Google OAuth / Facebook Login | API externa | Autenticação social (Google: MVP; Facebook: Sprint 1) |
-| `bcryptjs` | Biblioteca | Hash de senhas — e-mail/senha (Sprint 1) |
-| `jose` | Biblioteca | JWT da Custom JWT Layer (Sprint 1) |
+| `bcryptjs` + `@types/bcryptjs` | Biblioteca | Hash de senhas — e-mail/senha (Sprint 1; **instalado no F1/T1**) |
+| `jose` | Biblioteca | JWT RS256 da Custom JWT Layer (Sprint 1; **instalado no F1/T1**) |
+| `zustand` | Biblioteca | Store de auth do frontend (Sprint 1; **instalado no F1/T1**) |
+| `ioredis` + `@types/ioredis` | Biblioteca | Redis: validação de `tokenVersion` + rate limiting (Sprint 1; **instalado no F1/T1**) |
+| `axios` | Biblioteca | Interceptor de API com refresh token (Sprint 1; **instalado no F1/T1**) |
+| `resend` | Biblioteca | Provedor de e-mail transacional da issue #3 (Sprint 1; **instalado no F1/T1**) |
 | `zod` | Biblioteca | Validação de inputs das rotas `/api/v1/auth/*` (Sprint 1) |
 
 ---
