@@ -114,9 +114,17 @@ jobs:
       github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+      - env:
+          AUTH_URL: https://arkanaagora.com.br
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          AUTH_TRUST_HOST: true
+        run: |
+          echo "AUTH_URL is set to production"
       - uses: amondnet/vercel-action@v25
         with:
           github-token: ${{ github.token }}
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          github-comment: true
+          github-deployment: false
