@@ -268,6 +268,7 @@ model User {
   astrologicalSign String?
   mayanKin         String?
   personalArcana   Int?
+  tokenVersion     Int          @default(0) // revogação imediata de role/plan/suspensão/reset de senha/logout-all (§7.4; fonte-da-verdade — Redis é cache espelhado)
   isActive         Boolean      @default(true) // soft delete: filtros usam isActive = true AND deletedAt IS NULL
   deletedAt        DateTime?
   createdAt        DateTime     @default(now())
