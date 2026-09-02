@@ -1,6 +1,6 @@
 # Estratégia de Migrações — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.0 | Última atualização: 2026-09-01
 
 ---
 
@@ -14,6 +14,8 @@ prisma/
 └── migrations/
     ├── 20260813000605_init/
     │   └── migration.sql   # Migration inicial — APLICADA (Sprint 0 / F1)
+    ├── 20260902015420_add_token_version/
+    │   └── migration.sql   # tokenVersion no User — APLICADA (Módulo 1 Auth, T5)
     └── migration_lock.toml  # provider = postgresql
 ```
 
@@ -32,6 +34,7 @@ YYYYMMDDHHMMSS_descriptive_name
 | Migration | Nome | Descrição |
 |-----------|------|-----------|
 | `20260813000605` | `init` | Criação inicial (User, UserProfile, Subscription, Session, VerificationToken) — **aplicada (Sprint 0 / F1)** |
+| `20260902015420` | `add_token_version` | Add `User.tokenVersion` (Int, default 0) p/ revogação imediata de JWT — **aplicada (Módulo 1 Auth, T5)** |
 | `20250711010000` | `add_reading_tables` | Tabelas de leitura, cartas e baralhos |
 | `20250712000000` | `add_social_tables` | Tabelas de feed, follows, comentários |
 | `20250712010000` | `add_marketplace_tables` | Tabelas de produtos, pedidos e pagamentos |
@@ -104,6 +107,10 @@ Antes de aplicar qualquer migration em produção, seguir obrigatoriamente:
 ### Sprint 0 — Autenticação (MVP) — ✅ APLICADA (Sprint 0 / F1, 2026-08-13)
 
 **Migration**: `20260813000605_init` — **aplicada em dev** (Docker Postgres 16). Cobre **5 models**: `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (Session/VerificationToken = cópia de `.specs/001-auth/design.md` §4). SQL real versionado: `prisma/migrations/20260813000605_init/migration.sql` (`migration_lock.toml` = `postgresql`). Gerada com `bunx prisma migrate dev --name init` após a troca do datasource para `postgresql`.
+
+### Módulo 1 — Autenticação (T5) — ✅ APLICADA (2026-09-01)
+
+**Migration**: `20260902015420_add_token_version` — aplicada em dev (Postgres local). Adiciona `User.tokenVersion` (`INTEGER NOT NULL DEFAULT 0`) para revogação imediata de JWT (role/plan/suspensão, reset de senha, logout-all — SPEC-001 §7.4). Gerada com atomic chain da skill `prisma` (`bunx prisma migrate dev --name addTokenVersion`); drift-check: SQL contém somente o `ALTER TABLE` da coluna; **defesa em profundidade (C1):** após o `ALTER`, rodado `UPDATE "User" SET "tokenVersion" = 1` (invalida JWTs pré-recurso em DB populado; no dev, tabela vazia → no-op). SQL real versionado: `prisma/migrations/20260902015420_add_token_version/migration.sql`.
 
 > ⚠️ **Ilustrativo, não copiar.** O SQL abaixo é o **rascunho de planejamento** (pré-migration) e cobre apenas `User`/`UserProfile`; `Subscription`/`Session`/`VerificationToken` seguiram o mesmo processo. O SQL real gerado pelo Prisma difere (tipos nativos, enums, `TEXT[]` etc.) — **o arquivo versionado é a fonte de verdade**. Regra da disciplina (§4.4): **nunca criar migration files manualmente** — gere com o Prisma CLI e revise o SQL gerado.
 
