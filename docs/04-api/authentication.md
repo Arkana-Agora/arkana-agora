@@ -3,8 +3,8 @@
 > **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
-> **`POST /auth/register` (T6) e `POST /auth/login` (T7) que já estão implementados** (ver
-> seções abaixo).
+> **`POST /auth/register` (T6), `POST /auth/login` (T7) e `POST /auth/refresh` (T13) que já
+> estão implementados** (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -358,9 +358,10 @@ Mesmo formato de `/auth/login` (access token no body + refresh token em cookie h
 
 Renova o access token usando o refresh token do cookie httpOnly.
 
-> **Status:** a lógica de rotação está **implementada** em `src/services/token-service.ts`
-> (`rotateRefresh` — rotação condicional anti-race + revogação de família em reuso), mas a
-> **rota HTTP ainda não está exposta** como endpoint.
+> **Status (T13 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/refresh/route.ts`. Lê o `refreshToken` do cookie httpOnly e chama
+> `rotateRefresh` de `src/services/token-service.ts` (rotação condicional anti-race +
+> revogação de família em reuso). O contrato abaixo reflete o comportamento implementado.
 
 ### Requisição
 
@@ -389,6 +390,8 @@ Cookie: refreshToken=<rt_token>
 | 401 | `AUTH_REFRESH_TOKEN_INVALID` | Refresh token inválido |
 | 401 | `AUTH_REFRESH_TOKEN_EXPIRED` | Refresh token expirado |
 | 401 | `AUTH_REFRESH_TOKEN_REVOKED` | Refresh token revogado |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa (`isActive=false`/`deletedAt`) |
+| 500 | `INTERNAL_ERROR` | Erro desconhecido (todos os erros incluem `meta.requestId`, C13) |
 
 ---
 
