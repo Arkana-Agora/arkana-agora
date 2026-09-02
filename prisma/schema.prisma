@@ -38,6 +38,7 @@ model User {
   mayanKin         String?
   personalArcana   Int?
   emailVerified    DateTime?
+  tokenVersion     Int          @default(0) // revogação imediata de role/plan/suspensão/reset de senha/logout-all (SPEC-001 §7.4; fonte-da-verdade — Redis é cache espelhado)
   isActive         Boolean      @default(true)
   deletedAt        DateTime?    // LGPD 30-day restoration window
   createdAt        DateTime     @default(now())

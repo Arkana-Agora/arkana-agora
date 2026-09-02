@@ -1,6 +1,6 @@
 # Definição de Entidades — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.0 | Última atualização: 2026-09-01
 
 ---
 
@@ -29,6 +29,7 @@ Entidade principal de autenticação e identidade do usuário.
 | `provider` | `AuthProvider` | NOT NULL | Provedor de autenticação |
 | `providerId` | `String` | NOT NULL, **UQ comp.** with provider | ID do provedor OAuth (convenção: EMAIL → email normalizado lowercase, GOOGLE/FACEBOOK → OAuth subject ID) |
 | `emailVerified` | `DateTime?` | nullable | Data de verificação do e-mail |
+| `tokenVersion` | `Int` | NOT NULL, default `0` | Revogação imediata de role/plan/suspensão/reset de senha/logout-all (SPEC-001 §7.4; fonte-da-verdade — Redis é somente cache espelhado) |
 | `isActive` | `Boolean` | NOT NULL, default `true` | Conta ativa |
 | `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window) |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data de criação |
