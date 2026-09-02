@@ -37,7 +37,7 @@ const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 > **Status:** a emissão/verificação de tokens está **implementada** em
 > `src/services/token-service.ts` (`signAccessToken`, `verifyAccessToken`,
 > `createRefreshSession`, `rotateRefresh`, `bumpTokenVersion`). A rota de refresh
-> (`POST /api/v1/auth/refresh`) ainda não está exposta como endpoint.
+> (`POST /api/v1/auth/refresh`) está **exposta** em `src/app/api/v1/auth/refresh/route.ts` (T13).
 
 | Parâmetro | Access Token | Refresh Token |
 |---|---|---|

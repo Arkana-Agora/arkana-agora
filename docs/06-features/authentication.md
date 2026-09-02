@@ -22,10 +22,11 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
 - **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
+- **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
 - **Rotas de rate limit de magic link** — Sprint 1: `POST /api/v1/auth/magic-link` (429 `AUTH_MAGIC_LINK_RATE_LIMIT`, máx. 3/hora por e-mail)
-- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`)
+- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T13 implementado** (`POST /api/v1/auth/refresh`)
 - **Exclusão de conta (LGPD)** — Sprint 1: soft delete (`deletedAt`) com janela de restauração de 30 dias
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
@@ -163,6 +164,36 @@ rate limit, suspensão, email não verificado, credenciais inválidas, sucesso c
 
 ---
 
+## Refresh de token (`POST /api/v1/auth/refresh`) — T13 implementado
+
+Terceira rota da **Custom JWT Layer** (Fase 2) implementada em
+`src/app/api/v1/auth/refresh/route.ts`.
+
+### Contrato do endpoint
+
+- **Cookie** `refreshToken` (httpOnly, `path=/api/v1/auth`) — nunca em body/query
+- **200** → `{ accessToken, expiresIn }` + `Set-Cookie` do refresh rotacionado (mesmo `familyId`)
+- **401** `AUTH_REFRESH_TOKEN_INVALID` / `AUTH_REFRESH_TOKEN_EXPIRED` / `AUTH_REFRESH_TOKEN_REVOKED`
+- **403** `AUTH_ACCOUNT_SUSPENDED` — conta suspensa (`isActive=false`/`deletedAt`)
+- **500** `INTERNAL_ERROR` — erro desconhecido
+- Todos os erros incluem `meta.requestId` (C13)
+
+### Comportamento
+
+1. Lê o `refreshToken` do cookie httpOnly
+2. Chama `rotateRefresh` de `src/services/token-service.ts` (rotação condicional anti-race +
+   revogação de família em reuso)
+3. Sucesso: retorna `200 { accessToken, expiresIn }` + `Set-Cookie` do refresh rotacionado
+4. Mapeia `AuthTokenError` para HTTP (401/403/500 conforme o código)
+5. Log estruturado não expõe o token
+
+### Testes
+
+`tests/refresh.test.ts` — 8 testes vitest cobrindo o contrato do refresh (rotação, reuso,
+expiração, invalidação, suspensão, sucesso com accessToken + Set-Cookie).
+
+---
+
 ## Versão
 
 | Feature | Versão |
@@ -173,9 +204,10 @@ rate limit, suspensão, email não verificado, credenciais inválidas, sucesso c
 | Proteção de rotas (`src/proxy.ts` + `src/app/(app)/layout.tsx`) | MVP |
 | Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
 | Login e-mail/senha (`POST /api/v1/auth/login`) | Sprint 1 — **T7 implementado** |
+| Refresh de token (`POST /api/v1/auth/refresh`) | Sprint 1 — **T13 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 |
-| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (login/register implementados)** |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/refresh implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
 | Verificação de e-mail | Sprint 1 |
 

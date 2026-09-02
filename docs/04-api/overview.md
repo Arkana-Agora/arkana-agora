@@ -36,7 +36,7 @@ https://{dominio}/api/v1/{recurso}
 
 ## Autenticação
 
-O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1). **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6) e `POST /api/v1/auth/login` (T7) com `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion), `src/lib/rate-limit.ts` (lockout de conta + volume por IP), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`).
+O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1). **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7) e `POST /api/v1/auth/refresh` (T13) com `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion), `src/lib/rate-limit.ts` (lockout de conta + volume por IP), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`).
 
 ### Fluxo
 

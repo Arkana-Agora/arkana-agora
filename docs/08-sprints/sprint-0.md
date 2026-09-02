@@ -165,7 +165,7 @@ arkana-agora/                  # Raiz = monolito MVP (bun)
 - Validação E2E do pipeline (push remoto → PR verde + staging Vercel responde; requer secrets `VERCEL_TOKEN`/`ORG_ID`/`PROJECT_ID`)
 - Sentry capturando em produção (requer DSN configurado no dashboard)
 - Tabelas completas (18 entidades, `docs/03-database/entities.md`) — demais sprints
-- Autenticação Sprint 1: e-mail/senha (credentials), Facebook OAuth, Custom JWT Layer (access RS256 + refresh rotation) e rotas `/api/v1/auth/*` (rate limit de magic link, LGPD delete) — **parcial: register (T6) e login (T7) implementados; refresh/logout/magic-link/LGPD pendentes**
+- Autenticação Sprint 1: e-mail/senha (credentials), Facebook OAuth, Custom JWT Layer (access RS256 + refresh rotation) e rotas `/api/v1/auth/*` (rate limit de magic link, LGPD delete) — **parcial: register (T6), login (T7) e refresh (T13) implementados; logout/magic-link/LGPD pendentes**
 - Storybook (adiado, risco aceito) e Monorepo Turborepo + pnpm (ADR-005, pós-MVP)
 
 **Decisões rastreadas para a Sprint 1 (não reversíveis de forma barata — ver `prisma/schema.prisma` header e `docs/infrastructure.md` → Known Constraints #3):**
