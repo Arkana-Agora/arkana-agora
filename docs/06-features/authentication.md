@@ -20,7 +20,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Login via OAuth (Google)** — MVP: vínculo via `User.provider`/`providerId`, sem model `Account` (provedor único no MVP); provider condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`
 - **Sessão JWT do Auth.js** — MVP: cookie JWT (`session: { strategy: "jwt" }`), sem gravação de sessão no banco
 - **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
-- **Cadastro por e-mail e senha** — Sprint 1: validação de formato, força da senha e verificação de e-mail (credentials)
+- **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
 - **Rotas de rate limit de magic link** — Sprint 1: `POST /api/v1/auth/magic-link` (429 `AUTH_MAGIC_LINK_RATE_LIMIT`, máx. 3/hora por e-mail)
@@ -73,6 +73,57 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 
 ---
 
+## Cadastro por e-mail e senha (`POST /api/v1/auth/register`) — T6 implementado
+
+Primeira rota da **Custom JWT Layer** (Fase 2) implementada em
+`src/app/api/v1/auth/register/route.ts`. Contrato canônico conforme o plano S11 (design §3),
+que supersede a divergência antiga da `docs/04-api/authentication.md` (sem `birthDate`/idade,
+sem auto-login).
+
+### Contrato do endpoint
+
+- **Body** `{ name, email, password, passwordConfirmation, acceptTerms }` — **sem `birthDate`**
+- **201** → `{ user: { id, name, email, emailVerified }, message }` — **sem `accessToken`/`meta`**
+  (o cadastro **NÃO faz auto-login**; exige verificação de e-mail — RF-AUTH-005)
+- **409** `AUTH_EMAIL_ALREADY_EXISTS` — e-mail duplicado (busca case-insensitive)
+- **422** `VALIDATION_ERROR` — falha de validação Zod (com `details` por campo)
+- **500** `INTERNAL_ERROR` — falha interna ao criar conta
+
+### Validação (Zod)
+
+Schemas compartilhados em **`src/lib/validators/auth.ts`** (local canônico para validação de
+register/senha das rotas `/api/v1/auth/*`):
+
+- `passwordSchema` — min 8 chars + 1 maiúscula + 1 minúscula + 1 número + 1 especial
+- `registerSchema` — `name` 2–50, `email` RFC, `password` (via `passwordSchema`),
+  `passwordConfirmation` idêntico, `acceptTerms === true`
+- `RegisterInput` — tipo inferido (`z.infer<typeof registerSchema>`)
+
+### Comportamento
+
+1. Valida o body com `registerSchema` (422 `VALIDATION_ERROR` em falha)
+2. Normaliza `email` para minúsculas; busca duplicado case-insensitive (409 `AUTH_EMAIL_ALREADY_EXISTS`)
+3. Hash da senha com **bcrypt custo 12** (`BCRYPT_COST = 12`) — nunca plaintext
+4. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase`
+   (convenção S7), `displayName=name`
+5. Cria `VerificationToken` `type=EMAIL` com validade de **24h**
+6. Envia e-mail de verificação apontando para o frontend `/auth/verify-email?token=...`
+   (helper `sendVerificationEmail` de `src/lib/email/email.ts`)
+7. Retorna **201** com `user` + `message`
+
+### Observability
+
+Respostas de erro usam o envelope `{ error: { code, message, details? } }` com correlação
+`requestId`/`newReqId()` e log estruturado Pino (`src/lib/logger.ts`) em cada etapa
+(`[auth:register] ...`).
+
+### Testes
+
+`tests/register.test.ts` — 10 testes vitest cobrindo o contrato do register (validação,
+duplicado, hash, criação de token de verificação, resposta 201, erros 409/422).
+
+---
+
 ## Versão
 
 | Feature | Versão |
@@ -81,7 +132,7 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 | Magic Link | MVP |
 | Sessão JWT do Auth.js (`/api/auth/*`) | MVP |
 | Proteção de rotas (`src/proxy.ts` + `src/app/(app)/layout.tsx`) | MVP |
-| Cadastro e-mail/senha | Sprint 1 |
+| Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 |
 | Custom JWT Layer (access/refresh) | Sprint 1 |

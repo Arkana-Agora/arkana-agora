@@ -2,7 +2,8 @@
 
 > **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
-> rotação) abaixo **não estão implementadas** — são o estado-alvo da **Sprint 1** (ADR-009 Gate B).
+> rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
+> **`POST /auth/register` (T6) que já está implementado** (ver seção abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -65,6 +66,12 @@
 
 Cadastro de novo usuário.
 
+> **Status (T6 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/register/route.ts` (primeira rota da Custom JWT Layer, Fase 2).
+> O contrato abaixo reflete o **contrato canônico do plano S11 (design §3)**, que **supersede**
+> a divergência antiga desta seção (que documentava `birthDate`/`AUTH_UNDER_AGE`/`accessToken`/
+> `meta`). A divergência foi registrada para o doc-shepherd na conclusão da F7.
+
 ### Requisição
 
 ```http
@@ -78,50 +85,65 @@ Accept-Language: pt-BR
   "name": "Maria Silva",
   "email": "maria@email.com",
   "password": "SenhaForte123",
-  "birthDate": "1995-03-15",
+  "passwordConfirmation": "SenhaForte123",
   "acceptTerms": true
 }
 ```
 
+> **Nota:** o body **não** inclui `birthDate` (mantido para evolução de perfil, fora do MVP).
+
 ### Validação
+
+Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `registerSchema`):
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `name` | string | Sim | 2–100 caracteres |
-| `email` | string | Sim | Formato e-mail válido, único |
-| `password` | string | Sim | Min 8 chars, 1 maiúsc, 1 minúsc, 1 número |
-| `birthDate` | string | Sim | ISO 8601 (`YYYY-MM-DD`), maior de 18 anos |
+| `name` | string | Sim | 2–50 caracteres |
+| `email` | string | Sim | Formato e-mail válido, único (case-insensitive) |
+| `password` | string | Sim | Min 8 chars, 1 maiúsc, 1 minúsc, 1 número, 1 especial |
+| `passwordConfirmation` | string | Sim | Deve ser idêntico a `password` |
 | `acceptTerms` | boolean | Sim | Deve ser `true` |
 
 ### Resposta — 201 Created
 
 ```json
 {
-  "data": {
-    "user": {
-      "id": "usr_a1b2c3d4",
-      "name": "Maria Silva",
-      "email": "maria@email.com",
-      "avatar": null,
-      "plan": "FREE",
-      "createdAt": "2025-01-15T10:30:00Z"
-    },
-    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "user": {
+    "id": "usr_a1b2c3d4",
+    "name": "Maria Silva",
+    "email": "maria@email.com",
+    "emailVerified": null
   },
-  "meta": {
-    "requestId": "req_f8a7b6c5",
-    "timestamp": "2025-01-15T10:30:00Z"
-  }
+  "message": "Email de verificacao enviado"
 }
 ```
+
+> **Nota:** a resposta **não** inclui `accessToken`/`meta` — o cadastro **NÃO faz auto-login**
+> (exige verificação de e-mail, RF-AUTH-005). `emailVerified` é `DateTime?` (S12) — `null` até
+> a verificação.
+
+### Comportamento
+
+1. Valida o body com `registerSchema` (422 `VALIDATION_ERROR` em falha)
+2. Normaliza `email` para minúsculas; busca duplicado case-insensitive (409 `AUTH_EMAIL_ALREADY_EXISTS`)
+3. Hash da senha com **bcrypt custo 12**
+4. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase`
+5. Cria `VerificationToken` `type=EMAIL` (24h) e envia e-mail de verificação para
+   `/auth/verify-email?token=...`
+6. Retorna **201** com `user` + `message`
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Dados inválidos |
 | 409 | `AUTH_EMAIL_ALREADY_EXISTS` | E-mail já cadastrado |
-| 422 | `AUTH_UNDER_AGE` | Usuário menor de 18 anos |
+| 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) |
+| 500 | `INTERNAL_ERROR` | Falha interna ao criar conta |
+
+> **Divergência supersedida:** o contrato antigo desta seção (body com `birthDate`, resposta com
+> `data`/`accessToken`/`meta`, erro `AUTH_UNDER_AGE` 422, sem `passwordConfirmation`) foi
+> **substituído** pelo contrato canônico S11 acima (design §3). O `AUTH_UNDER_AGE`/idade não faz
+> parte do cadastro no MVP.
 
 ---
 
@@ -508,3 +530,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_MAGIC_LINK_RATE_LIMIT` | 429 | Muitos magic links | Aguardar 1 hora |
 | `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido | Solicitar novo link |
 | `AUTH_UNDER_AGE` | 422 | Menor de 18 anos | Bloquear cadastro |
+
+> **Nota:** `AUTH_UNDER_AGE` não faz parte do contrato canônico de register (S11) — o cadastro
+> do MVP não coleta `birthDate`/idade. Mantido na tabela apenas como referência histórica;
+> não usar em implementações novas do register.
