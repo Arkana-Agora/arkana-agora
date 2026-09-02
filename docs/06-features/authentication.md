@@ -21,6 +21,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Sessão JWT do Auth.js** — MVP: cookie JWT (`session: { strategy: "jwt" }`), sem gravação de sessão no banco
 - **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
+- **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
 - **Rotas de rate limit de magic link** — Sprint 1: `POST /api/v1/auth/magic-link` (429 `AUTH_MAGIC_LINK_RATE_LIMIT`, máx. 3/hora por e-mail)
@@ -124,6 +125,44 @@ duplicado, hash, criação de token de verificação, resposta 201, erros 409/42
 
 ---
 
+## Login por e-mail e senha (`POST /api/v1/auth/login`) — T7 implementado
+
+Segunda rota da **Custom JWT Layer** (Fase 2) implementada em
+`src/app/api/v1/auth/login/route.ts`. Contrato canônico conforme o plano S11 (design §3).
+
+### Contrato do endpoint
+
+- **Body** `{ email, password }` — validado com `loginSchema` de `src/lib/validators/auth.ts`
+- **200** → `{ accessToken, user: { id, name, email, displayName, role, plan, avatar } }`
+  — **body plano (flat), sem wrapper `data`** + `Set-Cookie: refreshToken`
+  (`Path=/api/v1/auth`, `HttpOnly`, `SameSite=Strict`, `Max-Age=2592000` = 30 dias)
+- **422** `VALIDATION_ERROR` — falha de validação Zod (com `details` por campo)
+- **403** `AUTH_ACCOUNT_LOCKED` — 5 falhas consecutivas (body com `retryAfter: 900`)
+- **429** `AUTH_RATE_LIMITED` — limite de volume por IP (5/15min; body com `retryAfter`)
+- **403** `AUTH_ACCOUNT_SUSPENDED` — `isActive=false` ou `deletedAt` set
+- **401** `AUTH_EMAIL_NOT_VERIFIED` — e-mail não verificado
+- **401** `AUTH_INVALID_CREDENTIALS` — credenciais incorretas (anti-enumeração)
+
+### Serviços de suporte (implementados)
+
+- **`src/services/token-service.ts`** — `sha256()`, `signAccessToken` (RS256 via jose, 15min,
+  claims `role`/`plan`/`tokenVersion`), `verifyAccessToken` (fail-closed, Redis cache com
+  fallback DB, admin recheck de `isActive`/`deletedAt`), `createRefreshSession` (Session 30d),
+  `rotateRefresh` (rotação + revogação de família em reuso), `bumpTokenVersion` (incremento
+  atômico), `AuthTokenError`
+- **`src/lib/rate-limit.ts`** — rate limiting em memória: lockout de conta (5 falhas
+  consecutivas → 15min, `retryAfter`) e limite de volume por IP (5/15min → 429),
+  `resetRateLimiter()`
+- **`src/lib/redis.ts`** — singleton Redis (ioredis, `lazyConnect`, gated on `REDIS_URL` env)
+
+### Testes
+
+`tests/login.test.ts` — testes vitest cobrindo o contrato do login (validação, lockout,
+rate limit, suspensão, email não verificado, credenciais inválidas, sucesso com accessToken
++ refresh cookie).
+
+---
+
 ## Versão
 
 | Feature | Versão |
@@ -133,9 +172,10 @@ duplicado, hash, criação de token de verificação, resposta 201, erros 409/42
 | Sessão JWT do Auth.js (`/api/auth/*`) | MVP |
 | Proteção de rotas (`src/proxy.ts` + `src/app/(app)/layout.tsx`) | MVP |
 | Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
+| Login e-mail/senha (`POST /api/v1/auth/login`) | Sprint 1 — **T7 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 |
-| Custom JWT Layer (access/refresh) | Sprint 1 |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (login/register implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
 | Verificação de e-mail | Sprint 1 |
 

@@ -164,9 +164,13 @@
 | email | string | Sim |
 | password | string | Sim |
 
-**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }`
-**Response 401**: `{ error: "INVALID_CREDENTIALS" }`
-**Response 429**: `{ error: "TOO_MANY_ATTEMPTS", retryAfter: 900 }`
+**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }` + Set-Cookie refreshToken (httpOnly, SameSite=Strict, Path=/api/v1/auth, Max-Age=30d)
+**Response 422**: `{ error: { code: "VALIDATION_ERROR", message, details } }`
+**Response 403**: `{ error: { code: "AUTH_ACCOUNT_LOCKED", retryAfter: 900 } }` (5 falhas consecutivas)
+**Response 429**: `{ error: { code: "AUTH_RATE_LIMITED", retryAfter } }` (limite de volume por IP, 5/15min)
+**Response 403**: `{ error: { code: "AUTH_ACCOUNT_SUSPENDED" } }` (isActive=false / deletedAt set)
+**Response 401**: `{ error: { code: "AUTH_EMAIL_NOT_VERIFIED" } }` (emailVerified null)
+**Response 401**: `{ error: { code: "AUTH_INVALID_CREDENTIALS" } }` (anti-enumeração — email inexistente retorna o mesmo 401)
 
 ### OAuth Google/Facebook e Magic Link (via Auth.js v5 — ADR-010)
 **Descricao**: Os fluxos OAuth (Google/Facebook) e magic link sao delegados ao Auth.js v5

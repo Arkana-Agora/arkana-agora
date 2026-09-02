@@ -36,7 +36,7 @@ https://{dominio}/api/v1/{recurso}
 
 ## Autenticação
 
-O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1).
+O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1). **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6) e `POST /api/v1/auth/login` (T7) com `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion), `src/lib/rate-limit.ts` (lockout de conta + volume por IP), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`).
 
 ### Fluxo
 
@@ -78,6 +78,12 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
   }
 }
 ```
+
+> **Nota (auth endpoints):** os endpoints de auth implementados (`POST /api/v1/auth/register`,
+> `POST /api/v1/auth/login`) retornam o body **plano (flat)** — `{ user, message }` e
+> `{ accessToken, user }` respectivamente — **sem** wrapper `data`. Este é o contrato canônico
+> dos endpoints de auth (ver `docs/04-api/authentication.md`). O envelope `data` aplica-se aos
+> demais endpoints REST.
 
 ### SSE (Server-Sent Events — streaming de IA)
 
@@ -223,8 +229,13 @@ HTTP 429 Too Many Requests
 
 | Domínio | Código | Descrição |
 |---------|--------|-----------|
-| Auth | `AUTH_INVALID_CREDENTIALS` | Credenciais inválidas |
-| Auth | `AUTH_TOKEN_EXPIRED` | Token expirado |
+| Auth | `AUTH_INVALID_CREDENTIALS` | Credenciais inválidas (anti-enumeração) |
+| Auth | `AUTH_EMAIL_NOT_VERIFIED` | E-mail não verificado |
+| Auth | `AUTH_TOKEN_INVALID` | Token inválido ou expirado |
+| Auth | `AUTH_TOKEN_REVOKED` | Token revogado (tokenVersion/flags) |
+| Auth | `AUTH_ACCOUNT_LOCKED` | Conta bloqueada (5 falhas consecutivas; retryAfter 900) |
+| Auth | `AUTH_RATE_LIMITED` | Limite de volume por IP (5/15min) |
+| Auth | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa |
 | Auth | `AUTH_EMAIL_ALREADY_EXISTS` | E-mail já cadastrado |
 | Validação | `VALIDATION_ERROR` | Erro nos dados de entrada |
 | Validação | `INVALID_FORMAT` | Formato inválido para um campo |

@@ -34,6 +34,11 @@ const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 
 ### JWT (JSON Web Tokens) — fluxo híbrido (ADR-009)
 
+> **Status:** a emissão/verificação de tokens está **implementada** em
+> `src/services/token-service.ts` (`signAccessToken`, `verifyAccessToken`,
+> `createRefreshSession`, `rotateRefresh`, `bumpTokenVersion`). A rota de refresh
+> (`POST /api/v1/auth/refresh`) ainda não está exposta como endpoint.
+
 | Parâmetro | Access Token | Refresh Token |
 |---|---|---|
 | Algoritmo | RS256 | Opaco (gerado via `randomBytes`); apenas o hash SHA-256 é persistido |
@@ -43,7 +48,7 @@ const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 | Rotação | Não | Sim (a cada uso, o anterior é invalidado, mantendo o `familyId`) |
 
 ```typescript
-// Payload do access token
+// Payload do access token (implementado em src/services/token-service.ts)
 interface JWTPayload {
   sub: string;          // userId
   role: UserRole;
@@ -51,9 +56,10 @@ interface JWTPayload {
   tokenVersion: number; // bump em mudança de role/plan, suspensão ou logout-all
   iat: number;          // issued at
   exp: number;          // expiration
-  jti: string;          // unique token ID
 }
 // Permissões NÃO vão no token: derivadas server-side a partir do role.
+// `verifyAccessToken` é fail-closed: valida tokenVersion contra Redis (cache) com fallback
+// DB; requisições ADMIN re-checam isActive/deletedAt no banco.
 ```
 
 ### Refresh Token Rotation
@@ -71,14 +77,23 @@ interface JWTPayload {
 
 ### Rate Limiting
 
+> **Status:** o rate limiting de login está **implementado** em `src/lib/rate-limit.ts`
+> (em memória, por instância). O restante da tabela abaixo é o **estado-alvo** (planejado).
+
 | Endpoint | Limite | Janela | Usuários Autenticados |
 |---|---|---|---|
-| `POST /api/v1/auth/login` | 5 req | 15 min | Não se aplica |
+| `POST /api/v1/auth/login` (lockout de conta) | 5 falhas consecutivas | 15 min | Não se aplica |
+| `POST /api/v1/auth/login` (volume por IP) | 5 req | 15 min | Não se aplica |
 | `POST /api/v1/auth/register` | 3 req | 15 min | Não se aplica |
 | `POST /api/v1/auth/forgot-password` | 3 req | 1 hora | Não se aplica |
 | `GET /api/v1/*` | 100 req | 1 min | 300 req / 1 min |
 | `POST /api/v1/*` | 50 req | 1 min | 150 req / 1 min |
 | `POST /api/v1/readings` | 3/dia | dia | 10/dia |
+
+**Implementado (login):**
+- **Lockout de conta**: 5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900` (15 min). Resetado em login bem-sucedido.
+- **Limite de volume por IP**: 5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`.
+- `resetRateLimiter()` limpa o store (usado em testes).
 
 ### CORS (Cross-Origin Resource Sharing)
 

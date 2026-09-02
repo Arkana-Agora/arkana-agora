@@ -355,4 +355,4 @@ GET /api/v1/users/search?q=maria&page=1&limit=20
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 400 | `VALIDATION_ERROR` | Query muito curta |
-| 401 | `AUTH_TOKEN_EXPIRED` | Token expirado (se autenticado) |
+| 401 | `AUTH_TOKEN_INVALID` | Token inválido ou expirado (se autenticado) |

@@ -11,18 +11,18 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 1 | Instalar e configurar Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) com adapter Prisma mínimo | pending | 2 | - |
-| 2 | Configurar Google OAuth no Google Cloud Console e obter credentials | pending | 1 | - |
-| 3 | Configurar provedor de email (Resend) com template transacional | pending | 2 | - |
-| 4 | Criar schema Prisma para User, Session, VerificationToken | pending | 2 | 1 |
-| 5 | Executar migracao inicial do banco de dados | pending | 0.5 | 4 |
+| 1 | Instalar e configurar Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) com adapter Prisma mínimo | done | 2 | - |
+| 2 | Configurar Google OAuth no Google Cloud Console e obter credentials | done | 1 | - |
+| 3 | Configurar provedor de email (Resend) com template transacional | done | 2 | - |
+| 4 | Criar schema Prisma para User, Session, VerificationToken | done | 2 | 1 |
+| 5 | Executar migracao inicial do banco de dados | done | 0.5 | 4 |
 
 ### Backend - API Routes
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 6 | Implementar POST /api/v1/auth/register com validacao Zod | pending | 3 | 4, 5 |
-| 7 | Implementar POST /api/v1/auth/login com hashing bcrypt | pending | 3 | 4, 5 |
+| 6 | Implementar POST /api/v1/auth/register com validacao Zod | done | 3 | 4, 5 |
+| 7 | Implementar POST /api/v1/auth/login com hashing bcrypt | done | 3 | 4, 5 |
 | 8 | Configurar Google/Facebook OAuth via Auth.js (/api/auth/*, adapter mínimo) + emissao de tokens custom no callback | pending | 3 | 1, 2 |
 | 9 | Implementar POST /api/v1/auth/magic-link (geracao e envio) | pending | 2 | 3, 4 |
 | 10 | Implementar POST /api/v1/auth/magic-link/verify (single-use, 15 min) | pending | 2 | 9 |
@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | 25 | Implementar AuthStore no Zustand com persistencia | pending | 3 | 7, 8 |
 | 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
-| 27 | Implementar rate limiting com memoria em servidor | pending | 2 | 7 |
+| 27 | Implementar rate limiting com memoria em servidor | done | 2 | 7 |
 | 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |
 | 29 | Criar testes de integracao para todos os endpoints | pending | 3 | 6-17 |
 
