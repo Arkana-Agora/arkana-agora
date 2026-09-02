@@ -8,7 +8,9 @@
 
 O módulo de autenticação do **Arkana Agora** é responsável por gerenciar o ciclo de vida do usuário, desde o login inicial até o encerramento da conta. A camada de login do MVP é o **Auth.js v5** (`next-auth@5.0.0-beta.32` pinado — ADR-010, que supersede a cláusula "NextAuth.js v4 + adapter Prisma" do ADR-009) com **adapter Prisma mínimo** e estratégia de sessão **JWT**: **Google OAuth** e **magic link** são os fluxos do MVP, e a sessão real é o **cookie JWT do Auth.js** exposto em `/api/auth/*` (handler em `src/app/api/auth/[...nextauth]`). A **Custom JWT Layer** (access RS256 de 15 min + refresh rotativo de 30 dias, ADR-009 Gate B) é o estado-alvo da **Sprint 1**, com ponto de anexo nos callbacks `jwt`/`session` de `src/auth/auth.config.ts`. E-mail/senha (credentials), Facebook OAuth e as rotas `/api/v1/auth/*` (incluindo o rate limit de magic link) também são **Sprint 1**.
 
-O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth/callback/email`): token **single-use** com validade de **15 minutos** via model `VerificationToken` (`type = "MAGIC_LINK"`, deletado na redenção); em dev, sem SMTP, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console em vez de enviar. O vínculo OAuth usa `User.provider`/`providerId` (`@@unique([provider, providerId])`, normalização H-2) — sem model `Account` no MVP (provedor único por usuário). A recuperação de senha e a exclusão completa da conta seguem o design de `docs/04-api/authentication.md` e `.specs/001-auth/design.md` (Sprint 1), em conformidade com a LGPD (soft delete com janela de 30 dias).
+O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth/callback/email`): token **single-use** com validade de **15 minutos** via model `VerificationToken` (`type = "MAGIC_LINK"`, deletado na redenção); em dev, sem SMTP, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console em vez de enviar.
+
+**Dois fluxos de e-mail (não conflitantes):** (1) o magic link do MVP usa o `EmailProvider` do Auth.js via **nodemailer/SMTP** (`src/auth/auth.config.ts`, vars `SMTP_*`/`EMAIL_FROM`); (2) os e-mails transacionais das rotas REST `/api/v1/auth/*` (verificação de e-mail, reset de senha, magic link) usam o **Resend** via `src/lib/email/email.ts` (helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`, implementado no T3), com guard de dev `AUTH_EMAIL_SKIP_SEND=true` (`NODE_ENV=development` obrigatório). O vínculo OAuth usa `User.provider`/`providerId` (`@@unique([provider, providerId])`, normalização H-2) — sem model `Account` no MVP (provedor único por usuário). A recuperação de senha e a exclusão completa da conta seguem o design de `docs/04-api/authentication.md` e `.specs/001-auth/design.md` (Sprint 1), em conformidade com a LGPD (soft delete com janela de 30 dias).
 
 ---
 
@@ -102,7 +104,7 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 | `zustand` | Biblioteca | Store de auth do frontend (Sprint 1; **instalado no F1/T1**) |
 | `ioredis` + `@types/ioredis` | Biblioteca | Redis: validação de `tokenVersion` + rate limiting (Sprint 1; **instalado no F1/T1**) |
 | `axios` | Biblioteca | Interceptor de API com refresh token (Sprint 1; **instalado no F1/T1**) |
-| `resend` | Biblioteca | Provedor de e-mail transacional da issue #3 (Sprint 1; **instalado no F1/T1**) |
+| `resend` | Biblioteca | Provedor de e-mail transacional (issue #3): `src/lib/email/email.ts` com helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail` (**implementado no T3**) — consumido pelas rotas REST `/api/v1/auth/*` da Sprint 1 |
 | `zod` | Biblioteca | Validação de inputs das rotas `/api/v1/auth/*` (Sprint 1) |
 
 ---

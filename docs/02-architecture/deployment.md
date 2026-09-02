@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-13
+> Versão: 1.0 | Última atualização: 2026-09-01
 
 ---
 
@@ -122,6 +122,8 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
+# Resend (e-mails transacionais — src/lib/email/email.ts); em dev use AUTH_EMAIL_SKIP_SEND=true para logar no console
+RESEND_API_KEY=
 
 # IA
 AI_PRIMARY_API_KEY=dev-ai-key
@@ -609,3 +611,4 @@ railway up --rollback
 - **2026-08-12 (F1 — Banco de dados + Docker):** dev DB SQLite → Docker Postgres 16 — §1 env table, §2.1 skeleton status, §2.2 stack diagram, §2.3 dev commands (`db push` → `docker compose up -d postgres` + `bunx prisma migrate dev`), §2.4 `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana`. §5.1 Dockerfile aligned to the real file (named stages deps/builder/runner; `groupadd`/`useradd` because oven/bun:1 is Debian-based; `bun install --frozen-lockfile`; standalone prerequisite note on `next.config.ts`). §5.2 docker-compose replaced with the committed file (postgres/redis/migrate/web; db `arkana`; no `version:` key; no ws/caddy — deferred to Sprint 1 chat).
 - **2026-08-24:** §5.1 standalone prerequisite note rewritten — `output: "standalone"` agora é condicional (`if (!process.env.VERCEL)`). Primeiro deploy na Vercel falhava com `ENOENT .next/next-server.js.nft.json` em `onBuildComplete` (Next 16.3 + adapter + standalone, upstream #96646). Docker/CI preservam o standalone.
 - **2026-08-24 (F4 sync):** §2.3 Logger note atualizada — `src/lib/logger.ts` (Pino) já está implementado; a health route loga via `logger.error({ err }, "[health] ...")` e o stopgap restante conhecido é o `console.log("[auth:magic-link] ...")` em `src/auth/auth.config.ts:88` (ver `docs/solutions/patterns/observability/logger-migration-stopgap.md`).
+- **2026-09-01 (T3 email):** §2.4 adicionada `RESEND_API_KEY` (provedor Resend transacional — `src/lib/email/email.ts`, helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`), alinhada ao `.env.example`; guard de dev `AUTH_EMAIL_SKIP_SEND=true` exige `NODE_ENV=development`. O magic link do Auth.js continua via nodemailer/SMTP (`SMTP_*`).

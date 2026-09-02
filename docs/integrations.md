@@ -11,7 +11,7 @@
 | Mercado Pago | External (payments) | Checkout (PIX/card/boleto), subscriptions (Arkana Plus), split payments, webhooks | Mercado Pago | `docs/04-api/marketplace.md`, ADR-008 |
 | Google OAuth | External (auth) | Social login via Auth.js v5 `/api/auth/*` (provider `google`) — **MVP, shipped** | Google | `docs/04-api/authentication.md` |
 | Facebook OAuth | External (auth) | Social login via Auth.js v5 `/api/auth/*` (provider `facebook`) — **Sprint 1** | Meta | `docs/04-api/authentication.md` |
-| SMTP / email | External | Magic-link login (15 min TTL), password reset (1h TTL) | Unspecified SMTP provider | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
+| SMTP / email | External | Magic-link login (15 min TTL) via Auth.js `EmailProvider` (nodemailer); password reset (1h TTL) + verification REST routes (Sprint 1) via Resend (`src/lib/email/email.ts`) | SMTP (unspecified) + Resend | `docs/04-api/authentication.md`, `docs/07-security/security.md`, `docs/06-features/authentication.md` |
 | Neon PostgreSQL | External (data) | Serverless production database (staging branch + prod) | Neon | `docs/02-architecture/deployment.md`, `docs/03-database/*` |
 | Upstash Redis | External (data) | Sessions, rate limiting, cache (AI interpretation 24h TTL), BullMQ queues, Pub/Sub event bus | Upstash | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | External (storage) | Card images (WebP, 3 variants), avatars, post images | Cloudflare | `docs/02-architecture/deployment.md` §4 |
@@ -30,6 +30,7 @@
 | Mercado Pago | `MP_ACCESS_TOKEN` (access token; sandbox `TEST-` prefix in staging) | Env var, provider console |
 | Google / Facebook OAuth | Client ID + Client Secret (Auth.js v5 — `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, ADR-010) | Env var |
 | SMTP | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Env var / secret manager |
+| Resend | `RESEND_API_KEY` | Env var / secret manager (`src/lib/email/email.ts`) |
 | Neon | `DATABASE_URL` (staging/prod: connection string with password) | Env var / secret manager |
 | Upstash | `REDIS_URL` (with token) | Env var |
 | Cloudflare R2 | R2 credentials (S3-compatible) | Env var / secret manager |
