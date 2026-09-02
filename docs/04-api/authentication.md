@@ -3,7 +3,8 @@
 > **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
-> **`POST /auth/register` (T6) que já está implementado** (ver seção abaixo).
+> **`POST /auth/register` (T6) e `POST /auth/login` (T7) que já estão implementados** (ver
+> seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -151,6 +152,11 @@ Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `regis
 
 Login com e-mail e senha.
 
+> **Status (implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/login/route.ts`. Usa `loginSchema` de `src/lib/validators/auth.ts`,
+> `signAccessToken`/`createRefreshSession` de `src/services/token-service.ts` e o rate limiter
+> em memória de `src/lib/rate-limit.ts`.
+
 ### Requisição
 
 ```http
@@ -167,39 +173,59 @@ Content-Type: application/json
 
 ### Validação
 
+Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
+
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `email` | string | Sim | Formato e-mail válido |
+| `email` | string | Sim | Formato e-mail válido (normalizado para minúsculas) |
 | `password` | string | Sim | Não vazio |
 
 ### Resposta — 200 OK
 
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ accessToken, user }`,
+> **sem** wrapper `data`. Este é o formato canônico do login implementado; o antigo
+> `{ data: { user, accessToken } }` desta seção foi **substituído**.
+
 ```json
 {
-  "data": {
-    "user": {
-      "id": "usr_a1b2c3d4",
-      "name": "Maria Silva",
-      "email": "maria@email.com",
-      "avatar": "/avatars/usr_a1b2c3d4.jpg",
-      "plan": "PLUS",
-      "createdAt": "2024-06-01T00:00:00Z"
-    },
-    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "usr_a1b2c3d4",
+    "name": "Maria Silva",
+    "email": "maria@email.com",
+    "displayName": "Maria Silva",
+    "role": "USER",
+    "plan": "FREE",
+    "avatar": null
   }
 }
 ```
 
-> **Nota**: o `refreshToken` nunca é retornado no body — é definido via `Set-Cookie` httpOnly (`path=/api/v1/auth`).
+> **Nota**: o `refreshToken` nunca é retornado no body — é definido via `Set-Cookie` httpOnly
+> (`Path=/api/v1/auth`, `HttpOnly`, `SameSite=Strict`, `Max-Age=2592000` = 30 dias).
+
+### Comportamento
+
+1. Valida o body com `loginSchema` (422 `VALIDATION_ERROR` em falha, com `details` por campo)
+2. Checa lockout de conta (5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900`)
+3. Checa limite de volume por IP (5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`)
+4. Busca usuário por e-mail normalizado (`findFirst`); e-mail inexistente → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
+5. Conta suspensa (`isActive=false` ou `deletedAt` set) → 403 `AUTH_ACCOUNT_SUSPENDED`
+6. E-mail não verificado (`emailVerified=null`) → 401 `AUTH_EMAIL_NOT_VERIFIED`
+7. Compara hash bcrypt (custo 12); falha → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
+8. Sucesso: `signAccessToken` (RS256, 15min, claims `role`/`plan`/`tokenVersion`) + `createRefreshSession` (Session 30d) + `Set-Cookie` refreshToken
+9. Reseta contador de falhas da conta
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Dados inválidos |
-| 401 | `AUTH_INVALID_CREDENTIALS` | E-mail ou senha incorretos |
-| 403 | `AUTH_ACCOUNT_LOCKED` | Conta bloqueada por tentativas |
-| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa pelo admin |
+| 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) |
+| 403 | `AUTH_ACCOUNT_LOCKED` | Conta bloqueada por 5 falhas consecutivas (body com `retryAfter: 900`) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de volume por IP atingido (5/15min; body com `retryAfter`) |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa pelo admin (`isActive=false`/`deletedAt`) |
+| 401 | `AUTH_EMAIL_NOT_VERIFIED` | E-mail não verificado |
+| 401 | `AUTH_INVALID_CREDENTIALS` | E-mail ou senha incorretos (anti-enumeração) |
 
 ---
 
@@ -332,6 +358,10 @@ Mesmo formato de `/auth/login` (access token no body + refresh token em cookie h
 
 Renova o access token usando o refresh token do cookie httpOnly.
 
+> **Status:** a lógica de rotação está **implementada** em `src/services/token-service.ts`
+> (`rotateRefresh` — rotação condicional anti-race + revogação de família em reuso), mas a
+> **rota HTTP ainda não está exposta** como endpoint.
+
 ### Requisição
 
 ```http
@@ -345,10 +375,8 @@ Cookie: refreshToken=<rt_token>
 
 ```json
 {
-  "data": {
-    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 900
-  }
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900
 }
 ```
 
@@ -506,8 +534,8 @@ Authorization: Bearer <accessToken>
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 401 | `AUTH_TOKEN_EXPIRED` | Token expirado |
-| 401 | `AUTH_INVALID_CREDENTIALS` | Token inválido |
+| 401 | `AUTH_TOKEN_INVALID` | Token inválido ou expirado |
+| 401 | `AUTH_TOKEN_REVOKED` | Token revogado (tokenVersion/flags) |
 
 ---
 
@@ -517,13 +545,16 @@ Referência completa de erros do módulo de autenticação:
 
 | Código | HTTP | Descrição | Ação do cliente |
 |--------|------|-----------|-----------------|
-| `AUTH_INVALID_CREDENTIALS` | 401 | Credenciais incorretas | Reenviar credenciais |
-| `AUTH_TOKEN_EXPIRED` | 401 | Token expirado | Usar refresh token |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Credenciais incorretas (anti-enumeração) | Reenviar credenciais |
+| `AUTH_EMAIL_NOT_VERIFIED` | 401 | E-mail não verificado | Verificar e-mail |
+| `AUTH_TOKEN_INVALID` | 401 | Token inválido ou expirado (emitido por `verifyAccessToken`) | Usar refresh token |
+| `AUTH_TOKEN_REVOKED` | 401 | Token revogado (tokenVersion divergente / flags) | Refazer login |
 | `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token inválido | Refazer login |
 | `AUTH_REFRESH_TOKEN_EXPIRED` | 401 | Refresh token expirado | Refazer login |
-| `AUTH_REFRESH_TOKEN_REVOKED` | 401 | Refresh token revogado | Refazer login |
+| `AUTH_REFRESH_TOKEN_REVOKED` | 401 | Refresh token revogado (reuso revoga família) | Refazer login |
 | `AUTH_EMAIL_ALREADY_EXISTS` | 409 | E-mail já cadastrado | Oferecer login |
-| `AUTH_ACCOUNT_LOCKED` | 403 | Conta bloqueada | Aguardar ou contato suporte |
+| `AUTH_ACCOUNT_LOCKED` | 403 | Conta bloqueada (5 falhas consecutivas; `retryAfter: 900`) | Aguardar ou contato suporte |
+| `AUTH_RATE_LIMITED` | 429 | Limite de volume por IP atingido (5/15min) | Aguardar `retryAfter` |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Conta suspensa | Contato suporte |
 | `AUTH_SOCIAL_TOKEN_INVALID` | 401 | Token social inválido | Reautenticar com provedor |
 | `AUTH_SOCIAL_ACCOUNT_CONFLICT` | 409 | Conflito de conta social | Login com credenciais + vincular |

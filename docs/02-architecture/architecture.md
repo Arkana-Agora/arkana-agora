@@ -1,6 +1,6 @@
 # Arquitetura do Sistema — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.0 | Última atualização: 2026-09-02
 
 ---
 
@@ -166,7 +166,7 @@ export default async function ReadingPage({ params }: { params: { id: string } }
 - **API Routes** do Next.js como controladores HTTP
 - **Zod** para validação de entrada/saída
 - **SSE** para streaming de interpretações IA
-- **Auth.js v5** (`next-auth@5.0.0-beta.32`, ADR-010) como camada de login do MVP (Google OAuth + magic link, JWT strategy) + **Custom JWT Layer** (access RS256 / refresh rotativo) como sessão autenticada da Sprint 1 (ADR-009 Gate B)
+- **Auth.js v5** (`next-auth@5.0.0-beta.32`, ADR-010) como camada de login do MVP (Google OAuth + magic link, JWT strategy) + **Custom JWT Layer** (access RS256 / refresh rotativo) como sessão autenticada da Sprint 1 (ADR-009 Gate B). **Implementado (Módulo 1 Auth):** `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion), `src/lib/rate-limit.ts` (lockout de conta + volume por IP), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`).
 
 ```typescript
 // Exemplo: API Route com validação (autenticação via access token custom — ADR-009)
@@ -410,7 +410,7 @@ export class InMemoryCache {
 
 - **Protocolo**: HTTP/2, JSON
 - **Uso**: Todas as operações CRUD padrão
-- **Autenticação**: Custom JWT Bearer (access RS256 15min; refresh rotativo 30d) — Sprint 1 (ADR-009 Gate B), emitido após login via Auth.js v5 (ADR-010)
+- **Autenticação**: Custom JWT Bearer (access RS256 15min; refresh rotativo 30d) — Sprint 1 (ADR-009 Gate B), emitido após login via Auth.js v5 (ADR-010). **Implementado (Módulo 1 Auth):** `src/services/token-service.ts` + `src/lib/rate-limit.ts`.
 - **Versionamento**: URI path `/api/v1/...` (futuro)
 
 ### 6.2 SSE (Server-Sent Events) — Leituras IA
@@ -499,10 +499,10 @@ packages/api-client/     # Cliente API compartilhado
 
 ## 8. Segurança
 
-- **Autenticação**: Auth.js v5 (camada de login do MVP: Google OAuth + magic link, JWT strategy — ADR-010) + Custom JWT Layer (access RS256 / refresh rotativo) — Sprint 1 (ADR-009 Gate B); Facebook e e-mail/senha (credentials) também são Sprint 1. Middleware custom `verifyToken()` valida `Authorization: Bearer` (substitui `getServerSession()`).
+- **Autenticação**: Auth.js v5 (camada de login do MVP: Google OAuth + magic link, JWT strategy — ADR-010) + Custom JWT Layer (access RS256 / refresh rotativo) — Sprint 1 (ADR-009 Gate B); Facebook e e-mail/senha (credentials) também são Sprint 1. **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6) e `POST /api/v1/auth/login` (T7) com `verifyAccessToken()` (fail-closed, Redis+DB) validando `Authorization: Bearer` (substitui `getServerSession()`).
 - **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN); permissões derivadas server-side do role (não embutidas no token)
 - **CSRF**: Double-submit token (`__Host-csrf-token` + header `X-Requested-With`) nos endpoints que usam cookies (`/api/v1/auth/*`, callbacks); endpoints apenas-Bearer não exigem. `/api/auth/*` mantém o CSRF nativo do Auth.js v5
-- **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js
+- **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js. **Implementado (login):** `src/lib/rate-limit.ts` — lockout de conta (5 falhas consecutivas → 15min, `AUTH_ACCOUNT_LOCKED` retryAfter 900) + volume por IP (5/15min → 429 `AUTH_RATE_LIMITED`)
 - **Input Validation**: Zod schemas em todas as rotas de API
 - **Content Security Policy**: Headers de segurança configurados no `next.config.ts`
 - **Sanitização**: DOMPurify para conteúdo rich text de postagens
