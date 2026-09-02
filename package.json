@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "dev:ws": "echo \"Socket.io mini-service (port 3003) — not scaffolded yet\"",
     "dev:all": "echo \"Run full local stack (Next.js + Socket.io + Caddy) — not scaffolded yet\"",
