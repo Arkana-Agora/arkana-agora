@@ -24,12 +24,12 @@
 | 6 | Implementar POST /api/v1/auth/register com validacao Zod | done | 3 | 4, 5 |
 | 7 | Implementar POST /api/v1/auth/login com hashing bcrypt | done | 3 | 4, 5 |
 | 8 | Configurar Google/Facebook OAuth via Auth.js (/api/auth/*, adapter mínimo) + emissao de tokens custom no callback | pending | 3 | 1, 2 |
-| 9 | Implementar POST /api/v1/auth/magic-link (geracao e envio) | pending | 2 | 3, 4 |
+| 9 | Implementar POST /api/v1/auth/magic-link (geracao e envio) | done | 2 | 3, 4 |
 | 10 | Implementar POST /api/v1/auth/magic-link/verify (single-use, 15 min) | pending | 2 | 9 |
 | 11 | Implementar POST /api/v1/auth/forgot-password | pending | 2 | 3, 4 |
 | 12 | Implementar POST /api/v1/auth/reset-password | pending | 2 | 11 |
-| 13 | Implementar POST /api/v1/auth/refresh (renovacao com rotacao + deteccao de reuso por familia) | pending | 3 | 7 |
-| 14 | Implementar POST /api/v1/auth/logout (revogacao de sessao) | pending | 1 | 13 |
+| 13 | Implementar POST /api/v1/auth/refresh (renovacao com rotacao + deteccao de reuso por familia) | done | 3 | 7 |
+| 14 | Implementar POST /api/v1/auth/logout (revogacao de sessao) | done | 1 | 13 |
 | 15 | Implementar DELETE /api/v1/auth/account (soft delete LGPD com confirmacao digitada) | pending | 2 | 4 |
 | 16 | Implementar job agendado de hard delete/anonymizacao apos 30 dias (RF-AUTH-008) | pending | 3 | 15 |
 | 17 | Implementar endpoint de restauracao de conta dentro da janela de carencia LGPD | pending | 1.5 | 15 |

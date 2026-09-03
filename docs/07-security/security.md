@@ -96,22 +96,26 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 
 ### Rate Limiting
 
-> **Status:** o rate limiting de login está **implementado** em `src/lib/rate-limit.ts`
+> **Status:** o rate limiting de login e magic link está **implementado** em `src/lib/rate-limit.ts`
 > (em memória, por instância). O restante da tabela abaixo é o **estado-alvo** (planejado).
 
 | Endpoint | Limite | Janela | Usuários Autenticados |
 |---|---|---|---|
 | `POST /api/v1/auth/login` (lockout de conta) | 5 falhas consecutivas | 15 min | Não se aplica |
 | `POST /api/v1/auth/login` (volume por IP) | 5 req | 15 min | Não se aplica |
+| `POST /api/v1/auth/magic-link` (por email) | 3 req | 1 hora | Não se aplica |
+| `POST /api/v1/auth/magic-link` (por IP) | 20 req | 1 hora | Não se aplica |
 | `POST /api/v1/auth/register` | 3 req | 15 min | Não se aplica |
 | `POST /api/v1/auth/forgot-password` | 3 req | 1 hora | Não se aplica |
 | `GET /api/v1/*` | 100 req | 1 min | 300 req / 1 min |
 | `POST /api/v1/*` | 50 req | 1 min | 150 req / 1 min |
 | `POST /api/v1/readings` | 3/dia | dia | 10/dia |
 
-**Implementado (login):**
+**Implementado (login + magic-link):**
 - **Lockout de conta**: 5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900` (15 min). Resetado em login bem-sucedido.
 - **Limite de volume por IP**: 5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`.
+- **Magic link por email**: 3/hora por email → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkLimited`/`recordMagicLinkRequest`).
+- **Magic link por IP**: 20/hora por IP → 429 `AUTH_MAGIC_LINK_IP_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkIpLimited`/`recordMagicLinkIpAttempt`).
 - `resetRateLimiter()` limpa o store (usado em testes).
 
 ### CORS (Cross-Origin Resource Sharing)
