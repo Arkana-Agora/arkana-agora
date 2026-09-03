@@ -34,7 +34,7 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 
 ### Autenticação e Perfil
 - [x] 1. Tela de cadastro/login com Google OAuth e email (magic link) — **implementado no Sprint 0 (F2A, ADR-010)**
-- [ ] 1a. Custom JWT Layer (Sprint 1): access token RS256 de 15 min + refresh token rotativo de 30 dias + `tokenVersion`/revogação server-side (model `Session`, ADR-009 Gate C; encerra a janela de não-revogação do ADR-010) — **parcial: `src/services/token-service.ts` + `src/lib/rate-limit.ts` + `src/lib/redis.ts` implementados; register (T6), login (T7) e refresh (T13) expostos; rota logout pendente**
+- [ ] 1a. Custom JWT Layer (Sprint 1): access token RS256 de 15 min + refresh token rotativo de 30 dias + `tokenVersion`/revogação server-side (model `Session`, ADR-009 Gate C; encerra a janela de não-revogação do ADR-010) — **parcial: `src/services/token-service.ts` + `src/lib/rate-limit.ts` + `src/lib/redis.ts` implementados; register (T6), login (T7), refresh (T13) e logout (T14) expostos**
 - [ ] 1b. Rate limit do magic link (RF-AUTH-003: 3 links/hora) na rota `/api/v1/auth/magic-link`
 - [x] 1c. Credentials e-mail/senha — Sprint 1 (ADR-010 §10) — **parcial: `POST /api/v1/auth/login` implementado (T7)**
 - [ ] 1d. Facebook OAuth — Sprint 1 (ADR-010 §10)
