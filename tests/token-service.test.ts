@@ -16,8 +16,10 @@ const prismaMock = vi.hoisted(() => ({
   session: {
     create: vi.fn(),
     findUnique: vi.fn(),
+    update: vi.fn(),
     updateMany: vi.fn(),
   },
+  $transaction: vi.fn(),
 }))
 
 vi.mock("@/lib/redis", () => ({ redis: redisMock }))
@@ -458,6 +460,102 @@ describe("token service T7a - bumpTokenVersion", () => {
       "1",
       "EX",
       expect.any(Number),
+    )
+  })
+})
+
+describe("token service T7a - revokeRefreshSession", () => {
+  it("revoga a Session pelo hash do token quando pertence ao usuario autenticado", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: "sess_1",
+      userId: "usr_1",
+      revokedAt: null,
+    })
+    prismaMock.session.update.mockResolvedValue({ id: "sess_1" })
+    const { revokeRefreshSession } = await import("@/services/token-service")
+
+    await revokeRefreshSession("raw-refresh", "usr_1")
+
+    expect(prismaMock.session.findUnique).toHaveBeenCalledWith({
+      where: {
+        tokenHash: createHash("sha256").update("raw-refresh").digest("hex"),
+      },
+    })
+    expect(prismaMock.session.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "sess_1" },
+        data: expect.objectContaining({ revokedAt: expect.anything() }),
+      }),
+    )
+  })
+
+  it("nao revoga sessao de outro usuario (idempotente)", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: "sess_1",
+      userId: "usr_OTHER",
+      revokedAt: null,
+    })
+    const { revokeRefreshSession } = await import("@/services/token-service")
+
+    await revokeRefreshSession("raw-refresh", "usr_1")
+
+    expect(prismaMock.session.update).not.toHaveBeenCalled()
+  })
+
+  it("nao atualiza quando o token nao existe (idempotente)", async () => {
+    prismaMock.session.findUnique.mockResolvedValue(null)
+    const { revokeRefreshSession } = await import("@/services/token-service")
+
+    await revokeRefreshSession("unknown", "usr_1")
+
+    expect(prismaMock.session.update).not.toHaveBeenCalled()
+  })
+
+  it("nao atualiza quando a sessao ja estava revogada (idempotente)", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: "sess_1",
+      userId: "usr_1",
+      revokedAt: new Date(),
+    })
+    const { revokeRefreshSession } = await import("@/services/token-service")
+
+    await revokeRefreshSession("already-revoked", "usr_1")
+
+    expect(prismaMock.session.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("token service T7a - revokeAllSessions", () => {
+  it("revoga TODAS as sessoes + bump tokenVersion na MESMA transacao (contrato architecture-review)", async () => {
+    prismaMock.session.updateMany.mockResolvedValue({ count: 3 })
+    prismaMock.user.update.mockResolvedValue({
+      id: "usr_1",
+      tokenVersion: 5,
+    })
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "usr_1",
+      tokenVersion: 5,
+    })
+    prismaMock.$transaction.mockImplementation(
+      async (cb: (tx: unknown) => unknown) =>
+        cb({ session: prismaMock.session, user: prismaMock.user }),
+    )
+    const { revokeAllSessions } = await import("@/services/token-service")
+
+    await revokeAllSessions("usr_1")
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "usr_1" },
+        data: expect.objectContaining({ revokedAt: expect.anything() }),
+      }),
+    )
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "usr_1" },
+        data: { tokenVersion: { increment: 1 } },
+      }),
     )
   })
 })

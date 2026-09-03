@@ -35,3 +35,9 @@ export const loginSchema = z.object({
 })
 
 export type LoginInput = z.infer<typeof loginSchema>
+
+export const logoutSchema = z.object({
+  allDevices: z.boolean().optional(),
+})
+
+export type LogoutInput = z.infer<typeof logoutSchema>

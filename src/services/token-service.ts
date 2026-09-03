@@ -375,3 +375,61 @@ export async function bumpTokenVersion(userId: string): Promise<void> {
 
   logger.info(`[auth:token] tokenVersion bumped p/ ${userId}`)
 }
+
+export async function revokeRefreshSession(
+  rawToken: string,
+  expectedUserId: string,
+): Promise<void> {
+  const tokenHash = sha256(rawToken)
+  const session = await prisma.session.findUnique({ where: { tokenHash } })
+
+  if (!session || session.revokedAt !== null) {
+    return
+  }
+
+  if (session.userId !== expectedUserId) {
+    logger.warn(
+      "[auth:logout] tentativa de revogar sessao de outro usuario — ignorada",
+    )
+    return
+  }
+
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { revokedAt: new Date() },
+  })
+}
+
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.session.updateMany({
+      where: { userId },
+      data: { revokedAt: new Date() },
+    })
+    await tx.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    })
+  })
+
+  if (redis) {
+    try {
+      const fresh = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tokenVersion: true },
+      })
+      if (fresh) {
+        await redis.set(
+          tokenVersionCacheKey(userId),
+          String(fresh.tokenVersion),
+          "EX",
+          ACCESS_TOKEN_TTL_SECONDS,
+        )
+      }
+    } catch {
+      logger.warn("[auth:logout] falha ao espelhar tokenVersion no Redis")
+    }
+  }
+
+  logger.info(`[auth:logout] todas as sessoes revogadas p/ ${userId}`)
+}
