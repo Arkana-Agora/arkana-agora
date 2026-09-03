@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | 25 | Implementar AuthStore no Zustand com persistencia | pending | 3 | 7, 8 |
 | 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
-| 27 | Implementar rate limiting com memoria em servidor | done | 2 | 7 |
+| 27 | Implementar rate limiting com memoria em servidor | pending (memoria parcial via T7; Redis/multi-instancia pendente - F7/T27) | 2 | 7 |
 | 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |
 | 29 | Criar testes de integracao para todos os endpoints | pending | 3 | 6-17 |
 

@@ -3,8 +3,8 @@
 > **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
-> **`POST /auth/register` (T6), `POST /auth/login` (T7) e `POST /auth/refresh` (T13) que já
-> estão implementados** (ver seções abaixo).
+> **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/refresh` (T13) e
+> `POST /auth/logout` (T14) que já estão implementados** (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -58,8 +58,8 @@
 ### Estratégia de senhas
 
 - **Hashing**: bcrypt com salt rounds = 12
-- **Requisitos mínimos**: 8 caracteres, 1 maiúscula, 1 minúscula, 1 número
-- **Bloqueio**: 5 tentativas falhas → lockout de 15 minutos
+- **Requisitos mínimos**: 8 caracteres, 1 maiúscula, 1 minúscula, 1 número, 1 caractere especial
+- **Bloqueio**: 5 tentativas falhas (credenc. comuns) / 20 (ADMIN) → lockout de 15 minutos
 
 ---
 
@@ -196,7 +196,8 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
     "displayName": "Maria Silva",
     "role": "USER",
     "plan": "FREE",
-    "avatar": null
+    "avatar": null,
+    "emailVerified": null
   }
 }
 ```
@@ -290,8 +291,7 @@ Content-Type: application/json
 
 ```json
 {
-  "email": "maria@email.com",
-  "redirectUrl": "/dashboard"
+  "email": "maria@email.com"
 }
 ```
 
@@ -300,15 +300,18 @@ Content-Type: application/json
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
 | `email` | string | Sim | Formato e-mail válido |
-| `redirectUrl` | string | Não | URL válida do app (padrão: `/dashboard`) |
+
+> **Nota (contrato canônico):** o magic link é **email-only** — o campo opcional `redirectUrl`
+> foi removido deste contrato (consistente com `T9`/`MagicLinkForm` `T21`, campo único email).
 
 ### Resposta — 200 OK
 
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com as rotas implementadas (register/login/refresh/logout).
+
 ```json
 {
-  "data": {
-    "message": "Link mágico enviado para maria@email.com. Válido por 15 minutos."
-  }
+  "message": "Link mágico enviado para maria@email.com. Válido por 15 minutos."
 }
 ```
 
@@ -399,22 +402,72 @@ Cookie: refreshToken=<rt_token>
 
 Revoga tokens e encerra sessão.
 
+> **Status (T14 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/logout/route.ts`. Lê o access token do header `Authorization: Bearer`,
+> verifica via `verifyAccessToken` (de `src/services/token-service.ts`, S10) e delega a
+> revogação de sessão aos helpers compartilhados `revokeRefreshSession`/`revokeAllSessions`
+> do mesmo `token-service.ts` — **nunca duplica** lógica de rotação/revogação.
+
 ### Requisição
 
 ```http
 POST /api/v1/auth/logout
 Authorization: Bearer <accessToken>
+Cookie: refreshToken=<rt_token>
 ```
+
+> **Nota:** o access token é obrigatório (header `Authorization: Bearer`). O refresh token é
+> lido **somente** do cookie httpOnly (`path=/api/v1/auth`) — nunca em body ou query string.
+
+### Body (opcional)
+
+```json
+{
+  "allDevices": true
+}
+```
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `allDevices` | boolean | Não | `true` revoga **todas** as sessões do usuário; `false`/ausente revoga apenas a sessão do refresh cookie |
 
 ### Resposta — 200 OK
 
 ```json
 {
-  "data": {
-    "message": "Sessão encerrada com sucesso."
-  }
+  "message": "Sessao encerrada com sucesso"
 }
 ```
+
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com login/register/refresh implementados. A resposta sempre
+> limpa o cookie de refresh via `Set-Cookie: refreshToken=; Path=/api/v1/auth; HttpOnly;
+> SameSite=Strict; Max-Age=0` e define `Cache-Control: no-store`.
+
+### Comportamento
+
+1. Lê o access token do header `Authorization: Bearer`; ausente → 401 `AUTH_TOKEN_INVALID`
+2. Verifica via `verifyAccessToken` (fail-closed, Redis+DB); mapeia `AuthTokenError`:
+   - `AUTH_ACCOUNT_SUSPENDED` → 403
+   - `AUTH_TOKEN_*` → 401
+   - código desconhecido → 500 `INTERNAL_ERROR` (não vaza o código)
+3. Lê o body opcional `{ allDevices }` (não-booleano/ausente → `false`)
+4. **Default (single device):** chama `revokeRefreshSession(rawToken)` com o refresh do cookie
+   (idempotente — sessão inexistente/já revogada não falha)
+5. **`allDevices=true`:** chama `revokeAllSessions(userId)` — revoga **todas** as `Session` do
+   usuário **pareado com bump de `tokenVersion`** (contrato de segurança architecture-review:
+   invalida todos os access tokens emitidos)
+6. Sempre limpa o cookie de refresh (`Max-Age=0`) e retorna `200 { message }`
+7. `Cache-Control: no-store`; erros incluem `meta.requestId` (C13); log estruturado não expõe tokens
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` | Access token ausente ou inválido |
+| 401 | `AUTH_TOKEN_REVOKED` | Access token revogado (tokenVersion/flags) |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa (`isActive=false`/`deletedAt`) |
+| 500 | `INTERNAL_ERROR` | Erro desconhecido (código `AuthTokenError` não vazado; inclui `meta.requestId`, C13) |
 
 ---
 
@@ -437,11 +490,12 @@ Content-Type: application/json
 
 ### Resposta — 200 OK
 
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com as rotas implementadas.
+
 ```json
 {
-  "data": {
-    "message": "Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha."
-  }
+  "message": "Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha."
 }
 ```
 
@@ -476,11 +530,12 @@ Content-Type: application/json
 
 ### Resposta — 200 OK
 
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com as rotas implementadas.
+
 ```json
 {
-  "data": {
-    "message": "Senha redefinida com sucesso."
-  }
+  "message": "Senha redefinida com sucesso."
 }
 ```
 
@@ -562,6 +617,10 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_SOCIAL_TOKEN_INVALID` | 401 | Token social inválido | Reautenticar com provedor |
 | `AUTH_SOCIAL_ACCOUNT_CONFLICT` | 409 | Conflito de conta social | Login com credenciais + vincular |
 | `AUTH_MAGIC_LINK_RATE_LIMIT` | 429 | Muitos magic links | Aguardar 1 hora |
+| `AUTH_MAGIC_TOKEN_INVALID` | 401 | Token de magic link inválido (já usado / single-use) | Solicitar novo link |
+| `AUTH_MAGIC_TOKEN_EXPIRED` | 410 | Token de magic link expirado (15 min) | Solicitar novo link |
+| `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (já usado) | Reenviar verificação |
+| `AUTH_EMAIL_VERIFY_EXPIRED` | 410 | Token de verificação de e-mail expirado (24 h) | Reenviar verificação |
 | `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido | Solicitar novo link |
 | `AUTH_UNDER_AGE` | 422 | Menor de 18 anos | Bloquear cadastro |
 

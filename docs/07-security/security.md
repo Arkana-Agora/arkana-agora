@@ -36,8 +36,10 @@ const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 
 > **Status:** a emissão/verificação de tokens está **implementada** em
 > `src/services/token-service.ts` (`signAccessToken`, `verifyAccessToken`,
-> `createRefreshSession`, `rotateRefresh`, `bumpTokenVersion`). A rota de refresh
-> (`POST /api/v1/auth/refresh`) está **exposta** em `src/app/api/v1/auth/refresh/route.ts` (T13).
+> `createRefreshSession`, `rotateRefresh`, `bumpTokenVersion`, `revokeRefreshSession`,
+> `revokeAllSessions`). As rotas de refresh (`POST /api/v1/auth/refresh`, T13) e logout
+> (`POST /api/v1/auth/logout`, T14) estão **expostas** em
+> `src/app/api/v1/auth/refresh/route.ts` e `src/app/api/v1/auth/logout/route.ts`.
 
 | Parâmetro | Access Token | Refresh Token |
 |---|---|---|
@@ -70,6 +72,23 @@ interface JWTPayload {
 4. O servidor gera um novo access token e rotaciona o refresh token (mesmo `familyId`)
 5. O novo refresh token é enviado em cookie
 6. Se um refresh token já rotacionado for reenviado (reuso), todos os tokens da família (`familyId`) são revogados (detecção de roubo)
+
+### Logout e revogação de sessão (T14 implementado)
+
+A rota `POST /api/v1/auth/logout` (`src/app/api/v1/auth/logout/route.ts`) delega a revogação
+aos helpers compartilhados de `src/services/token-service.ts` — **nunca duplica** lógica de
+rotação/revogação (S10):
+
+- **`revokeRefreshSession(rawToken)`** — revoga a `Session` cujo hash SHA-256 do token casa;
+  idempotente (sessão inexistente/já revogada → `revoked: false`, sem erro). Usado no logout
+  padrão (single device), lendo o refresh do cookie httpOnly.
+- **`revokeAllSessions(userId)`** — revoga **todas** as `Session` do usuário **pareado com bump
+  de `tokenVersion`** (contrato de segurança architecture-review). O bump invalida **todos** os
+  access tokens emitidos (validados fail-closed contra Redis/DB em `verifyAccessToken`). Usado
+  quando o body `{ allDevices: true }` é enviado.
+
+O logout sempre limpa o cookie de refresh (`Set-Cookie: Max-Age=0`) e retorna `200 { message }`
+flat (sem wrapper `data`), com `Cache-Control: no-store`.
 
 ---
 

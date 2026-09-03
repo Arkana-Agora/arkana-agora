@@ -23,10 +23,11 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
 - **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
+- **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
 - **Rotas de rate limit de magic link** — Sprint 1: `POST /api/v1/auth/magic-link` (429 `AUTH_MAGIC_LINK_RATE_LIMIT`, máx. 3/hora por e-mail)
-- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T13 implementado** (`POST /api/v1/auth/refresh`)
+- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
 - **Exclusão de conta (LGPD)** — Sprint 1: soft delete (`deletedAt`) com janela de restauração de 30 dias
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
@@ -150,7 +151,8 @@ Segunda rota da **Custom JWT Layer** (Fase 2) implementada em
   claims `role`/`plan`/`tokenVersion`), `verifyAccessToken` (fail-closed, Redis cache com
   fallback DB, admin recheck de `isActive`/`deletedAt`), `createRefreshSession` (Session 30d),
   `rotateRefresh` (rotação + revogação de família em reuso), `bumpTokenVersion` (incremento
-  atômico), `AuthTokenError`
+  atômico), `revokeRefreshSession` (revoga Session por hash; idempotente), `revokeAllSessions`
+  (revoga todas as Session + bump de `tokenVersion`), `AuthTokenError`
 - **`src/lib/rate-limit.ts`** — rate limiting em memória: lockout de conta (5 falhas
   consecutivas → 15min, `retryAfter`) e limite de volume por IP (5/15min → 429),
   `resetRateLimiter()`
@@ -194,6 +196,53 @@ expiração, invalidação, suspensão, sucesso com accessToken + Set-Cookie).
 
 ---
 
+## Logout (`POST /api/v1/auth/logout`) — T14 implementado
+
+Quarta rota da **Custom JWT Layer** (Fase 2) implementada em
+`src/app/api/v1/auth/logout/route.ts`.
+
+### Contrato do endpoint
+
+- **Header** `Authorization: Bearer <accessToken>` (obrigatório) — verificado via
+  `verifyAccessToken` de `src/services/token-service.ts`
+- **Cookie** `refreshToken` (httpOnly, `path=/api/v1/auth`) — lido para revogação single-device
+- **Body (opcional)** `{ allDevices?: boolean }` — `true` revoga todas as sessões do usuário
+- **200** → `{ message }` — **body plano (flat), sem wrapper `data`** (consistente com
+  login/register/refresh) + `Set-Cookie` limpando o refresh (`Max-Age=0`) + `Cache-Control: no-store`
+- **401** `AUTH_TOKEN_INVALID` / `AUTH_TOKEN_REVOKED` — access token ausente/inválido/revogado
+- **403** `AUTH_ACCOUNT_SUSPENDED` — conta suspensa (`isActive=false`/`deletedAt`)
+- **500** `INTERNAL_ERROR` — erro desconhecido (código `AuthTokenError` não vazado)
+- Todos os erros incluem `meta.requestId` (C13)
+
+### Comportamento
+
+1. Lê o access token do header `Authorization: Bearer`; ausente → 401 `AUTH_TOKEN_INVALID`
+2. Verifica via `verifyAccessToken`; mapeia `AuthTokenError` (403 suspensão / 401 `AUTH_TOKEN_*` /
+   500 código desconhecido)
+3. Lê o body opcional `{ allDevices }` (não-booleano/ausente → `false`)
+4. **Default:** chama `revokeRefreshSession(rawToken)` com o refresh do cookie (idempotente)
+5. **`allDevices=true`:** chama `revokeAllSessions(userId)` — revoga todas as `Session` +
+   **bump de `tokenVersion`** (contrato de segurança architecture-review: invalida todos os
+   access tokens emitidos)
+6. Sempre limpa o cookie de refresh (`Max-Age=0`) e retorna `200 { message }`
+7. Log estruturado não expõe tokens (C13)
+
+### Serviços de suporte (implementados)
+
+- **`src/services/token-service.ts`** — adiciona `revokeRefreshSession(rawToken)` (revoga a
+  `Session` pelo hash do token; idempotente) e `revokeAllSessions(userId)` (revoga todas as
+  `Session` + `bumpTokenVersion`). A rota **nunca duplica** lógica de rotação/revogação — delega
+  tudo ao serviço compartilhado (S10).
+
+### Testes
+
+`tests/logout.test.ts` — 9 testes vitest cobrindo o contrato do logout (revogação single-device,
+idempotência sem refresh cookie, `allDevices=true`, `allDevices` não-booleano, 401/403/500,
+não exposição de tokens). `tests/token-service.test.ts` — 4 testes adicionais para
+`revokeRefreshSession`/`revokeAllSessions`.
+
+---
+
 ## Versão
 
 | Feature | Versão |
@@ -205,9 +254,10 @@ expiração, invalidação, suspensão, sucesso com accessToken + Set-Cookie).
 | Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
 | Login e-mail/senha (`POST /api/v1/auth/login`) | Sprint 1 — **T7 implementado** |
 | Refresh de token (`POST /api/v1/auth/refresh`) | Sprint 1 — **T13 implementado** |
+| Logout (`POST /api/v1/auth/logout`) | Sprint 1 — **T14 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 |
-| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/refresh implementados)** |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/refresh/logout implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
 | Verificação de e-mail | Sprint 1 |
 
