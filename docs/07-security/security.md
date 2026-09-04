@@ -32,6 +32,10 @@ const hashedPassword = await bcrypt.hash(password, saltRounds);
 const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 ```
 
+> **Rotas que gravam senha (bcrypt custo 12 obrigatório):** `POST /api/v1/auth/register` (T6) e
+> `POST /api/v1/auth/reset-password` (T12) — ambas usam `BCRYPT_COST = 12` ao gravar
+> `passwordHash`. Nenhuma senha em texto puro, em logs ou em banco (CA-01).
+
 ### JWT (JSON Web Tokens) — fluxo híbrido (ADR-009)
 
 > **Status:** a emissão/verificação de tokens está **implementada** em
@@ -85,7 +89,9 @@ rotação/revogação (S10):
 - **`revokeAllSessions(userId)`** — revoga **todas** as `Session` do usuário **pareado com bump
   de `tokenVersion`** (contrato de segurança architecture-review). O bump invalida **todos** os
   access tokens emitidos (validados fail-closed contra Redis/DB em `verifyAccessToken`). Usado
-  quando o body `{ allDevices: true }` é enviado.
+  quando o body `{ allDevices: true }` é enviado no logout **e** no sucesso de
+  `POST /api/v1/auth/reset-password` (T12) — redefinir a senha derruba todas as sessões ativas
+  (incl. access tokens emitidos antes do reset).
 
 O logout sempre limpa o cookie de refresh (`Set-Cookie: Max-Age=0`) e retorna `200 { message }`
 flat (sem wrapper `data`), com `Cache-Control: no-store`.
@@ -119,6 +125,7 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 - **Magic link por IP**: 20/hora por IP → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkIpLimited`/`recordMagicLinkIpAttempt`; mesmo código do limite por email — não há `AUTH_MAGIC_LINK_IP_RATE_LIMIT`).
 - **Forgot-password por email**: 3/hora por email → 429 `AUTH_FORGOT_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isPasswordResetLimited`/`recordPasswordResetRequest`, env `MAX_PASSWORD_RESET_PER_EMAIL`). A contagem é registrada antes da verificação de existência do usuário (anti-spam).
 - **Audit de reset de senha** (design §7.6): pedidos de recuperação de senha são logados com **IP** (`x-forwarded-for`) e **user agent** em `[auth:forgot-password]` (`src/app/api/v1/auth/forgot-password/route.ts`).
+- **`POST /api/v1/auth/reset-password` (T12) NÃO tem rate limit** — decisão consciente; rate limiting (incl. Redis-based) é tarefa posterior (T27). Não confundir com o limite de **emissão** de tokens (forgot-password 3/h por email), que já existe.
 - `resetRateLimiter()` limpa o store (usado em testes).
 
 ### CORS (Cross-Origin Resource Sharing)

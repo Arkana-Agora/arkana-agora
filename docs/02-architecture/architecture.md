@@ -78,7 +78,7 @@ src/
 │   │   └── profile/
 │   ├── api/                # API Routes
 │   │   ├── auth/           # Auth.js v5 endpoints internos (callbacks, session, csrf) — ADR-010
-│   │   ├── v1/auth/        # Auth REST custom (ADR-009): register, login, magic-link, magic-link/verify, forgot-password, refresh, logout
+│   │   ├── v1/auth/        # Auth REST custom (ADR-009): register, login, magic-link, magic-link/verify, forgot-password, reset-password, refresh, logout
 │   │   ├── v1/readings/    # CRUD de leituras
 │   │   ├── v1/social/      # Feed, follows, posts
 │   │   ├── v1/marketplace/ # Produtos, pedidos
@@ -114,7 +114,7 @@ As rotas de API seguem o padrão RESTful:
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | `POST` | `/api/auth/...` | Endpoints internos Auth.js v5 (callbacks, session, csrf) — não renomeáveis |
-| `POST` | `/api/v1/auth/...` | Auth REST custom (ADR-009): register, login, magic-link, magic-link/verify, forgot-password, refresh, logout |
+| `POST` | `/api/v1/auth/...` | Auth REST custom (ADR-009): register, login, magic-link, magic-link/verify, forgot-password, reset-password, refresh, logout |
 | `GET` | `/api/v1/readings` | Listar leituras do usuário |
 | `POST` | `/api/v1/readings` | Criar nova leitura |
 | `GET` | `/api/v1/readings/[id]` | Buscar leitura específica |
@@ -166,7 +166,7 @@ export default async function ReadingPage({ params }: { params: { id: string } }
 - **API Routes** do Next.js como controladores HTTP
 - **Zod** para validação de entrada/saída
 - **SSE** para streaming de interpretações IA
-- **Auth.js v5** (`next-auth@5.0.0-beta.32`, ADR-010) como camada de login do MVP (Google OAuth + magic link, JWT strategy) + **Custom JWT Layer** (access RS256 / refresh rotativo) como sessão autenticada da Sprint 1 (ADR-009 Gate B). **Implementado (Módulo 1 Auth):** `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion, revokeRefreshSession, revokeAllSessions), `src/lib/rate-limit.ts` (lockout de conta + volume por IP + magic link 3/h por email + forgot-password 3/h por email), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`/`forgotPasswordSchema`), rotas `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14).
+- **Auth.js v5** (`next-auth@5.0.0-beta.32`, ADR-010) como camada de login do MVP (Google OAuth + magic link, JWT strategy) + **Custom JWT Layer** (access RS256 / refresh rotativo) como sessão autenticada da Sprint 1 (ADR-009 Gate B). **Implementado (Módulo 1 Auth):** `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion, revokeRefreshSession, revokeAllSessions), `src/lib/rate-limit.ts` (lockout de conta + volume por IP + magic link 3/h por email + forgot-password 3/h por email), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`/`magicLinkVerifySchema`/`forgotPasswordSchema`/`resetPasswordSchema`), rotas `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/reset-password` (T12), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14).
 
 ```typescript
 // Exemplo: API Route com validação (autenticação via access token custom — ADR-009)
@@ -499,10 +499,10 @@ packages/api-client/     # Cliente API compartilhado
 
 ## 8. Segurança
 
-- **Autenticação**: Auth.js v5 (camada de login do MVP: Google OAuth + magic link, JWT strategy — ADR-010) + Custom JWT Layer (access RS256 / refresh rotativo) — Sprint 1 (ADR-009 Gate B); Facebook e e-mail/senha (credentials) também são Sprint 1. **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14) com `verifyAccessToken()` (fail-closed, Redis+DB) validando `Authorization: Bearer` (substitui `getServerSession()`).
+- **Autenticação**: Auth.js v5 (camada de login do MVP: Google OAuth + magic link, JWT strategy — ADR-010) + Custom JWT Layer (access RS256 / refresh rotativo) — Sprint 1 (ADR-009 Gate B); Facebook e e-mail/senha (credentials) também são Sprint 1. **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/reset-password` (T12), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14) com `verifyAccessToken()` (fail-closed, Redis+DB) validando `Authorization: Bearer` (substitui `getServerSession()`).
 - **Autorização**: RBAC por roles (USER, PROFESSIONAL, ADMIN); permissões derivadas server-side do role (não embutidas no token)
 - **CSRF**: Double-submit token (`__Host-csrf-token` + header `X-Requested-With`) nos endpoints que usam cookies (`/api/v1/auth/*`, callbacks); endpoints apenas-Bearer não exigem. `/api/auth/*` mantém o CSRF nativo do Auth.js v5
-- **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js. **Implementado (login + magic-link + forgot-password):** `src/lib/rate-limit.ts` — lockout de conta (5 falhas consecutivas → 15min, `AUTH_ACCOUNT_LOCKED` retryAfter 900) + volume por IP (5/15min → 429 `AUTH_RATE_LIMITED`) + magic link 3/h por email (429 `AUTH_MAGIC_LINK_RATE_LIMIT`) + forgot-password 3/h por email (429 `AUTH_FORGOT_RATE_LIMIT`, env `MAX_PASSWORD_RESET_PER_EMAIL`)
+- **Rate Limiting**: Via API Gateway (Caddy) e middleware Next.js. **Implementado (login + magic-link + forgot-password):** `src/lib/rate-limit.ts` — lockout de conta (5 falhas consecutivas → 15min, `AUTH_ACCOUNT_LOCKED` retryAfter 900) + volume por IP (5/15min → 429 `AUTH_RATE_LIMITED`) + magic link 3/h por email (429 `AUTH_MAGIC_LINK_RATE_LIMIT`) + forgot-password 3/h por email (429 `AUTH_FORGOT_RATE_LIMIT`, env `MAX_PASSWORD_RESET_PER_EMAIL`). `POST /api/v1/auth/reset-password` (T12) **não tem rate limit** (decisão consciente; T27 posterior)
 - **Input Validation**: Zod schemas em todas as rotas de API
 - **Content Security Policy**: Headers de segurança configurados no `next.config.ts`
 - **Sanitização**: DOMPurify para conteúdo rich text de postagens
