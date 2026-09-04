@@ -15,7 +15,7 @@ Domínio: `api` — requisitos de API (rotas `/api/v1/auth/*` e `/api/auth/*`)
 - [ ] CHK-API-007 Os endpoints somente-Bearer vs somente-cookie estão corretamente rotulados (para aplicabilidade de CSRF)? [Coverage]
 
 ## Comportamento e estados
-- [ ] CHK-API-008 A anti-enumeração (resposta 200 idêntica para email existente/não, em magic-link e forgot-password) está expressa como requisito, não só comentário? [Edge Case]
+- [x] CHK-API-008 A anti-enumeração (resposta 200 idêntica para email existente/não, em magic-link e forgot-password) está expressa como requisito, não só comentário? [Edge Case]
 - [ ] CHK-API-009 A rotação + detecção de reuso do refresh (revoga família) está especificada como comportamento observável da API? [Edge Case]
 - [ ] CHK-API-010 A semântica do magic link single-use (token já usado → inválido) e expirado (→ 410) está separada e testável? [Edge Case]
 

@@ -2,18 +2,19 @@ import { randomBytes } from "node:crypto"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
-import { magicLinkSchema } from "@/lib/validators/auth"
-import { sendMagicLinkEmail } from "@/lib/email/email"
+import { forgotPasswordSchema } from "@/lib/validators/auth"
+import { sendPasswordResetEmail } from "@/lib/email/email"
 import {
-  isMagicLinkLimited,
-  isMagicLinkIpLimited,
-  recordMagicLinkIpAttempt,
-  recordMagicLinkRequest,
+  isPasswordResetLimited,
+  recordPasswordResetRequest,
 } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
-const MAGIC_LINK_LIFETIME_MS = 15 * 60 * 1000
+const PASSWORD_RESET_LIFETIME_MS = 60 * 60 * 1000
+
+const NOOP_MESSAGE =
+  "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha"
 
 const NOOP_EQUALIZE_MS = 250
 
@@ -53,12 +54,16 @@ function getIp(request: Request): string {
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
   const ip = getIp(request)
+  const userAgent = request.headers.get("user-agent") ?? "unknown"
 
   let payload: unknown
   try {
     payload = await request.json()
   } catch {
-    logger.info({ reqId }, "[auth:magic-link] corpo invalido")
+    logger.info(
+      { reqId, ip, userAgent },
+      "[auth:forgot-password] corpo invalido",
+    )
     return errorResponse(reqId, 422, {
       error: {
         code: "VALIDATION_ERROR",
@@ -67,9 +72,12 @@ export async function POST(request: Request): Promise<Response> {
     })
   }
 
-  const parsed = magicLinkSchema.safeParse(payload)
+  const parsed = forgotPasswordSchema.safeParse(payload)
   if (!parsed.success) {
-    logger.info({ reqId }, "[auth:magic-link] validacao falhou")
+    logger.info(
+      { reqId, ip, userAgent },
+      "[auth:forgot-password] validacao falhou",
+    )
     return errorResponse(reqId, 422, {
       error: {
         code: "VALIDATION_ERROR",
@@ -85,94 +93,78 @@ export async function POST(request: Request): Promise<Response> {
   const { email } = parsed.data
   const normalizedEmail = email.toLowerCase()
 
-  const ipLimit = isMagicLinkIpLimited(ip)
-  if (!ipLimit.allowed) {
-    logger.warn({ reqId, ip }, "[auth:magic-link] limite por IP atingido")
-    return errorResponse(reqId, 429, {
-      error: {
-        code: "AUTH_MAGIC_LINK_RATE_LIMIT",
-        message: "Muitos magic links solicitados, tente novamente mais tarde",
-        retryAfter: ipLimit.retryAfter,
-      },
-    })
-  }
-  recordMagicLinkIpAttempt(ip)
-
-  const limit = isMagicLinkLimited(normalizedEmail)
+  const limit = isPasswordResetLimited(normalizedEmail)
   if (!limit.allowed) {
     logger.warn(
-      { reqId },
-      "[auth:magic-link] limite de magic links por email atingido",
+      { reqId, ip, userAgent },
+      "[auth:forgot-password] limite de pedidos de reset por email atingido",
     )
     return errorResponse(reqId, 429, {
       error: {
-        code: "AUTH_MAGIC_LINK_RATE_LIMIT",
-        message: "Muitos magic links solicitados, tente novamente mais tarde",
+        code: "AUTH_FORGOT_RATE_LIMIT",
+        message:
+          "Muitos pedidos de recuperacao de senha, tente novamente mais tarde",
         retryAfter: limit.retryAfter,
       },
     })
   }
-  recordMagicLinkRequest(normalizedEmail)
+  recordPasswordResetRequest(normalizedEmail)
 
   try {
     const user = await prisma.user.findFirst({
       where: { email: { equals: normalizedEmail, mode: "insensitive" } },
       select: {
         isActive: true,
-        emailVerified: true,
         deletedAt: true,
       },
     })
 
     const canIssue =
-      user !== null &&
-      user.isActive === true &&
-      user.deletedAt === null &&
-      user.emailVerified !== null
+      user !== null && user.isActive === true && user.deletedAt === null
 
     if (!canIssue) {
       logger.info(
-        { reqId },
-        "[auth:magic-link] no-op anti-enumeracao (email inexistente/inativo/nao verificado)",
+        { reqId, ip, userAgent },
+        "[auth:forgot-password] no-op anti-enumeracao (email inexistente/inativo/deletado)",
       )
       await equalizeNoopTiming()
-      return NextResponse.json(
-        { message: "Magic link enviado se o e-mail estiver cadastrado" },
-        { status: 200 },
-      )
+      return NextResponse.json({ message: NOOP_MESSAGE }, { status: 200 })
     }
 
     const token = randomBytes(32).toString("hex")
-    const expiresAt = new Date(Date.now() + MAGIC_LINK_LIFETIME_MS)
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_LIFETIME_MS)
 
     await prisma.verificationToken.create({
       data: {
         identifier: normalizedEmail,
         token,
-        type: "MAGIC_LINK",
+        type: "PASSWORD_RESET",
         expiresAt,
       },
     })
 
     const baseUrl = getBaseUrl()
-    const magicUrl = `${baseUrl}/auth/login?token=${token}`
+    const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`
     try {
-      await sendMagicLinkEmail(normalizedEmail, { url: magicUrl })
+      await sendPasswordResetEmail(normalizedEmail, { resetUrl })
     } catch (error) {
       logger.error(
-        { err: error, reqId },
-        "[auth:magic-link] envio de email falhou — usuario pode solicitar novo link",
+        { err: error, reqId, ip, userAgent },
+        "[auth:forgot-password] envio de email falhou — usuario pode solicitar novo pedido",
       )
     }
 
-    logger.info({ reqId }, "[auth:magic-link] magic link gerado")
-
-    return NextResponse.json(
-      { message: "Magic link enviado se o e-mail estiver cadastrado" },
-      { status: 200 },
+    logger.info(
+      { reqId, ip, userAgent },
+      "[auth:forgot-password] pedido de reset registrado",
     )
+
+    return NextResponse.json({ message: NOOP_MESSAGE }, { status: 200 })
   } catch (error) {
-    logger.error({ err: error, reqId }, "[auth:magic-link] falha ao gerar link")
+    logger.error(
+      { err: error, reqId, ip, userAgent },
+      "[auth:forgot-password] falha ao registrar pedido de reset",
+    )
     return errorResponse(reqId, 500, {
       error: { code: "INTERNAL_ERROR", message: "Erro interno do servidor" },
     })

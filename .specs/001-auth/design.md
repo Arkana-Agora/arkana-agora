@@ -215,7 +215,13 @@ Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite
 |---|---|---|
 | email | string | Sim |
 
-**Response 200**: `{ message: "Email de recuperacao enviado" }` (idêntico para email existente ou não — anti-enumeração)
+**Response 200**: `{ message: "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha" }` (flat, sem wrapper `data`; idêntico para email existente ou não — anti-enumeração; no-op para conta inativa/deletada também responde 200)
+
+**Response 422**: `{ error: "VALIDATION_ERROR" }` (email invalido, campo extra ou corpo nao-JSON)
+**Response 429**: `{ error: "AUTH_FORGOT_RATE_LIMIT", retryAfter: N }` — 3 pedidos/hora por email, janela 1h (env `MAX_PASSWORD_RESET_PER_EMAIL`). Contagem registrada antes do lookup do usuario (anti-spam — emails inexistentes consomem cota).
+**Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
+
+**Decisoes**: sem limite por IP; sem gate de `emailVerified` (qualquer email cadastrado ativo recebe reset, verificado ou nao); token `VerificationToken type=PASSWORD_RESET` 64 chars hex com `expiresAt` 1h; anti-enumeração por tempo e **piso** de 250ms no no-op (`equalizeNoopTiming`), nao equalizacao exata.
 
 ### POST /api/v1/auth/reset-password
 **Descricao**: Redefine a senha do usuario.

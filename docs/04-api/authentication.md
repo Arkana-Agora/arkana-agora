@@ -4,7 +4,8 @@
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
-> `POST /auth/magic-link/verify` (T10), `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
+> `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
+> `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
 > que já estão implementados**
 > (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
@@ -288,10 +289,14 @@ Envia link mágico por e-mail para login sem senha.
 > `src/app/api/v1/auth/magic-link/route.ts`. Zod `magicLinkSchema` (email-only, `.strict()` —
 > rejeita campos extras como `redirectUrl`), normaliza email para minúsculas, aplica rate limit
 > 3/h por email (`AUTH_MAGIC_LINK_RATE_LIMIT` 429) **e** 20/h por IP
-> (`AUTH_MAGIC_LINK_IP_RATE_LIMIT` 429), anti-enumeração (200 idêntico para
+> (`AUTH_MAGIC_LINK_RATE_LIMIT` 429 — mesmo código do limite por email), anti-enumeração (200 idêntico para
 > emails inexistentes/inativos/não verificados), gera token de 64 chars
 > (`randomBytes(32).toString("hex")`), persiste `VerificationToken type=MAGIC_LINK` com
 > `expiresAt` 15 min, envia via `sendMagicLinkEmail`, retorna **200 flat `{ message }`**.
+> No-op anti-enumeração (email inexistente/inativo/não verificado) responde o **mesmo 200 com
+> delay mínimo de 250ms** (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
+> fluxo completo (o envio de email tem latência variável); dificulta a enumeração por timing em vez
+> de eliminá-la (residual documentado).
 > `POST /auth/magic-link/verify` (T10) — que redime o token — está **implementado** em
 > `src/app/api/v1/auth/magic-link/verify/route.ts` (contrato da seção abaixo).
 
@@ -320,7 +325,7 @@ Content-Type: application/json
 ### Resposta — 200 OK
 
 > **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
-> wrapper `data` — consistente com as rotas implementadas (register/login/magic-link/refresh/logout).
+> wrapper `data` — consistente com as rotas implementadas (register/login/magic-link/magic-link-verify/forgot-password/refresh/logout).
 
 ```json
 {
@@ -532,11 +537,36 @@ Content-Type: application/json
 
 ```json
 {
-  "message": "Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha."
+  "message": "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha"
 }
 ```
 
-> **Nota**: Sempre retorna 200 para evitar enumeração.
+> **Nota**: Sempre retorna 200 para evitar enumeração (a mensagem é idêntica para e-mail existente ou
+> não — o cliente não consegue distinguir). Contas suspensas (`isActive=false`) ou deletadas
+> (`deletedAt` preenchido, LGPD) também recebem 200 sem gerar token nem enviar e-mail. O no-op
+> aplica delay mínimo de 250ms (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
+> fluxo completo (o envio de email tem latência variável); dificulta a enumeração por tempo em vez de
+> eliminá-la (residual documentado).
+>
+> **Sem gate de `emailVerified`** — qualquer e-mail cadastrado ativo pode receber reset (verificado
+> ou não) — e **sem limite por IP** (apenas 3/h por e-mail).
+
+### Validação
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `email` | string | Sim | Formato e-mail; normalizado para minúsculas; `forgotPasswordSchema` `.strict()` rejeita campos extras (ex.: `redirectUrl`) |
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON |
+| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (`retryAfter` em segundos; janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`) |
+| 500 | `INTERNAL_ERROR` | Falha DB/SMTP desconhecida (inclui `meta.requestId`, C13) |
+
+A contagem é registrada **antes** da verificação de existência do usuário, então pedidos de
+e-mails inexistentes também consomem cota (anti-spam).
 
 ---
 
@@ -654,6 +684,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_SOCIAL_TOKEN_INVALID` | 401 | Token social inválido | Reautenticar com provedor |
 | `AUTH_SOCIAL_ACCOUNT_CONFLICT` | 409 | Conflito de conta social | Login com credenciais + vincular |
 | `AUTH_MAGIC_LINK_RATE_LIMIT` | 429 | Muitos magic links | Aguardar 1 hora |
+| `AUTH_FORGOT_RATE_LIMIT` | 429 | Muitos pedidos de recuperação de senha por e-mail (3/h) | Aguardar 1 hora |
 | `AUTH_MAGIC_TOKEN_INVALID` | 401 | Token de magic link inválido (já usado / single-use) | Solicitar novo link |
 | `AUTH_MAGIC_TOKEN_EXPIRED` | 410 | Token de magic link expirado (15 min) | Solicitar novo link |
 | `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (já usado) | Reenviar verificação |

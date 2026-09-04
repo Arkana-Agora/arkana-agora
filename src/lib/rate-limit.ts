@@ -6,6 +6,7 @@ const MAX_CONSECUTIVE_FAILURES = Number(
 )
 const MAX_IP_ATTEMPTS = Number(process.env.MAX_IP_ATTEMPTS ?? 5)
 const MAGIC_LINK_WINDOW_MS = 60 * 60 * 1000
+
 const MAX_MAGIC_LINK_PER_EMAIL = (() => {
   const raw = process.env.MAX_MAGIC_LINK_PER_EMAIL
   if (raw === undefined) return 3
@@ -22,6 +23,18 @@ const MAX_MAGIC_LINK_IP_ATTEMPTS = (() => {
   const value = Number(raw)
   if (!Number.isFinite(value) || value < 1) {
     throw new Error(`Invalid MAX_MAGIC_LINK_IP_ATTEMPTS: ${raw}`)
+  }
+  return value
+})()
+
+const PASSWORD_RESET_WINDOW_MS = 60 * 60 * 1000
+
+const MAX_PASSWORD_RESET_PER_EMAIL = (() => {
+  const raw = process.env.MAX_PASSWORD_RESET_PER_EMAIL
+  if (raw === undefined) return 3
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`Invalid MAX_PASSWORD_RESET_PER_EMAIL: ${raw}`)
   }
   return value
 })()
@@ -120,6 +133,25 @@ export function isMagicLinkIpLimited(ip: string): RateCheck {
 
 export function recordMagicLinkIpAttempt(ip: string): void {
   record(`magic-link:ip:${ip}`, Date.now(), MAGIC_LINK_WINDOW_MS)
+}
+
+export function isPasswordResetLimited(email: string): RateCheck {
+  const now = Date.now()
+  const key = `password-reset:${email.toLowerCase()}`
+  const entry = prune(key, now)
+  if (entry && entry.count >= MAX_PASSWORD_RESET_PER_EMAIL) {
+    const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return { allowed: false, retryAfter }
+  }
+  return { allowed: true, retryAfter: 0 }
+}
+
+export function recordPasswordResetRequest(email: string): void {
+  record(
+    `password-reset:${email.toLowerCase()}`,
+    Date.now(),
+    PASSWORD_RESET_WINDOW_MS,
+  )
 }
 
 export function logSecurityEvent(message: string): void {
