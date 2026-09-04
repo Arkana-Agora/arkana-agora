@@ -201,3 +201,4 @@ logger.error({
 ## Status Update
 
 - **2026-08-24:** Phase 2 landed for the health-check surface — `src/lib/logger.ts` (Pino + pino-pretty em dev, redact de secrets, reqId helper) existe e `src/app/api/health/route.ts` loga via `logger.error({ err }, "[health] ...")`. Remaining known stopgap: `console.log("[auth:magic-link] ...")` em `src/auth/auth.config.ts:88` (fora do escopo da fase de observabilidade; migrar quando o fluxo de auth for tocado).
+- **2026-09-04:** T11 (`POST /api/v1/auth/forgot-password`) e a equalização de timing de T9/T11 tocaram `src/app/api/v1/auth/*`. O novo audit logging de reset (design §7.6) usa `console.error` com prefixo `[auth:forgot-password]` (mesmo stopgap). `src/auth/auth.config.ts:88` permanece intocado — `console.log("[auth:magic-link] ...")` segue adiado (evitar tocar o fluxo de login); migrar em conjunto na fase Pino/auth.config.

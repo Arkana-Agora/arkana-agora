@@ -26,7 +26,7 @@
 | 8 | Configurar Google/Facebook OAuth via Auth.js (/api/auth/*, adapter mínimo) + emissao de tokens custom no callback | pending | 3 | 1, 2 |
 | 9 | Implementar POST /api/v1/auth/magic-link (geracao e envio) | done | 2 | 3, 4 |
 | 10 | Implementar POST /api/v1/auth/magic-link/verify (single-use, 15 min) | done | 2 | 9 |
-| 11 | Implementar POST /api/v1/auth/forgot-password | pending | 2 | 3, 4 |
+| 11 | Implementar POST /api/v1/auth/forgot-password | done | 2 | 3, 4 |
 | 12 | Implementar POST /api/v1/auth/reset-password | pending | 2 | 11 |
 | 13 | Implementar POST /api/v1/auth/refresh (renovacao com rotacao + deteccao de reuso por familia) | done | 3 | 7 |
 | 14 | Implementar POST /api/v1/auth/logout (revogacao de sessao) | done | 1 | 13 |

@@ -25,9 +25,9 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
-- **Recuperação de senha** — Sprint 1: token temporário com expiração de 1 hora
+- **Recuperação de senha** — Sprint 1: **T11 implementado** — `POST /api/v1/auth/forgot-password` (Zod `forgotPasswordSchema` email-only `.strict()`, anti-enumeração 200 idêntico para e-mail existente/inexistente/suspenso/deletado, token 64 chars `VerificationToken type=PASSWORD_RESET` 1h, envio via `sendPasswordResetEmail`, rate limit 429 `AUTH_FORGOT_RATE_LIMIT` máx. 3/hora por e-mail — contagem registrada antes da verificação de existência, anti-spam)
 - **Rotas de rate limit de magic link** — Sprint 1: **T9 implementado** — `POST /api/v1/auth/magic-link` (Zod `magicLinkSchema` email-only `.strict()`, anti-enumeração 200 idêntico, token 64 chars `VerificationToken type=MAGIC_LINK` 15min, envio via `sendMagicLinkEmail`, rate limit 429 `AUTH_MAGIC_LINK_RATE_LIMIT` máx. 3/hora por e-mail; **T10 verify implementado** — `POST /api/v1/auth/magic-link/verify` consome o token single-use, 401 `AUTH_MAGIC_TOKEN_INVALID` / 410 `AUTH_MAGIC_TOKEN_EXPIRED`)
-- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
+- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
 - **Exclusão de conta (LGPD)** — Sprint 1: soft delete (`deletedAt`) com janela de restauração de 30 dias
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
@@ -72,7 +72,7 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 5. A sessão é o **cookie JWT do Auth.js** (JWT strategy) — o Auth.js não grava sessões no banco
 6. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })` e, em nível de route group, pelo guard `src/app/(app)/layout.tsx` (`auth()` + `redirect("/login")` — F2B); sem sessão válida, redireciona para `/login`
 7. **Sprint 1**: a Custom JWT Layer assume após o callback (callbacks `jwt`/`session` em `src/auth/auth.config.ts`): access token (15 min, RS256) + refresh token rotativo (30 dias)
-8. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h) e exclusão de conta (LGPD, 30 dias)
+8. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h — T11 implementado) e exclusão de conta (LGPD, 30 dias)
 
 ---
 
@@ -257,7 +257,8 @@ não exposição de tokens). `tests/token-service.test.ts` — 4 testes adiciona
 | Logout (`POST /api/v1/auth/logout`) | Sprint 1 — **T14 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 — **T9 implementado** |
-| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/refresh/logout implementados)** |
+| Recuperação de senha (`POST /api/v1/auth/forgot-password`) | Sprint 1 — **T11 implementado** |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/refresh/logout implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
 | Verificação de e-mail | Sprint 1 |
 
@@ -291,3 +292,4 @@ não exposição de tokens). `tests/token-service.test.ts` — 4 testes adiciona
 - **CA-05**: O rate limit de magic link (máx. 3/hora por e-mail) deve retornar 429 `AUTH_MAGIC_LINK_RATE_LIMIT` — Sprint 1 (`POST /api/v1/auth/magic-link`)
 - **CA-06**: A exclusão de conta deve marcar o registro para exclusão em 30 dias (LGPD, soft delete `deletedAt`) com possibilidade de restauração — Sprint 1
 - **CA-07**: Tentativas de login com credenciais inválidas devem ser limitadas a 5 por IP em 15 minutos (rate limiting) — Sprint 1 (e-mail/senha)
+- **CA-08**: O rate limit de forgot-password (máx. 3/hora por e-mail) deve retornar 429 `AUTH_FORGOT_RATE_LIMIT` com `retryAfter` — Sprint 1 (`POST /api/v1/auth/forgot-password`)
