@@ -3,8 +3,9 @@
 > **Status (Sprint 0):** a sessão real do MVP é o **cookie JWT do Auth.js** (`/api/auth/*`,
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
-> **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/refresh` (T13) e
-> `POST /auth/logout` (T14) que já estão implementados** (ver seções abaixo).
+> **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
+> `POST /auth/refresh` (T13) e `POST /auth/logout` (T14) que já estão implementados**
+> (ver seções abaixo). `POST /auth/magic-link/verify` (T10) ainda NÃO está implementado.
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -282,6 +283,16 @@ Mesmo formato de `/auth/login`.
 
 Envia link mágico por e-mail para login sem senha.
 
+> **Status (T9 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/magic-link/route.ts`. Zod `magicLinkSchema` (email-only, `.strict()` —
+> rejeita campos extras como `redirectUrl`), normaliza email para minúsculas, aplica rate limit
+> 3/h por email (`AUTH_MAGIC_LINK_RATE_LIMIT` 429) **e** 20/h por IP
+> (`AUTH_MAGIC_LINK_IP_RATE_LIMIT` 429), anti-enumeração (200 idêntico para
+> emails inexistentes/inativos/não verificados), gera token de 64 chars
+> (`randomBytes(32).toString("hex")`), persiste `VerificationToken type=MAGIC_LINK` com
+> `expiresAt` 15 min, envia via `sendMagicLinkEmail`, retorna **200 flat `{ message }`**.
+> `POST /auth/magic-link/verify` (T10) — que redime o token — ainda NÃO está implementado.
+
 ### Requisição
 
 ```http
@@ -307,11 +318,11 @@ Content-Type: application/json
 ### Resposta — 200 OK
 
 > **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
-> wrapper `data` — consistente com as rotas implementadas (register/login/refresh/logout).
+> wrapper `data` — consistente com as rotas implementadas (register/login/magic-link/refresh/logout).
 
 ```json
 {
-  "message": "Link mágico enviado para maria@email.com. Válido por 15 minutos."
+  "message": "Magic link enviado se o e-mail estiver cadastrado"
 }
 ```
 
@@ -323,7 +334,12 @@ Content-Type: application/json
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail |
+| 422 | `VALIDATION_ERROR` | Body inválido ou campo extra rejeitado (Zod, com `details` por campo) |
+| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail (`retryAfter` no body) |
+| 500 | `INTERNAL_ERROR` | Erro interno ao persistir token (inclui `meta.requestId`) |
+
+> **Nota:** falha no envio do e-mail **não** retorna erro — o 200 é mantido (token persistido,
+> usuário pode solicitar novo link). Erros incluem `meta.requestId` (C13).
 
 ---
 

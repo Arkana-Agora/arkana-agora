@@ -41,3 +41,11 @@ export const logoutSchema = z.object({
 })
 
 export type LogoutInput = z.infer<typeof logoutSchema>
+
+export const magicLinkSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+  })
+  .strict()
+
+export type MagicLinkInput = z.infer<typeof magicLinkSchema>
