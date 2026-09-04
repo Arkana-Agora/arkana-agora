@@ -65,3 +65,17 @@ export const forgotPasswordSchema = z
   .strict()
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "Token obrigatorio").max(256, "Token invalido"),
+    password: passwordSchema,
+    passwordConfirmation: z.string(),
+  })
+  .strict()
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: "Confirmacao de senha nao confere",
+    path: ["passwordConfirmation"],
+  })
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
