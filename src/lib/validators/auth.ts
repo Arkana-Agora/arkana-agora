@@ -57,3 +57,11 @@ export const magicLinkVerifySchema = z
   .strict()
 
 export type MagicLinkVerifyInput = z.infer<typeof magicLinkVerifySchema>
+
+export const forgotPasswordSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+  })
+  .strict()
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
