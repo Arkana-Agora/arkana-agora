@@ -49,3 +49,11 @@ export const magicLinkSchema = z
   .strict()
 
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>
+
+export const magicLinkVerifySchema = z
+  .object({
+    token: z.string().min(1, "Token obrigatorio"),
+  })
+  .strict()
+
+export type MagicLinkVerifyInput = z.infer<typeof magicLinkVerifySchema>
