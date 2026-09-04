@@ -36,7 +36,7 @@ https://{dominio}/api/v1/{recurso}
 
 ## Autenticação
 
-O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1). **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14) com `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion, revokeRefreshSession, revokeAllSessions), `src/lib/rate-limit.ts` (lockout de conta + volume por IP + magic link 3/h por email), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`).
+O **arkana-agora** utiliza autenticação híbrida (ADR-009; camada de login atualizada pelo ADR-010): Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) como camada de login (**magic link** e **Google OAuth** — implementados no Sprint 0; **credentials** e **Facebook OAuth** no Sprint 1) + **Custom JWT Layer** para a sessão autenticada (access token RS256 de 15 min + refresh token rotativo de 30 dias — Sprint 1). **Implementado (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/refresh` (T13) e `POST /api/v1/auth/logout` (T14) com `src/services/token-service.ts` (sign/verify access RS256, refresh session, rotation, bumpTokenVersion, revokeRefreshSession, revokeAllSessions), `src/lib/rate-limit.ts` (lockout de conta + volume por IP + magic link 3/h por email), `src/lib/redis.ts` (singleton), `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`/`magicLinkVerifySchema`).
 
 ### Fluxo
 
@@ -80,12 +80,12 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 ```
 
 > **Nota (auth endpoints):** os endpoints de auth implementados (`POST /api/v1/auth/register`,
-> `POST /api/v1/auth/login`, `POST /api/v1/auth/magic-link`, `POST /api/v1/auth/refresh`,
-> `POST /api/v1/auth/logout`) retornam o
+> `POST /api/v1/auth/login`, `POST /api/v1/auth/magic-link`, `POST /api/v1/auth/magic-link/verify`,
+> `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`) retornam o
 > body **plano (flat)** — `{ user, message }`, `{ accessToken, user }`, `{ message }`,
-> `{ accessToken, expiresIn }` e `{ message }` respectivamente — **sem** wrapper `data`. Este é o
-> contrato canônico dos endpoints de auth (ver `docs/04-api/authentication.md`). O envelope `data`
-> aplica-se aos demais endpoints REST.
+> `{ accessToken, user }`, `{ accessToken, expiresIn }` e `{ message }` respectivamente — **sem**
+> wrapper `data`. Este é o contrato canônico dos endpoints de auth (ver
+> `docs/04-api/authentication.md`). O envelope `data` aplica-se aos demais endpoints REST.
 
 ### SSE (Server-Sent Events — streaming de IA)
 

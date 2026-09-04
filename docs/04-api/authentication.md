@@ -4,8 +4,9 @@
 > ADR-010). As rotas `/api/v1/auth/*` e a **Custom JWT Layer** (access RS256 + refresh com
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
-> `POST /auth/refresh` (T13) e `POST /auth/logout` (T14) que já estão implementados**
-> (ver seções abaixo). `POST /auth/magic-link/verify` (T10) ainda NÃO está implementado.
+> `POST /auth/magic-link/verify` (T10), `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
+> que já estão implementados**
+> (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
@@ -291,7 +292,8 @@ Envia link mágico por e-mail para login sem senha.
 > emails inexistentes/inativos/não verificados), gera token de 64 chars
 > (`randomBytes(32).toString("hex")`), persiste `VerificationToken type=MAGIC_LINK` com
 > `expiresAt` 15 min, envia via `sendMagicLinkEmail`, retorna **200 flat `{ message }`**.
-> `POST /auth/magic-link/verify` (T10) — que redime o token — ainda NÃO está implementado.
+> `POST /auth/magic-link/verify` (T10) — que redime o token — está **implementado** em
+> `src/app/api/v1/auth/magic-link/verify/route.ts` (contrato da seção abaixo).
 
 ### Requisição
 
@@ -344,6 +346,25 @@ Content-Type: application/json
 ---
 
 ## POST /auth/magic-link/verify
+
+> **Status (T10 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/magic-link/verify/route.ts`. Zod `magicLinkVerifySchema` (`{ token }`,
+> `.strict()`), redime o token **single-use** (delete atômico via `deleteMany` com
+> `expiresAt > now` — contagem 0 = já usado → 401). Token inexistente/tipo ≠ `MAGIC_LINK` →
+> **401 `AUTH_MAGIC_TOKEN_INVALID`**; expirado (15 min) → **410 `AUTH_MAGIC_TOKEN_EXPIRED`**.
+> **Contrato LGPD:** revalida `isActive=true AND deletedAt=null` do usuário (resolvido pelo
+> `identifier` do token) antes de re-autenticar — inativo/deletado → 401 e token consumido.
+> Sucesso: `signAccessToken` + `createRefreshSession` (ip/userAgent) → **200 `{ accessToken,
+> user }`** + `Set-Cookie` httpOnly (`Path=/api/v1/auth`), mesmo formato do `/auth/login`.
+>
+> **Nota (interop com Auth.js):** a rota redime qualquer `VerificationToken` `MAGIC_LINK`
+> vigente. Tokens emitidos por `POST /auth/magic-link` (T9) só existem para usuários com
+> `emailVerified` setado (T9 exige verificação antes de emitir). Já os tokens do `EmailProvider`
+> do Auth.js (`src/auth/prisma-adapter.ts` → `createVerificationToken`) também são gravados com
+> `type=MAGIC_LINK` **sem** exigir `emailVerified` — ao redimir um por esta rota, o usuário
+> autentica sem marcar `emailVerified` (o fluxo canônico de verificação é o callback do Auth.js).
+> Assimetria consciente, **não documentada no plano T10** — follow-up (hardening): gate de
+> `emailVerified` no verify, em paridade com o RF-AUTH-005 exigido no login.
 
 Redime o token do magic link (single-use, expira em 15 minutos).
 
