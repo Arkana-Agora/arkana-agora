@@ -34,6 +34,16 @@
 | 16 | Implementar job agendado de hard delete/anonymizacao apos 30 dias (RF-AUTH-008) | pending | 3 | 15 |
 | 17 | Implementar endpoint de restauracao de conta dentro da janela de carencia LGPD | pending | 1.5 | 15 |
 
+### Backend - Security & Tokens (novas tasks do plano)
+
+| # | Tarefa | Status | Estimativa (h) | Dependencias |
+|---|---|---|---|---|
+| 30 | Implementar Custom JWT Layer: emitir Access Token RS256 (15 min) e integrar com Auth.js callbacks | pending | 6 | 1, 4 |
+| 31 | Persistir Refresh Tokens (hash SHA-256) e implementar rotacao (familyId) | pending | 4 | 13, 4 |
+| 32 | Detectar reuso de refresh token e revogar toda a familia de tokens (revoke on theft) | pending | 3 | 31 |
+| 33 | Implementar blacklist / token revocation store (Redis) e endpoints de revogacao total (logout all devices) | pending | 3 | 31, 14 |
+| 34 | Implementar middleware de validação de access token (RS256) e refresh workflow em edge/runtime compatível | pending | 3.5 | 30, 31 |
+
 ### Frontend - Componentes e Paginas
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
@@ -52,9 +62,9 @@
 |---|---|---|---|---|
 | 25 | Implementar AuthStore no Zustand com persistencia | pending | 3 | 7, 8 |
 | 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
-| 27 | Implementar rate limiting com memoria em servidor | pending (memoria parcial via T7; Redis/multi-instancia pendente - F7/T27) | 2 | 7 |
+| 27 | Implementar rate limiting (Redis) por IP/email (login, magic link, reset) | pending | 3 | infra |
 | 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |
-| 29 | Criar testes de integracao para todos os endpoints | pending | 3 | 6-17 |
+| 29 | Criar testes de integracao para todos os endpoints | pending | 3 | 6-17, 30-34 |
 
 ---
 
@@ -63,10 +73,11 @@
 | Categoria | Total de Tarefas | Horas Estimadas |
 |---|---|---|
 | Configuracao e Infraestrutura | 5 | 7.5h |
-| Backend - API Routes | 12 | 27h |
+| Backend - API Routes | 14 | 32.5h |
+| Backend - Security & Tokens | 5 | 19.5h |
 | Frontend - Componentes e Paginas | 7 | 15.5h |
-| Estado e Integracao | 5 | 14h |
-| **TOTAL** | **29** | **64h** |
+| Estado e Integracao | 5 | 15h |
+| **TOTAL** | **36** | **89.5h** |
 
 ---
 
@@ -74,16 +85,16 @@
 
 1. Tarefas 1-5 (infraestrutura)
 2. Tarefas 6-7 (cadastro e login basicos)
-3. Tarefa 25 (AuthStore)
-4. Tarefas 18-20 (AuthLayout + LoginForm + RegisterForm)
-5. Tarefa 8 (OAuth via NextAuth)
-6. Tarefas 9-10 (Magic Link)
-7. Tarefas 11-12 (Recuperacao de senha)
-8. Tarefa 13 (Refresh token com rotacao)
-9. Tarefa 24 (AuthGuard)
-10. Tarefas 21-23 (formularios restantes)
-11. Tarefas 14-15 (logout e delecao)
-12. Tarefas 16-17 (hard delete e restauracao LGPD)
+3. Tarefa 30 (Custom JWT Layer) e 31 (persistencia/rotacao de refresh)
+4. Tarefa 25 (AuthStore)
+5. Tarefas 18-20 (AuthLayout + LoginForm + RegisterForm)
+6. Tarefa 8 (OAuth via NextAuth)
+7. Tarefas 9-10 (Magic Link)
+8. Tarefas 11-12 (Recuperacao de senha)
+9. Tarefa 13 (Refresh token com rotacao)
+10. Tarefa 24 (AuthGuard)
+11. Tarefas 21-23 (formularios restantes)
+12. Tarefas 15-17 (deleção/restauração LGPD)
 13. Tarefa 26 (interceptor)
 14. Tarefa 27 (rate limiting)
 15. Tarefas 28-29 (testes)
