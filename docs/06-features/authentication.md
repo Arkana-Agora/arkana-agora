@@ -25,9 +25,9 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
-- **Recuperação de senha** — Sprint 1: **T11 implementado** — `POST /api/v1/auth/forgot-password` (Zod `forgotPasswordSchema` email-only `.strict()`, anti-enumeração 200 idêntico para e-mail existente/inexistente/suspenso/deletado, token 64 chars `VerificationToken type=PASSWORD_RESET` 1h, envio via `sendPasswordResetEmail`, rate limit 429 `AUTH_FORGOT_RATE_LIMIT` máx. 3/hora por e-mail — contagem registrada antes da verificação de existência, anti-spam)
+- **Recuperação de senha** — Sprint 1: **T11 implementado** — `POST /api/v1/auth/forgot-password` (Zod `forgotPasswordSchema` email-only `.strict()`, anti-enumeração 200 idêntico para e-mail existente/inexistente/suspenso/deletado, token 64 chars `VerificationToken type=PASSWORD_RESET` 1h, envio via `sendPasswordResetEmail`, rate limit 429 `AUTH_FORGOT_RATE_LIMIT` máx. 3/hora por e-mail — contagem registrada antes da verificação de existência, anti-spam); **T12 implementado** — `POST /api/v1/auth/reset-password` (Zod `resetPasswordSchema` `{ token, password, passwordConfirmation }` `.strict()`, hash bcrypt custo 12, token single-use, 401 `AUTH_RESET_TOKEN_INVALID` / 410 `AUTH_RESET_TOKEN_EXPIRED` (1h), invalida **todas** as sessões via `revokeAllSessions` + log de segurança `AUTH_PASSWORD_RESET`; **sem rate limit** — T27 posterior)
 - **Rotas de rate limit de magic link** — Sprint 1: **T9 implementado** — `POST /api/v1/auth/magic-link` (Zod `magicLinkSchema` email-only `.strict()`, anti-enumeração 200 idêntico, token 64 chars `VerificationToken type=MAGIC_LINK` 15min, envio via `sendMagicLinkEmail`, rate limit 429 `AUTH_MAGIC_LINK_RATE_LIMIT` máx. 3/hora por e-mail; **T10 verify implementado** — `POST /api/v1/auth/magic-link/verify` consome o token single-use, 401 `AUTH_MAGIC_TOKEN_INVALID` / 410 `AUTH_MAGIC_TOKEN_EXPIRED`)
-- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
+- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T12 implementado** (`POST /api/v1/auth/reset-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
 - **Exclusão de conta (LGPD)** — Sprint 1: soft delete (`deletedAt`) com janela de restauração de 30 dias
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
@@ -243,6 +243,46 @@ não exposição de tokens). `tests/token-service.test.ts` — 4 testes adiciona
 
 ---
 
+## Redefinição de senha (`POST /api/v1/auth/reset-password`) — T12 implementado
+
+Rota que redime o token `PASSWORD_RESET` emitido pelo forgot-password (T11), implementada em
+`src/app/api/v1/auth/reset-password/route.ts`.
+
+### Contrato do endpoint
+
+- **Body** `{ token, password, passwordConfirmation }` — validado com `resetPasswordSchema` de
+  `src/lib/validators/auth.ts` (`.strict()`, reusa `passwordSchema` do register)
+- **200** → `{ message: "Senha redefinida com sucesso" }` — **body plano (flat), sem wrapper
+  `data`** (consistente com as demais rotas)
+- **422** `VALIDATION_ERROR` — body inválido, campo extra, senha fraca ou `passwordConfirmation`
+  divergente (com `details` por campo); corpo não-JSON → 422
+- **401** `AUTH_RESET_TOKEN_INVALID` — token inexistente, tipo ≠ `PASSWORD_RESET`, já usado
+  (single-use) ou usuário inativo/deletado (janela LGPD — **nunca reativa conta via token válido**)
+- **410** `AUTH_RESET_TOKEN_EXPIRED` — token expirado (1h); deletado no momento da detecção
+- **500** `INTERNAL_ERROR` — falha interna (inclui `meta.requestId`, C13)
+- **Sem rate limit** nesta rota (rate limiting, incl. Redis-based, é tarefa posterior T27)
+
+### Comportamento
+
+1. Valida o body com `resetPasswordSchema` (422 `VALIDATION_ERROR` em falha)
+2. Busca o `VerificationToken` por `token`; inexistente ou `type ≠ PASSWORD_RESET` → 401
+3. Token expirado (1h) → deleta o token e retorna 410 `AUTH_RESET_TOKEN_EXPIRED`
+4. Revalida o usuário (`isActive=true AND deletedAt=null` via `identifier` do token) —
+   inativo/deletado → 401 e token consumido
+5. Redime o token **single-use** (delete atômico via `deleteMany` com `expiresAt > now` —
+   contagem ≠ 1 = já usado → 401)
+6. Hash da nova senha com **bcrypt custo 12** (`BCRYPT_COST = 12`) e atualiza `passwordHash`
+7. `revokeAllSessions(userId)` — invalida **todas** as sessões (bump de `tokenVersion` + espelho Redis)
+8. Log de segurança `AUTH_PASSWORD_RESET` com IP/userAgent; retorna **200 `{ message }`**
+
+### Testes
+
+`tests/reset-password.test.ts` — 14 testes vitest cobrindo o contrato do reset-password
+(validação, token inválido/tipo errado, expirado, single-use, usuário inativo/deletado LGPD,
+hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
+
+---
+
 ## Versão
 
 | Feature | Versão |
@@ -258,7 +298,8 @@ não exposição de tokens). `tests/token-service.test.ts` — 4 testes adiciona
 | Login OAuth (Facebook) | Sprint 1 |
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 — **T9 implementado** |
 | Recuperação de senha (`POST /api/v1/auth/forgot-password`) | Sprint 1 — **T11 implementado** |
-| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/refresh/logout implementados)** |
+| Redefinição de senha (`POST /api/v1/auth/reset-password`) | Sprint 1 — **T12 implementado** |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/reset-password/refresh/logout implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
 | Verificação de e-mail | Sprint 1 |
 
@@ -293,3 +334,4 @@ não exposição de tokens). `tests/token-service.test.ts` — 4 testes adiciona
 - **CA-06**: A exclusão de conta deve marcar o registro para exclusão em 30 dias (LGPD, soft delete `deletedAt`) com possibilidade de restauração — Sprint 1
 - **CA-07**: Tentativas de login com credenciais inválidas devem ser limitadas a 5 por IP em 15 minutos (rate limiting) — Sprint 1 (e-mail/senha)
 - **CA-08**: O rate limit de forgot-password (máx. 3/hora por e-mail) deve retornar 429 `AUTH_FORGOT_RATE_LIMIT` com `retryAfter` — Sprint 1 (`POST /api/v1/auth/forgot-password`)
+- **CA-09**: O reset de senha (`POST /api/v1/auth/reset-password`) deve redefinir a senha com bcrypt custo 12, consumir o token `PASSWORD_RESET` (single-use, 1h), invalidar **todas** as sessões do usuário (`revokeAllSessions`) e retornar 401 `AUTH_RESET_TOKEN_INVALID` / 410 `AUTH_RESET_TOKEN_EXPIRED` — Sprint 1 (T12)

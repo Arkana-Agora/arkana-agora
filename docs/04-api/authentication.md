@@ -5,7 +5,7 @@
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
 > `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
-> `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
+> `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
 > que já estão implementados**
 > (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
@@ -325,7 +325,7 @@ Content-Type: application/json
 ### Resposta — 200 OK
 
 > **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
-> wrapper `data` — consistente com as rotas implementadas (register/login/magic-link/magic-link-verify/forgot-password/refresh/logout).
+> wrapper `data` — consistente com as rotas implementadas (register/login/magic-link/magic-link-verify/forgot-password/reset-password/refresh/logout).
 
 ```json
 {
@@ -568,11 +568,23 @@ Content-Type: application/json
 A contagem é registrada **antes** da verificação de existência do usuário, então pedidos de
 e-mails inexistentes também consomem cota (anti-spam).
 
+> **Fluxo completo (T11 → T12):** o token `PASSWORD_RESET` emitido aqui (1h) é **redimido** por
+> `POST /auth/reset-password` (T12, seção abaixo) — single-use, com invalidação de todas as
+> sessões do usuário no sucesso.
+
 ---
 
 ## POST /auth/reset-password
 
 Redefine a senha usando token de recuperação.
+
+> **Status (T12 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/reset-password/route.ts`. Zod `resetPasswordSchema` (`{ token,
+> password, passwordConfirmation }`, `.strict()` — rejeita campos extras), hash bcrypt **custo
+> 12**, invalida **todas** as sessões do usuário via `revokeAllSessions(userId)` de
+> `src/services/token-service.ts` (bump de `tokenVersion` + espelho Redis) e loga evento de
+> segurança com código `AUTH_PASSWORD_RESET` (IP/userAgent). **Sem rate limit** nesta rota
+> (rate limiting, incl. Redis-based, é tarefa posterior T27).
 
 ### Requisição
 
@@ -584,16 +596,21 @@ Content-Type: application/json
 ```json
 {
   "token": "reset_abc123def456",
-  "password": "NovaSenhaForte456"
+  "password": "NovaSenhaForte456",
+  "passwordConfirmation": "NovaSenhaForte456"
 }
 ```
 
 ### Validação
 
+Schema compartilhado em `src/lib/validators/auth.ts` (`resetPasswordSchema`, reusa
+`passwordSchema` do register):
+
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `token` | string | Sim | Token válido (expira em 1h) |
-| `password` | string | Sim | Mesmas regras de cadastro |
+| `token` | string | Sim | Token `PASSWORD_RESET` válido (expira em 1h; máx. 256 chars) |
+| `password` | string | Sim | Mesmas regras de cadastro (min 8 chars, 1 maiúsc, 1 minúsc, 1 número, 1 especial) |
+| `passwordConfirmation` | string | Sim | Deve ser idêntico a `password` |
 
 ### Resposta — 200 OK
 
@@ -602,16 +619,33 @@ Content-Type: application/json
 
 ```json
 {
-  "message": "Senha redefinida com sucesso."
+  "message": "Senha redefinida com sucesso"
 }
 ```
+
+### Comportamento
+
+1. Valida o body com `resetPasswordSchema` (422 `VALIDATION_ERROR` em falha, com `details` por campo; corpo não-JSON → 422)
+2. Busca o `VerificationToken` por `token`; inexistente ou `type ≠ PASSWORD_RESET` → 401 `AUTH_RESET_TOKEN_INVALID`
+3. Token expirado (1h) → **deleta o token** (`deleteMany`) e retorna 410 `AUTH_RESET_TOKEN_EXPIRED`
+4. Revalida o usuário (`isActive=true AND deletedAt=null` via `identifier` do token) — usuário inativo/deletado (janela LGPD) → 401 `AUTH_RESET_TOKEN_INVALID` e token consumido (**nunca reativa conta via token válido**)
+5. Redime o token **single-use** (delete atômico via `deleteMany` com `expiresAt > now` — contagem ≠ 1 = já usado → 401 `AUTH_RESET_TOKEN_INVALID`)
+6. Hash da nova senha com **bcrypt custo 12**
+7. `revokeAllSessions(userId)` — invalida **todas** as sessões (bump de `tokenVersion` + espelho Redis), **antes** do write da senha (ordem fail-safe: falha aqui deixa conta com sessões revogadas, senha intacta, token consumido — nunca senha nova com sessões antigas válidas)
+8. Atualiza `passwordHash` e retorna **200 `{ message }`** com `Cache-Control: no-store`
+9. Log de segurança `AUTH_PASSWORD_RESET` com IP/userAgent
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Senha não atende requisitos |
-| 401 | `AUTH_RESET_TOKEN_INVALID` | Token inválido ou expirado |
+| 422 | `VALIDATION_ERROR` | Body inválido, campo extra, senha fraca ou `passwordConfirmation` divergente (Zod, com `details` por campo) |
+| 401 | `AUTH_RESET_TOKEN_INVALID` | Token inexistente, tipo ≠ `PASSWORD_RESET`, já usado (single-use) ou usuário inativo/deletado (LGPD) |
+| 410 | `AUTH_RESET_TOKEN_EXPIRED` | Token expirado (1h) — deletado no momento da detecção |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
+
+> **Nota:** todos os erros incluem `meta.requestId` (C13). O token é **single-use**: após o
+> sucesso ou após detecção de expiração/uso, uma nova tentativa com o mesmo token retorna 401.
 
 ---
 
@@ -689,7 +723,8 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_MAGIC_TOKEN_EXPIRED` | 410 | Token de magic link expirado (15 min) | Solicitar novo link |
 | `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (já usado) | Reenviar verificação |
 | `AUTH_EMAIL_VERIFY_EXPIRED` | 410 | Token de verificação de e-mail expirado (24 h) | Reenviar verificação |
-| `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido | Solicitar novo link |
+| `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido (inexistente, tipo errado, já usado ou usuário inativo/deletado) | Solicitar novo link |
+| `AUTH_RESET_TOKEN_EXPIRED` | 410 | Token de reset expirado (1 h) | Solicitar novo link |
 | `AUTH_UNDER_AGE` | 422 | Menor de 18 anos | Bloquear cadastro |
 
 > **Nota:** `AUTH_UNDER_AGE` não faz parte do contrato canônico de register (S11) — o cadastro

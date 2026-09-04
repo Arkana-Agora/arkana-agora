@@ -232,8 +232,15 @@ Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite
 | password | string | Sim |
 | passwordConfirmation | string | Sim |
 
-**Response 200**: `{ message: "Senha redefinida com sucesso" }`
-**Response 410**: `{ error: "TOKEN_EXPIRED" }`
+**Response 200**: `{ message: "Senha redefinida com sucesso" }` (flat, sem wrapper `data`)
+**Response 401**: `{ error: "AUTH_RESET_TOKEN_INVALID" }` (token inexistente, tipo != PASSWORD_RESET, token ja usado — single-use; ou usuario inativo/deletado na janela LGPD, sem reativar conta)
+**Response 410**: `{ error: "AUTH_RESET_TOKEN_EXPIRED" }` (token venceu no prazo de 1h — nesse caso o token e apagado)
+**Response 422**: `{ error: "VALIDATION_ERROR" }` (corpo invalido, senha fraca — mesmas regras do cadastro, passwordConfirmation divergente ou corpo nao-JSON; `.strict()` rejeita campos extras)
+**Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
+
+**Comportamento**: valida token → valida usuario ativo nao-deletado (LGPD: nunca reativar conta em janela de carencia via token valido) → redencao single-use (`deleteMany` garantindo `count === 1`) → bcrypt custo 12 (CHK-SEC-001) → invalida TODAS as sessoes ativas (`revokeAllSessions`, que tambem incrementa `tokenVersion` e espelha revogacao no Redis) **antes** do write da senha (ordem fail-safe) → atualiza `passwordHash` (+ `Cache-Control: no-store` na 200) → log de seguranca `AUTH_PASSWORD_RESET` com IP/userAgent.
+
+**Decisoes**: sem rate limit nesta rota (resposta uniforme; limites Redis para todas as rotas sao task posterior T27); respostas de erro 401/410 identicas em shape (nao expor se o token existia); mensagem de sucesso plana (sem `securityTitle`/`content`).
 
 ### POST /api/v1/auth/refresh
 **Descricao**: Renova o access token utilizando o refresh token do cookie.
