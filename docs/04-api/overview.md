@@ -83,14 +83,17 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > `POST /api/v1/auth/login`, `POST /api/v1/auth/magic-link`, `POST /api/v1/auth/magic-link/verify`,
 > `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password`,
 > `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/verify-email`,
-> `POST /api/v1/auth/verify-email/resend`)
+> `POST /api/v1/auth/verify-email/resend`, `DELETE /api/v1/auth/account`)
 > retornam o
 > body **plano (flat)** — `{ user, message }`, `{ accessToken, user }`, `{ message }`,
 > `{ accessToken, user }`, `{ message }`, `{ message }`, `{ accessToken, expiresIn }`,
-> `{ message }`, `{ message }` e `{ message }`
+> `{ message }`, `{ message }`, `{ message }` e `{ message }`
 > respectivamente — **sem**
 > wrapper `data`. Este é o contrato canônico dos endpoints de auth (ver
 > `docs/04-api/authentication.md`). O envelope `data` aplica-se aos demais endpoints REST.
+> **Rota interna (cron):** `GET /api/cron/hard-delete` (Vercel Cron 03:00 UTC, protegida por
+> `Authorization: Bearer $CRON_SECRET`) retorna `{ ok, data: { processed, failed, errors },
+> meta: { requestId } }` — ver `docs/04-api/authentication.md` §GET /cron/hard-delete.
 
 ### SSE (Server-Sent Events — streaming de IA)
 

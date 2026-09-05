@@ -6,8 +6,8 @@
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
 > `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
 > `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13), `POST /auth/logout` (T14),
-> `POST /auth/verify-email` (T30), `POST /auth/verify-email/resend` (T30) e
-> `DELETE /auth/account` (T15)
+> `POST /auth/verify-email` (T30), `POST /auth/verify-email/resend` (T30),
+> `DELETE /auth/account` (T15) e `GET /cron/hard-delete` (T16)
 > que já estão implementados**
 > (ver seções abaixo).
 > A emissão da Custom JWT Layer nos callbacks OAuth/magic link (`src/auth/auth.config.ts`) está
@@ -35,6 +35,7 @@
 - [POST /auth/verify-email/resend](#post-authverify-emailresend)
 - [GET /auth/me](#get-authme)
 - [DELETE /auth/account](#delete-authaccount)
+- [GET /cron/hard-delete](#get-cronhard-delete)
 - [Códigos de Erro](#códigos-de-erro)
 
 ---
@@ -367,7 +368,7 @@ Content-Type: application/json
 
 > **Nota**: Sempre retorna 200 para evitar enumeração de e-mails.
 
-> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration endpoint (future) sets `deletedAt = NULL` and `isActive = true` within 30-day window per sprint-0.clarifications.md.
+> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration endpoint (future) sets `deletedAt = NULL` and `isActive = true` within 30-day window per sprint-0.clarifications.md. Past the window, the T16 cron job (`GET /cron/hard-delete`) anonymizes the account — see the section below.
 
 ### Erros
 
@@ -866,9 +867,11 @@ Marca a conta para **exclusão soft (LGPD, RF-AUTH-008)** com confirmação digi
 > Soft delete **atômico** via `softDeleteAccount(userId)` (`src/services/token-service.ts`):
 > numa única `prisma.$transaction` aplica `isActive: false` + `deletedAt`, revoga **todas** as
 > `Session` e incrementa `tokenVersion` (com espelho Redis) — sem estado parcial; e-mail de
-> confirmação via `sendAccountDeletionEmail(user.email, { deleteAfterDays: 30 })` é
+> confirmação via `sendAccountDeletionEmail(user.email, { deleteAfterDays: LGPD_WINDOW_DAYS })` é
 > **best-effort** (falha é logada, não altera a resposta). Janela de reversão: 30 dias
-> (`LGPD_WINDOW_DAYS`, deve existir rota de restauração até 30 dias — T17). Testes:
+> (`LGPD_WINDOW_DAYS` em `src/lib/lgpd.ts`, compartilhado com o job T16; deve existir rota de
+> restauração até 30 dias — T17). Após a janela, o
+> job de hard-delete/anonimização roda via cron (T16 — ver [GET /cron/hard-delete](#get-cronhard-delete)). Testes:
 > `tests/account-delete.test.ts` (16 casos) + `tests/token-service.test.ts` (atomicidade).
 
 ### Requisição
@@ -924,6 +927,105 @@ Header `Cache-Control: no-store` na resposta 200.
 
 > **Nota de segurança:** a comparação de e-mail é **exata** (case-sensitive após trim) para
 > confirmar a ação irreversível — divergência de caixa cai no no-op anti-enumeração (200 idêntico).
+
+---
+
+## GET /cron/hard-delete
+
+Job agendado (Vercel Cron) que anonimiza contas cujo soft-delete expirou a mais de 30 dias (LGPD, T16).
+
+> **Status (T16 implementado):** implementado em `src/app/api/cron/hard-delete/route.ts` (route,
+> `runtime = "nodejs"`) e `src/jobs/hard-delete-accounts.ts` (job logic). Protegido por
+> `Authorization: Bearer $CRON_SECRET` — o Vercel Cron injeta o header automaticamente nas
+> invocações agendadas (o `vercel.json` **não** declara campo `Authorization`; basta `CRON_SECRET`
+> existir como env var no projeto). Cron agendado em `vercel.json`: `0 3 * * *` (03:00 UTC diário).
+
+### Requisição
+
+> **Rota interna** — não é uma API pública. Chamada pelo Vercel Cron, não por clientes.
+
+```http
+GET /api/cron/hard-delete
+Authorization: Bearer $CRON_SECRET
+```
+
+### Comportamento
+
+1. Valida `Authorization: Bearer` contra `CRON_SECRET`; ausente/mismatch → **401 `UNAUTHORIZED`**
+2. Seleciona `User` com `deletedAt` ≥ 30 dias, `isActive: false` **e** `email` não terminando com `@deleted.local` (exclui já-anonimizados)
+3. Para cada conta expirada (per-account, falha não interrompe o job):
+   - Uma única `prisma.$transaction` **callback-style** (`async (tx) => ...`) que:
+     - **Claim primeiro:** `tx.user.updateMany({ where: { id, deletedAt: { not: null } } })` — se `count === 0`, a conta foi **restaurada entre seleção e execução** → pulada (sem deletes, sem e-mail; não conta como processed nem failed; log `"conta restaurada entre selecao e execucao — pulada"`)
+     - Anonimiza PII no `User`: `email`/`providerId` → `anonymizedEmail(userId, email)` (hex digest SHA-256 de `${userId}:${email}`, 24 chars, domínio `@deleted.local`), `name`/`displayName` → `"Usuario Removido"`, `avatar`/`passwordHash`/`birthDate`/`astrologicalSign`/`mayanKin`/`personalArcana`/`emailVerified` → `null`, `isActive` → `false`, `tokenVersion` → `{ increment: 1 }` (invalidação defensiva)
+     - Deleta todas as `Session` do usuário
+     - Deleta `UserProfile` e `Subscription` do usuário
+     - Purga `VerificationToken` do usuário: `tx.verificationToken.deleteMany({ where: { identifier: email } })` — `VerificationToken` guarda o e-mail original em `identifier`, **não tem FK para `User`** e não era cascade-deletado antes
+   - `deletedAt` é **preservado** (não limpo)
+   - Após o commit: espelha `tokenVersion` no Redis (`mirrorTokenVersion(userId)`, best-effort)
+   - Envia `sendAccountDeletedFinalEmail(email, { deleteAfterDays: LGPD_WINDOW_DAYS })` — **após o commit** da transação, **best-effort** (falha logada, não fatal)
+4. Retorna tick summary: `{ processed, failed, errors[] }`
+
+### Resposta — 200 OK
+
+```json
+{
+  "ok": true,
+  "data": {
+    "processed": 3,
+    "failed": 0,
+    "errors": []
+  },
+  "meta": {
+    "requestId": "cron_req_abc123"
+  }
+}
+```
+
+> Header `cache-control: no-store`.
+
+### Resposta — 401 Unauthorized
+
+```json
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Nao autorizado"
+  },
+  "meta": {
+    "requestId": "cron_req_abc123"
+  }
+}
+```
+
+### Resposta — 500 Internal Server Error
+
+Falha **total** do job (erro não capturado na execução) → **nenhuma** conta é processada:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Falha ao executar o job"
+  },
+  "meta": {
+    "requestId": "cron_req_abc123"
+  }
+}
+```
+
+> Falhas **parciais** por conta (per-account) continuam retornando **200** com
+> `data: { processed, failed, errors[] }`.
+
+### Notas de implementação
+
+- **Sem schema change** — anonimização usa campos existentes, sem migração
+- **Idempotente** — contas já anonimizadas (`email` terminando com `@deleted.local`) são ignoradas na query
+- **Claim-guard** — conta restaurada entre seleção e execução é **pulada** (`updateMany` com `count === 0` → skip; não conta como processed nem failed); o claim revalida o e-mail original, tornando-o **idempotente** em execuções sobrepostas
+- **Purga de `VerificationToken`** — tokens de verificação do e-mail original são deletados na mesma transação (sem FK para `User`; antes não eram cascade-deletados)
+- **Persistência de `deletedAt`** — preservado após anonimização para auditoria (regua LGPD: 30 dias de janela + hard delete)
+- **Enviroment:** `CRON_SECRET` obrigatório em produção (Vercel env var) — ausente → 401 em todas as chamadas; o Vercel Cron injeta `Authorization: Bearer <CRON_SECRET>` automaticamente (sem campo `Authorization` no `vercel.json`)
+- Testes: `tests/hard-delete-accounts.test.ts` (8) + `tests/cron-hard-delete.test.ts` (6)
 
 ---
 

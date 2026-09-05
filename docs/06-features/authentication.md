@@ -10,7 +10,7 @@ O módulo de autenticação do **Arkana Agora** é responsável por gerenciar o 
 
 O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth/callback/email`): token **single-use** com validade de **15 minutos** via model `VerificationToken` (`type = "MAGIC_LINK"`, deletado na redenção); em dev, sem SMTP, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console em vez de enviar.
 
-**Dois fluxos de e-mail (não conflitantes):** (1) o magic link do MVP usa o `EmailProvider` do Auth.js via **nodemailer/SMTP** (`src/auth/auth.config.ts`, vars `SMTP_*`/`EMAIL_FROM`); (2) os e-mails transacionais das rotas REST `/api/v1/auth/*` (verificação de e-mail, reset de senha, magic link) usam o **Resend** via `src/lib/email/email.ts` (helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`/`sendAccountDeletionEmail`, implementado no T3), com guard de dev `AUTH_EMAIL_SKIP_SEND=true` (`NODE_ENV=development` obrigatório). O vínculo OAuth usa `User.provider`/`providerId` (`@@unique([provider, providerId])`, normalização H-2) — sem model `Account` no MVP (provedor único por usuário). A recuperação de senha e a exclusão completa da conta seguem o design de `docs/04-api/authentication.md` e `.specs/001-auth/design.md` (Sprint 1), em conformidade com a LGPD (soft delete com janela de 30 dias).
+**Dois fluxos de e-mail (não conflitantes):** (1) o magic link do MVP usa o `EmailProvider` do Auth.js via **nodemailer/SMTP** (`src/auth/auth.config.ts`, vars `SMTP_*`/`EMAIL_FROM`); (2) os e-mails transacionais das rotas REST `/api/v1/auth/*` (verificação de e-mail, reset de senha, magic link) usam o **Resend** via `src/lib/email/email.ts` (helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`/`sendAccountDeletionEmail`/`sendAccountDeletedFinalEmail`, implementado no T3/T16), com guard de dev `AUTH_EMAIL_SKIP_SEND=true` (`NODE_ENV=development` obrigatório). O vínculo OAuth usa `User.provider`/`providerId` (`@@unique([provider, providerId])`, normalização H-2) — sem model `Account` no MVP (provedor único por usuário). A recuperação de senha e a exclusão completa da conta seguem o design de `docs/04-api/authentication.md` e `.specs/001-auth/design.md` (Sprint 1), em conformidade com a LGPD (soft delete com janela de 30 dias + hard delete anonimização).
 
 ---
 
@@ -29,7 +29,7 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Recuperação de senha** — Sprint 1: **T11 implementado** — `POST /api/v1/auth/forgot-password` (Zod `forgotPasswordSchema` email-only `.strict()`, anti-enumeração 200 idêntico para e-mail existente/inexistente/suspenso/deletado, token 64 chars `VerificationToken type=PASSWORD_RESET` 1h, envio via `sendPasswordResetEmail`, rate limit 429 `AUTH_FORGOT_RATE_LIMIT` máx. 3/hora por e-mail — contagem registrada antes da verificação de existência, anti-spam); **T12 implementado** — `POST /api/v1/auth/reset-password` (Zod `resetPasswordSchema` `{ token, password, passwordConfirmation }` `.strict()`, hash bcrypt custo 12, token single-use, 401 `AUTH_RESET_TOKEN_INVALID` / 410 `AUTH_RESET_TOKEN_EXPIRED` (1h), invalida **todas** as sessões via `revokeAllSessions` + log de segurança `AUTH_PASSWORD_RESET`; **sem rate limit** — T27 posterior)
 - **Rotas de rate limit de magic link** — Sprint 1: **T9 implementado** — `POST /api/v1/auth/magic-link` (Zod `magicLinkSchema` email-only `.strict()`, anti-enumeração 200 idêntico, token 64 chars `VerificationToken type=MAGIC_LINK` 15min, envio via `sendMagicLinkEmail`, rate limit 429 `AUTH_MAGIC_LINK_RATE_LIMIT` máx. 3/hora por e-mail; **T10 verify implementado** — `POST /api/v1/auth/magic-link/verify` consome o token single-use, 401 `AUTH_MAGIC_TOKEN_INVALID` / 410 `AUTH_MAGIC_TOKEN_EXPIRED`)
 - **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T12 implementado** (`POST /api/v1/auth/reset-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`), **T30 implementado** (`POST /api/v1/auth/verify-email` + `POST /api/v1/auth/verify-email/resend`)
-- **Exclusão de conta (LGPD)** — Sprint 1: **T15 implementado** — `DELETE /api/v1/auth/account` (soft delete **atômico** via `softDeleteAccount` numa única transação: `isActive=false` + `deletedAt` + revogação de todas as `Session` + bump de `tokenVersion`, janela de restauração de 30 dias, confirmação digitada do e-mail, anti-enumeração 200 idêntico, e-mail de confirmação best-effort via `sendAccountDeletionEmail`)
+- **Exclusão de conta (LGPD)** — Sprint 1: **T15 implementado** — `DELETE /api/v1/auth/account` (soft delete **atômico** via `softDeleteAccount` numa única transação: `isActive=false` + `deletedAt` + revogação de todas as `Session` + bump de `tokenVersion`, janela de restauração de 30 dias, confirmação digitada do e-mail, anti-enumeração 200 idêntico, e-mail de confirmação best-effort via `sendAccountDeletionEmail`); **T16 implementado** — `GET /api/cron/hard-delete` job agendado (Vercel Cron 03:00 UTC, `src/jobs/hard-delete-accounts.ts`): anonimiza contas com `deletedAt` > 30 dias e `isActive: false` (email/providerId → `@deleted.local` digest, name → `"Usuario Removido"`, campos sensíveis → null, bump de `tokenVersion`, deleta session/userProfile/subscription e purga `VerificationToken` numa transação callback-style com claim-guard — conta restaurada entre seleção e execução é pulada; e-mail final best-effort via `sendAccountDeletedFinalEmail` **após o commit**, protegido por `CRON_SECRET`)
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
 ---
@@ -73,7 +73,7 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 5. A sessão é o **cookie JWT do Auth.js** (JWT strategy) — o Auth.js não grava sessões no banco
 6. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })` e, em nível de route group, pelo guard `src/app/(app)/layout.tsx` (`auth()` + `redirect("/login")` — F2B); sem sessão válida, redireciona para `/login`
 7. **Sprint 1**: a Custom JWT Layer assume após o callback (callbacks `jwt`/`session` em `src/auth/auth.config.ts`): access token (15 min, RS256) + refresh token rotativo (30 dias)
-8. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h — T11 implementado) e exclusão de conta (LGPD, 30 dias — T15 implementado)
+8. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h — T11 implementado) e exclusão de conta (LGPD, 30 dias — T15 soft delete implementado + T16 hard-delete cron implementado)
 
 ---
 
@@ -148,7 +148,7 @@ Segunda rota da **Custom JWT Layer** (Fase 2) implementada em
 
 ### Serviços de suporte (implementados)
 
-- **`src/services/token-service.ts`** — `sha256()`, `signAccessToken` (RS256 via jose, 15min,
+- **`src/services/token-service.ts`** — `signAccessToken` (RS256 via jose, 15min,
   claims `role`/`plan`/`tokenVersion`), `verifyAccessToken` (fail-closed, Redis cache com
   fallback DB, admin recheck de `isActive`/`deletedAt`), `createRefreshSession` (Session 30d),
   `rotateRefresh` (rotação + revogação de família em reuso), `bumpTokenVersion` (incremento
@@ -302,6 +302,7 @@ hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
 | Redefinição de senha (`POST /api/v1/auth/reset-password`) | Sprint 1 — **T12 implementado** |
 | Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/reset-password/refresh/logout/verify-email/verify-email-resend implementados)** |
 | Exclusão de conta (`DELETE /api/v1/auth/account`) | Sprint 1 — **T15 implementado** |
+| Hard-delete anonimização (`GET /api/cron/hard-delete`) | Sprint 1 — **T16 implementado** |
 | Verificação de e-mail | Sprint 1 — **T30 implementado** |
 
 ---
@@ -320,7 +321,7 @@ hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
 | `zustand` | Biblioteca | Store de auth do frontend (Sprint 1; **instalado no F1/T1**) |
 | `ioredis` + `@types/ioredis` | Biblioteca | Redis: validação de `tokenVersion` + rate limiting (Sprint 1; **instalado no F1/T1**) |
 | `axios` | Biblioteca | Interceptor de API com refresh token (Sprint 1; **instalado no F1/T1**) |
-| `resend` | Biblioteca | Provedor de e-mail transacional (issue #3): `src/lib/email/email.ts` com helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail` (**implementado no T3**) — consumido pelas rotas REST `/api/v1/auth/*` da Sprint 1 |
+| `resend` | Biblioteca | Provedor de e-mail transacional (issue #3): `src/lib/email/email.ts` com helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`/`sendAccountDeletionEmail`/`sendAccountDeletedFinalEmail` (**implementado no T3/T16**) — consumido pelas rotas REST `/api/v1/auth/*` da Sprint 1 |
 | `zod` | Biblioteca | Validação de inputs das rotas `/api/v1/auth/*` (Sprint 1) |
 
 ---

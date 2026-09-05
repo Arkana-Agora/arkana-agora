@@ -32,7 +32,7 @@ Development       http://localhost:3000/api/v1
 
 - **Dev**: `.env` (Prisma CLI and `bun` scripts load `.env`, not `.env.local`) with `DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana` (Docker Postgres 16), `AUTH_URL=http://localhost:3000`, `AUTH_SECRET=dev-...`, `AUTH_TRUST_HOST=true`, `AUTH_GOOGLE_ID=dev-...`, `AUTH_GOOGLE_SECRET=dev-...` (Auth.js v5, ADR-010 — not `NEXTAUTH_*`/`GOOGLE_CLIENT_*`), `MP_ACCESS_TOKEN=TEST-...`, `REDIS_URL=redis://localhost:6379`, empty `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN`/`POSTHOG_KEY` (Sentry desabilitado sem DSN), `LOG_LEVEL=info` (`docs/02-architecture/deployment.md` §2.4).
 - **Staging**: Mercado Pago **sandbox** token, Upstash free tier, Vercel preview env vars.
-- **Production**: live tokens, Neon prod `DATABASE_URL`, `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` (RS256), `MP_ACCESS_TOKEN`, `FCM_SERVER_KEY`, SMTP creds (`docs/07-security/security.md` §Variáveis de Ambiente Críticas).
+- **Production**: live tokens, Neon prod `DATABASE_URL`, `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` (RS256), `MP_ACCESS_TOKEN`, `FCM_SERVER_KEY`, SMTP creds (`docs/07-security/security.md` §Variáveis de Ambiente Críticas), `CRON_SECRET` (Vercel Cron — protege `GET /api/cron/hard-delete`, obrigatório para agendamento).
 - **Rule:** secrets only in provider consoles / secret manager, never in source control. `.env` and `.env*.local` gitignored; only `.env.example` committed. `.gitignore` enforced in CI (build fails if `.env` committed); secret scanner (`git-secrets`/`trufflehog`) on every PR.
 
 ## Deployment Differences

@@ -243,6 +243,8 @@ R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET=
 R2_PUBLIC_URL=https://assets.arkanaagora.com.br
+# Vercel Cron secret — protege rotas de cron (GET /api/cron/hard-delete)
+CRON_SECRET=
 ```
 
 ### Verificação em CI/CD

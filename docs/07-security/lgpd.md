@@ -30,7 +30,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 |---|---|---|---|
 | **Acesso** | Art. 18, II | Configurações → "Meus Dados" → "Exportar meus dados" | 15 dias |
 | **Correção** | Art. 18, III | Editar campos diretamente no perfil | Imediato |
-| **Eliminação** | Art. 18, VI | Configurações → "Excluir conta" | 30 dias (grace period: 30 dias) |
+| **Eliminação** | Art. 18, VI | Configurações → "Excluir conta" | 30 dias (grace period: 30 dias) + hard delete anonimização |
 | **Portabilidade** | Art. 18, V | Configurações → "Exportar meus dados" (JSON/CSV) | 15 dias |
 | **Revogação do consentimento** | Art. 18, IX | Configurações → Privacidade → Desativar | Imediato |
 | **Oposição** | Art. 18, IV | Configurações → Privacidade | Imediato |
@@ -100,7 +100,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 |---|---|---|
 | Dados da conta (ativo) | Enquanto a conta estiver ativa | Execução do contrato |
 | Dados da conta (excluída) | 30 dias após exclusão | Grace period para reativação |
-| Dados da conta (excluída definitiva) | Eliminados após 30 dias | Eliminação LGPD |
+| Dados da conta (excluída definitiva) | Eliminados/anonimizados após 30 dias | Eliminação LGPD (T16 hard-delete job: `src/jobs/hard-delete-accounts.ts`, Vercel Cron 03:00 UTC) |
 | Histórico de leituras | 90 dias após exclusão da conta | Backup e segurança |
 | Dados financeiros | 5 anos | Obrigação fiscal (Lei 9.613/98) |
 | Logs de acesso | 90 dias | Segurança e auditoria |

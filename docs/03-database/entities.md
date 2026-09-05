@@ -1,6 +1,6 @@
 # Definição de Entidades — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-09-01
+> Versão: 1.0 | Última atualização: 2026-09-05
 
 ---
 
@@ -31,7 +31,7 @@ Entidade principal de autenticação e identidade do usuário.
 | `emailVerified` | `DateTime?` | nullable | Data de verificação do e-mail |
 | `tokenVersion` | `Int` | NOT NULL, default `0` | Revogação imediata de role/plan/suspensão/reset de senha/logout-all (SPEC-001 §7.4; fonte-da-verdade — Redis é somente cache espelhado) |
 | `isActive` | `Boolean` | NOT NULL, default `true` | Conta ativa |
-| `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window) |
+| `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window). Após 30 dias, o job T16 (`src/jobs/hard-delete-accounts.ts`) anonimiza a conta (inclui bump de `tokenVersion` e purga de `VerificationToken` por `identifier` — o e-mail original, sem FK para `User`) — `deletedAt` é **preservado** (não limpo) para auditoria |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data de criação |
 | `updatedAt` | `DateTime` | NOT NULL, `@updatedAt` | Data de atualização |
 
