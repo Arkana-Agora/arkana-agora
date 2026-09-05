@@ -181,7 +181,13 @@ O magic link usa `EmailProvider` (id `email`, callback `/api/auth/callback/email
 single-use 15 min via `VerificationToken`). O vinculo OAuth usa `User.provider`/`providerId`
 (sem model `Account` no MVP). **Nao alterar os schemas de `Session`/`VerificationToken` do §4.**
 
-Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite o access token RS256 e rotaciona o refresh token (tabela `Session`), definindo o cookie `refreshToken` httpOnly. O redirect final vai para `/dashboard` **sem tokens na URL**.
+Apos o callback do NextAuth (identidade confirmada no callback `jwt`/`session` em
+`src/auth/auth.config.ts`), a Custom JWT Layer emite o access token RS256 e cria a sessao de
+refresh (tabela `Session`), guardando os tokens custom em `token.customAuth` (idempotencia por
+sessao) e expondo `session.accessToken` (C14). O wrapper `src/app/api/auth/[...nextauth]/route.ts`
+(`finalizeAuthResponse`) define o cookie `refreshToken` httpOnly+Secure (`Path=/api/v1/auth`,
+`SameSite=Strict`, `Max-Age=30d`, preservando o cookie de sessao do Auth.js) e rescreve o
+redirect final para `/dashboard` **sem tokens na URL**.
 
 ### POST /api/v1/auth/magic-link
 **Descricao**: Envia magic link para o email informado.
@@ -431,7 +437,7 @@ interface AuthState {
 - Em dev (http, localhost), usar variante sem `__Host-` prefix para não derrubar o cookie
 
 ### 7.2 Cookies Seguros
-- `refreshToken`: `httpOnly=true`, `secure=true` (producao), `sameSite=strict`, `path=/api/v1/auth`, `maxAge=2592000` (30 dias)
+- `refreshToken`: `httpOnly=true`, `secure=true`, `sameSite=strict`, `path=/api/v1/auth`, `maxAge=2592000` (30 dias)
 - `__Host-csrf-token`: `httpOnly=false`, `secure=true`, `sameSite=strict`, `path=/`
 
 ### 7.3 Protecao de Senha
