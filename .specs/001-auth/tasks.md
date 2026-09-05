@@ -30,7 +30,7 @@
 | 12 | Implementar POST /api/v1/auth/reset-password | done | 2 | 11 |
 | 13 | Implementar POST /api/v1/auth/refresh (renovacao com rotacao + deteccao de reuso por familia) | done | 3 | 7 |
 | 14 | Implementar POST /api/v1/auth/logout (revogacao de sessao) | done | 1 | 13 |
-| 15 | Implementar DELETE /api/v1/auth/account (soft delete LGPD com confirmacao digitada) | pending | 2 | 4 |
+| 15 | Implementar DELETE /api/v1/auth/account (soft delete LGPD com confirmacao digitada) | done | 2 | 4 |
 | 16 | Implementar job agendado de hard delete/anonymizacao apos 30 dias (RF-AUTH-008) | pending | 3 | 15 |
 | 17 | Implementar endpoint de restauracao de conta dentro da janela de carencia LGPD | pending | 1.5 | 15 |
 | 35 | Implementar POST /api/v1/auth/verify-email (consumo + reenvio do token de verificacao, RF-AUTH-005) — task extra T30 do plano | done | 2 | 6 |

@@ -6,7 +6,8 @@
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
 > `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
 > `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13), `POST /auth/logout` (T14),
-> `POST /auth/verify-email` (T30) e `POST /auth/verify-email/resend` (T30)
+> `POST /auth/verify-email` (T30), `POST /auth/verify-email/resend` (T30) e
+> `DELETE /auth/account` (T15)
 > que já estão implementados**
 > (ver seções abaixo).
 > A emissão da Custom JWT Layer nos callbacks OAuth/magic link (`src/auth/auth.config.ts`) está
@@ -33,6 +34,7 @@
 - [POST /auth/verify-email](#post-authverify-email)
 - [POST /auth/verify-email/resend](#post-authverify-emailresend)
 - [GET /auth/me](#get-authme)
+- [DELETE /auth/account](#delete-authaccount)
 - [Códigos de Erro](#códigos-de-erro)
 
 ---
@@ -853,6 +855,75 @@ Authorization: Bearer <accessToken>
 |--------|--------|-----------|
 | 401 | `AUTH_TOKEN_INVALID` | Token inválido ou expirado |
 | 401 | `AUTH_TOKEN_REVOKED` | Token revogado (tokenVersion/flags) |
+
+---
+
+## DELETE /auth/account
+
+Marca a conta para **exclusão soft (LGPD, RF-AUTH-008)** com confirmação digitada do e-mail.
+
+> **Status (T15 implementado):** implementado em `src/app/api/v1/auth/account/route.ts`.
+> Soft delete **atômico** via `softDeleteAccount(userId)` (`src/services/token-service.ts`):
+> numa única `prisma.$transaction` aplica `isActive: false` + `deletedAt`, revoga **todas** as
+> `Session` e incrementa `tokenVersion` (com espelho Redis) — sem estado parcial; e-mail de
+> confirmação via `sendAccountDeletionEmail(user.email, { deleteAfterDays: 30 })` é
+> **best-effort** (falha é logada, não altera a resposta). Janela de reversão: 30 dias
+> (`LGPD_WINDOW_DAYS`, deve existir rota de restauração até 30 dias — T17). Testes:
+> `tests/account-delete.test.ts` (16 casos) + `tests/token-service.test.ts` (atomicidade).
+
+### Requisição
+
+> **Anti-enumeração:** a resposta é **sempre idêntica** (`200 { message }` abaixo) para sucesso,
+> e-mail divergente do logado e conta inexistente. No no-op (e-mail divergente/usuário não
+> encontrado), a rota aguarda 250 ms (`equalizeNoopTiming`) antes de responder. Cookies/comparação:
+> o e-mail digitado é comparado **exatamente** ao e-mail armazenado (após trim do Zod) — variações
+> de caixa **não** confirmam a exclusão.
+
+```http
+DELETE /api/v1/auth/account
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "maria@email.com"
+}
+```
+
+### Validação
+
+Schema compartilhado em `src/lib/validators/auth.ts` (`deleteAccountSchema`):
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `email` | string | Sim | Formato e-mail válido; `.strict()` rejeita campos extras; deve ser **idêntico** ao e-mail do usuário logado |
+
+### Resposta — 200 OK
+
+> **Nota (contrato canônico):** body plano (flat) `{ message }`, sem wrapper `data` — idêntico
+> em todos os casos (sucesso, e-mail divergente, conta inexistente).
+
+```json
+{
+  "message": "Conta marcada para exclusao. Voce tem 30 dias para reverter."
+}
+```
+
+Header `Cache-Control: no-store` na resposta 200.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` | `Authorization` ausente/malformado ou token inválido/expirado |
+| 401 | `AUTH_TOKEN_REVOKED` | Token revogado (tokenVersion/flags) |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta inativa ou já deletada (janela LGPD) |
+| 422 | `VALIDATION_ERROR` | Corpo não-JSON, e-mail inválido ou campo extra (Zod, com `details`) |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
+
+> **Nota de segurança:** a comparação de e-mail é **exata** (case-sensitive após trim) para
+> confirmar a ação irreversível — divergência de caixa cai no no-op anti-enumeração (200 idêntico).
 
 ---
 
