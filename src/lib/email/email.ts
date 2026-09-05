@@ -193,3 +193,21 @@ export async function sendMagicLinkEmail(
     `Acesse sua conta pelo link (expira em 15 minutos): ${url}`,
   )
 }
+
+export async function sendAccountDeletionEmail(
+  to: string,
+  { deleteAfterDays }: { deleteAfterDays: number },
+): Promise<CreateEmailResponse> {
+  const email = assertSingleRecipient(to)
+  return sendEmail(
+    email,
+    "account-deleted",
+    `Sua conta sera excluida em ${deleteAfterDays} dias - Arkana Agora`,
+    wrap(
+      `<h1>Exclusao de conta</h1><p>Sua conta foi marcada para exclusao e sera
+permanentemente apagada apos <strong>${deleteAfterDays} dias</strong>.</p>
+<p>Voce pode reverter esta decisao dentro desse periodo.</p>`,
+    ),
+    `Sua conta foi marcada para exclusao e sera apagada apos ${deleteAfterDays} dias. Voce pode reverter dentro desse periodo.`,
+  )
+}

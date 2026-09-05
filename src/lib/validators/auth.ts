@@ -95,3 +95,11 @@ export const verifyEmailResendSchema = z
   .strict()
 
 export type VerifyEmailResendInput = z.infer<typeof verifyEmailResendSchema>
+
+export const deleteAccountSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+  })
+  .strict()
+
+export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>
