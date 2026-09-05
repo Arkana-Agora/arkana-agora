@@ -199,14 +199,32 @@ Apos o callback do NextAuth, a Custom JWT Layer (middleware `verifyToken`) emite
 **Response 410**: `{ error: "TOKEN_EXPIRED" }`
 
 ### POST /api/v1/auth/verify-email
-**Descricao**: Verifica o endereco de email do usuario.
+**Descricao**: Redime o token de verificacao de email (single-use, expira em 24 horas) e marca o email do usuario como verificado (fecha o ciclo da task 6). Ao consumir o token, o `tokenVersion` e aumentado primeiro (fail-safe — invalida tokens previamente emitidos antes do write) e `User.emailVerified` recebe `new Date()`.
 
 | Campo | Tipo | Obrigatorio |
 |---|---|---|
 | token | string | Sim |
 
-**Response 200**: `{ message: "Email verificado com sucesso" }`
-**Response 410**: `{ error: "TOKEN_EXPIRED" }`
+**Response 200**: `{ message: "Email verificado com sucesso" }` (flat, sem wrapper `data`; `Cache-Control: no-store`)
+**Response 401**: `{ error: "AUTH_EMAIL_VERIFY_INVALID" }` — token inexistente, tipo diferente de `EMAIL` (schema `VerificationToken.type` literal `"EMAIL"`), ja utilizado (single-use — `deleteMany` com `expiresAt > now` retorna `count !== 1`) ou usuario na janela LGPD (`isActive=false`/`deletedAt` — neste caso o token e consumido)
+**Response 410**: `{ error: "AUTH_EMAIL_VERIFY_EXPIRED" }` — token expirado (24h), com remocao do token
+**Response 422**: `{ error: "VALIDATION_ERROR" }` — token ausente, acima de 256 chars, campo extra (schema `.strict()`) ou corpo nao-JSON
+**Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
+
+**Decisoes**: reusar o tipo literal `"EMAIL"` existente no schema (prisma `VerificationToken.type String` — nao criar tipo novo); janela de 24h identica ao envio da task 6; valida LGPD antes de marcar verificado (usuario inativo/deletado nao reativa conta via token vigente). O frontend redireciona ao login apos confirmacao; ver `isAuthenticated` (design §6) que exige `emailVerified === true`.
+
+### POST /api/v1/auth/verify-email/resend
+**Descricao**: Reenvia o email de verificacao (RF-AUTH-005). Regenera um novo token `EMAIL` de 24h substituindo quaisquer tokens anteriores do mesmo endereco e envia por email; se o envio falhar, o token permanece persistido (precedente task 6) e a resposta e identica.
+
+| Campo | Tipo | Obrigatorio |
+|---|---|---|
+| email | string | Sim |
+
+**Response 200**: `{ message: "Email de verificacao enviado" }` (flat; `Cache-Control: no-store`) — identico para email existente ou nao (anti-enumeracao)
+**Response 422**: `{ error: "VALIDATION_ERROR" }` — email invalido, campo extra (schema `.strict()`) ou corpo nao-JSON
+**Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
+
+**Decisoes**: no-op com resposta uniforme (200) para conta inexistente, inativa/deletada (janela LGPD) ou ja verificada (nao se reenvia para email verificado), com **piso de 250ms no no-op** (`equalizeNoopTiming` — anti-enumeracao por tempo, padrao forgot-password/magic-link); regeneracao via `$transaction` (`deleteMany` + `create` substitui o token anterior sem janela sem-token); sem rate limit nesta task — limite de **1/min por email** (RNF-AUTH-004) sera implementado em T27 (rate limiting Redis); log de seguranca com reqId/userId (sem PII).
 
 ### POST /api/v1/auth/forgot-password
 **Descricao**: Inicia o processo de recuperacao de senha.
