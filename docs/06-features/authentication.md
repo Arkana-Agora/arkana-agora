@@ -21,13 +21,14 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Sessão JWT do Auth.js** — MVP: cookie JWT (`session: { strategy: "jwt" }`), sem gravação de sessão no banco
 - **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
+- **Verificação de e-mail** — Sprint 1: **T30 implementado** — `POST /api/v1/auth/verify-email` (redime `VerificationToken type=EMAIL` single-use 24h; 401 `AUTH_EMAIL_VERIFY_INVALID` / 410 `AUTH_EMAIL_VERIFY_EXPIRED`; guarda LGPD; marca `emailVerified` + `bumpTokenVersion`) e `POST /api/v1/auth/verify-email/resend` (reenvio anti-enumeração, 200 uniforme)
 - **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
 - **Recuperação de senha** — Sprint 1: **T11 implementado** — `POST /api/v1/auth/forgot-password` (Zod `forgotPasswordSchema` email-only `.strict()`, anti-enumeração 200 idêntico para e-mail existente/inexistente/suspenso/deletado, token 64 chars `VerificationToken type=PASSWORD_RESET` 1h, envio via `sendPasswordResetEmail`, rate limit 429 `AUTH_FORGOT_RATE_LIMIT` máx. 3/hora por e-mail — contagem registrada antes da verificação de existência, anti-spam); **T12 implementado** — `POST /api/v1/auth/reset-password` (Zod `resetPasswordSchema` `{ token, password, passwordConfirmation }` `.strict()`, hash bcrypt custo 12, token single-use, 401 `AUTH_RESET_TOKEN_INVALID` / 410 `AUTH_RESET_TOKEN_EXPIRED` (1h), invalida **todas** as sessões via `revokeAllSessions` + log de segurança `AUTH_PASSWORD_RESET`; **sem rate limit** — T27 posterior)
 - **Rotas de rate limit de magic link** — Sprint 1: **T9 implementado** — `POST /api/v1/auth/magic-link` (Zod `magicLinkSchema` email-only `.strict()`, anti-enumeração 200 idêntico, token 64 chars `VerificationToken type=MAGIC_LINK` 15min, envio via `sendMagicLinkEmail`, rate limit 429 `AUTH_MAGIC_LINK_RATE_LIMIT` máx. 3/hora por e-mail; **T10 verify implementado** — `POST /api/v1/auth/magic-link/verify` consome o token single-use, 401 `AUTH_MAGIC_TOKEN_INVALID` / 410 `AUTH_MAGIC_TOKEN_EXPIRED`)
-- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T12 implementado** (`POST /api/v1/auth/reset-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`)
+- **Custom JWT Layer** — Sprint 1: access token (15 min, RS256) + refresh token rotativo (30 dias, cookie httpOnly `path=/api/v1/auth`) — **T9 implementado** (`POST /api/v1/auth/magic-link`), **T10 implementado** (`POST /api/v1/auth/magic-link/verify`), **T11 implementado** (`POST /api/v1/auth/forgot-password`), **T12 implementado** (`POST /api/v1/auth/reset-password`), **T13 implementado** (`POST /api/v1/auth/refresh`), **T14 implementado** (`POST /api/v1/auth/logout`), **T30 implementado** (`POST /api/v1/auth/verify-email` + `POST /api/v1/auth/verify-email/resend`)
 - **Exclusão de conta (LGPD)** — Sprint 1: soft delete (`deletedAt`) com janela de restauração de 30 dias
 - **Sessões ativas** — Sprint 1: visualização e revogação de dispositivos conectados
 
@@ -299,9 +300,9 @@ hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
 | Rotas de rate limit de magic link (`/api/v1/auth/magic-link`) | Sprint 1 — **T9 implementado** |
 | Recuperação de senha (`POST /api/v1/auth/forgot-password`) | Sprint 1 — **T11 implementado** |
 | Redefinição de senha (`POST /api/v1/auth/reset-password`) | Sprint 1 — **T12 implementado** |
-| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/reset-password/refresh/logout implementados)** |
+| Custom JWT Layer (access/refresh) | Sprint 1 — **parcial (register/login/magic-link/magic-link-verify/forgot-password/reset-password/refresh/logout/verify-email/verify-email-resend implementados)** |
 | Exclusão de conta (LGPD) | Sprint 1 |
-| Verificação de e-mail | Sprint 1 |
+| Verificação de e-mail | Sprint 1 — **T30 implementado** |
 
 ---
 

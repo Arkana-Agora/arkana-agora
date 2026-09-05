@@ -5,7 +5,8 @@
 > rotação) abaixo são o estado-alvo da **Sprint 1** (ADR-009 Gate B), com exceção de
 > **`POST /auth/register` (T6), `POST /auth/login` (T7), `POST /auth/magic-link` (T9),
 > `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
-> `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13) e `POST /auth/logout` (T14)
+> `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13), `POST /auth/logout` (T14),
+> `POST /auth/verify-email` (T30) e `POST /auth/verify-email/resend` (T30)
 > que já estão implementados**
 > (ver seções abaixo).
 > O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
@@ -24,6 +25,8 @@
 - [POST /auth/logout](#post-authlogout)
 - [POST /auth/forgot-password](#post-authforgot-password)
 - [POST /auth/reset-password](#post-authreset-password)
+- [POST /auth/verify-email](#post-authverify-email)
+- [POST /auth/verify-email/resend](#post-authverify-emailresend)
 - [GET /auth/me](#get-authme)
 - [Códigos de Erro](#códigos-de-erro)
 
@@ -367,7 +370,8 @@ Content-Type: application/json
 > `emailVerified` setado (T9 exige verificação antes de emitir). Já os tokens do `EmailProvider`
 > do Auth.js (`src/auth/prisma-adapter.ts` → `createVerificationToken`) também são gravados com
 > `type=MAGIC_LINK` **sem** exigir `emailVerified` — ao redimir um por esta rota, o usuário
-> autentica sem marcar `emailVerified` (o fluxo canônico de verificação é o callback do Auth.js).
+> autentica sem marcar `emailVerified` (o fluxo canônico de verificação de e-mail é
+> `POST /auth/verify-email`, T30 — seção abaixo).
 > Assimetria consciente, **não documentada no plano T10** — follow-up (hardening): gate de
 > `emailVerified` no verify, em paridade com o RF-AUTH-005 exigido no login.
 
@@ -649,6 +653,133 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`resetPasswordSchema`, reu
 
 ---
 
+## POST /auth/verify-email
+
+Redime o token de verificação de e-mail (single-use, expira em 24 horas) e marca o e-mail do
+usuário como verificado (fecha o ciclo do register, RF-AUTH-005).
+
+> **Status (T30 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/verify-email/route.ts`. Zod `verifyEmailSchema` (`{ token }`, 1–256
+> chars, `.strict()`), redime `VerificationToken type=EMAIL` (literal do schema — não cria tipo
+> novo) **single-use** via `deleteMany` com `expiresAt > now` (contagem ≠ 1 = já usado → 401),
+> janela de **24h** idêntica à emissão do register (T6). Expirado → **410
+> `AUTH_EMAIL_VERIFY_EXPIRED`** com remoção do token; inexistente/tipo ≠ `EMAIL`/já usado →
+> **401 `AUTH_EMAIL_VERIFY_INVALID`**. **Contrato LGPD:** usuário inativo (`isActive=false`) ou
+> deletado (`deletedAt` set) → 401 e token consumido (**nunca reativa conta via token vigente**).
+> Sucesso: `prisma.user.update({ emailVerified: new Date() })` + `bumpTokenVersion(user.id)`
+> (invalida access tokens emitidos antes da verificação) → **200 flat
+> `{ message: "Email verificado com sucesso" }`** com `Cache-Control: no-store`.
+
+### Requisição
+
+```http
+POST /api/v1/auth/verify-email
+Content-Type: application/json
+```
+
+```json
+{
+  "token": "abc123def456"
+}
+```
+
+### Validação
+
+Schema compartilhado em `src/lib/validators/auth.ts` (`verifyEmailSchema`):
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `token` | string | Sim | 1–256 caracteres; `.strict()` rejeita campos extras |
+
+### Resposta — 200 OK
+
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com as rotas implementadas.
+
+```json
+{
+  "message": "Email verificado com sucesso"
+}
+```
+
+### Comportamento
+
+1. Valida o body com `verifyEmailSchema` (422 `VALIDATION_ERROR` em falha, com `details` por campo)
+2. Redime o token **single-use** (`deleteMany` com `expiresAt > now` — contagem ≠ 1 = inexistente/tipo errado/já usado → 401 `AUTH_EMAIL_VERIFY_INVALID`)
+3. Token expirado (24h) → **deleta o token** e retorna 410 `AUTH_EMAIL_VERIFY_EXPIRED`
+4. Revalida o usuário (`isActive=true AND deletedAt=null` via `identifier` do token) — inativo/deletado (janela LGPD) → 401 `AUTH_EMAIL_VERIFY_INVALID` e token consumido
+5. Marca `emailVerified = new Date()` e chama `bumpTokenVersion(user.id)` (invalida tokens emitidos antes da verificação)
+6. Retorna **200 `{ message }`** com `Cache-Control: no-store`; erros incluem `meta.requestId` (C13)
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 422 | `VALIDATION_ERROR` | Token ausente, acima de 256 chars, campo extra ou corpo não-JSON (Zod, com `details` por campo) |
+| 401 | `AUTH_EMAIL_VERIFY_INVALID` | Token inexistente, tipo ≠ `EMAIL`, já usado (single-use) ou usuário inativo/deletado (LGPD — token consumido) |
+| 410 | `AUTH_EMAIL_VERIFY_EXPIRED` | Token expirado (24h) — deletado no momento da detecção |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
+
+---
+
+## POST /auth/verify-email/resend
+
+Reenvia o e-mail de verificação (RF-AUTH-005).
+
+> **Status (T30 implementado):** esta rota está **implementada** em
+> `src/app/api/v1/auth/verify-email/resend/route.ts`. Zod `verifyEmailResendSchema`
+> (`{ email }`, `.strict()`), **no-op anti-enumeração** com 200 uniforme
+> `{ message: "Email de verificacao enviado" }` para conta inexistente, inativa/deletada (janela
+> LGPD) ou já verificada (`emailVerified` setado — não se reenvia para e-mail verificado). Caso
+> contrário: `deleteMany` dos tokens `EMAIL` anteriores do mesmo `identifier`+tipo e criação de
+> novo token 24h (`randomBytes(32).hex`), envio via `sendVerificationEmail` (falha de envio é
+> logada, **não** fatal — token permanece persistido, precedente do register T6). **Sem rate
+> limit nesta task** — limite de 1/min por e-mail (RNF-AUTH-004) será implementado em T27.
+
+### Requisição
+
+```http
+POST /api/v1/auth/verify-email/resend
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "maria@email.com"
+}
+```
+
+### Validação
+
+Schema compartilhado em `src/lib/validators/auth.ts` (`verifyEmailResendSchema`):
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `email` | string | Sim | Formato e-mail válido; `.strict()` rejeita campos extras |
+
+### Resposta — 200 OK
+
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — consistente com as rotas implementadas.
+
+```json
+{
+  "message": "Email de verificacao enviado"
+}
+```
+
+> **Nota**: Sempre retorna 200 para evitar enumeração de e-mails (a mensagem é idêntica para
+> e-mail existente ou não).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON (Zod, com `details` por campo) |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
+
+---
+
 ## GET /auth/me
 
 Retorna o perfil do usuário autenticado.
@@ -721,7 +852,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_FORGOT_RATE_LIMIT` | 429 | Muitos pedidos de recuperação de senha por e-mail (3/h) | Aguardar 1 hora |
 | `AUTH_MAGIC_TOKEN_INVALID` | 401 | Token de magic link inválido (já usado / single-use) | Solicitar novo link |
 | `AUTH_MAGIC_TOKEN_EXPIRED` | 410 | Token de magic link expirado (15 min) | Solicitar novo link |
-| `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (já usado) | Reenviar verificação |
+| `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (inexistente, tipo errado, já usado ou usuário inativo/deletado) | Reenviar verificação |
 | `AUTH_EMAIL_VERIFY_EXPIRED` | 410 | Token de verificação de e-mail expirado (24 h) | Reenviar verificação |
 | `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido (inexistente, tipo errado, já usado ou usuário inativo/deletado) | Solicitar novo link |
 | `AUTH_RESET_TOKEN_EXPIRED` | 410 | Token de reset expirado (1 h) | Solicitar novo link |

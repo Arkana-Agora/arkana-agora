@@ -33,6 +33,7 @@
 | 15 | Implementar DELETE /api/v1/auth/account (soft delete LGPD com confirmacao digitada) | pending | 2 | 4 |
 | 16 | Implementar job agendado de hard delete/anonymizacao apos 30 dias (RF-AUTH-008) | pending | 3 | 15 |
 | 17 | Implementar endpoint de restauracao de conta dentro da janela de carencia LGPD | pending | 1.5 | 15 |
+| 35 | Implementar POST /api/v1/auth/verify-email (consumo + reenvio do token de verificacao, RF-AUTH-005) — task extra T30 do plano | done | 2 | 6 |
 
 ### Backend - Security & Tokens (novas tasks do plano)
 
@@ -73,11 +74,11 @@
 | Categoria | Total de Tarefas | Horas Estimadas |
 |---|---|---|
 | Configuracao e Infraestrutura | 5 | 7.5h |
-| Backend - API Routes | 14 | 32.5h |
+| Backend - API Routes | 15 | 34.5h |
 | Backend - Security & Tokens | 5 | 19.5h |
 | Frontend - Componentes e Paginas | 7 | 15.5h |
 | Estado e Integracao | 5 | 15h |
-| **TOTAL** | **36** | **89.5h** |
+| **TOTAL** | **37** | **91.5h** |
 
 ---
 

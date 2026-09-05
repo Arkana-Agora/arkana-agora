@@ -39,14 +39,22 @@ This session addressed and documented multiple cross-cutting concerns:
    - Migration checklist and examples
    - Aligns with observability.md §2.1
 
+### Security Patterns (2)
+
+5. **`docs/solutions/patterns/security/auth-uniform-response-timing-equalization.md`**
+   - Uniform-200 is not enough for anti-enumeration — response timing is a second channel
+   - Timing floor (`NOOP_EQUALIZE_MS = 250`) on the no-op branch via `equalizeNoopTiming()`
+   - Used in magic-link, forgot-password, verify-email/resend; test asserts `>= 240ms`
+   - Rate limit (RNF-AUTH-004, 1/min) is separate and deferred to T27 — do not conflate
+
 ## Pattern Coverage
 
 | Pattern Category | Files Created | Key Learnings |
 |------------------|--------------|---------------|
-| Security | 2 | GDPR soft-delete, providerId normalization |
+| Security | 3 | GDPR soft-delete, providerId normalization, uniform-response timing equalization |
 | Backend | 1 | Admin health rich metadata |
 | Observability | 1 | Logger migration pattern |
-| **Total** | **4** | **4 reusable patterns** |
+| **Total** | **5** | **5 reusable patterns** |
 
 ## Related Changes
 
