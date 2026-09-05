@@ -1,5 +1,4 @@
 import {
-  createHash,
   createPrivateKey,
   createPublicKey,
   randomBytes,
@@ -9,6 +8,7 @@ import { SignJWT, jwtVerify } from "jose"
 import { prisma } from "@/lib/prisma"
 import { redis } from "@/lib/redis"
 import { logger } from "@/lib/logger"
+import { sha256 } from "@/lib/crypto"
 
 const ACCESS_TOKEN_TTL_SECONDS = Number(
   process.env.ACCESS_TOKEN_TTL_SECONDS ?? 15 * 60,
@@ -22,10 +22,6 @@ export class AuthTokenError extends Error {
     this.name = "AuthTokenError"
     this.code = code
   }
-}
-
-export function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex")
 }
 
 function getPrivateKey(): string {
@@ -354,26 +350,37 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
 }
 
 export async function bumpTokenVersion(userId: string): Promise<void> {
-  const updated = await prisma.user.update({
+  await prisma.user.update({
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
-    select: { tokenVersion: true },
   })
 
-  if (redis) {
-    try {
-      await redis.set(
-        tokenVersionCacheKey(userId),
-        String(updated.tokenVersion),
-        "EX",
-        ACCESS_TOKEN_TTL_SECONDS,
-      )
-    } catch {
-      logger.warn("[auth:token] falha ao espelhar tokenVersion no Redis")
-    }
-  }
-
+  await mirrorTokenVersion(userId)
   logger.info(`[auth:token] tokenVersion bumped p/ ${userId}`)
+}
+
+export async function mirrorTokenVersion(userId: string): Promise<void> {
+  if (!redis) {
+    return
+  }
+  try {
+    const fresh = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { tokenVersion: true },
+    })
+    if (!fresh) {
+      return
+    }
+    await redis.set(
+      tokenVersionCacheKey(userId),
+      String(fresh.tokenVersion),
+      "EX",
+      ACCESS_TOKEN_TTL_SECONDS,
+    )
+    logger.info(`[auth:token] tokenVersion espelhado p/ ${userId}`)
+  } catch {
+    logger.warn("[auth:token] falha ao espelhar tokenVersion no Redis")
+  }
 }
 
 export async function revokeRefreshSession(
@@ -412,25 +419,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
     })
   })
 
-  if (redis) {
-    try {
-      const fresh = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { tokenVersion: true },
-      })
-      if (fresh) {
-        await redis.set(
-          tokenVersionCacheKey(userId),
-          String(fresh.tokenVersion),
-          "EX",
-          ACCESS_TOKEN_TTL_SECONDS,
-        )
-      }
-    } catch {
-      logger.warn("[auth:logout] falha ao espelhar tokenVersion no Redis")
-    }
-  }
-
+  await mirrorTokenVersion(userId)
   logger.info(`[auth:logout] todas as sessoes revogadas p/ ${userId}`)
 }
 
@@ -450,26 +439,6 @@ export async function softDeleteAccount(userId: string): Promise<void> {
     })
   })
 
-  if (redis) {
-    try {
-      const fresh = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { tokenVersion: true },
-      })
-      if (fresh) {
-        await redis.set(
-          tokenVersionCacheKey(userId),
-          String(fresh.tokenVersion),
-          "EX",
-          ACCESS_TOKEN_TTL_SECONDS,
-        )
-      }
-    } catch {
-      logger.warn(
-        "[auth:account] falha ao espelhar tokenVersion no Redis pos soft delete",
-      )
-    }
-  }
-
+  await mirrorTokenVersion(userId)
   logger.info(`[auth:account] conta soft-deletada (LGPD) p/ ${userId}`)
 }

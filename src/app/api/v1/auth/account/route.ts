@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { deleteAccountSchema } from "@/lib/validators/auth"
+import { LGPD_WINDOW_DAYS } from "@/lib/lgpd"
 import { sendAccountDeletionEmail } from "@/lib/email/email"
 import {
   AuthTokenError,
@@ -11,10 +12,7 @@ import {
 
 export const dynamic = "force-dynamic"
 
-const SUCCESS_MESSAGE =
-  "Conta marcada para exclusao. Voce tem 30 dias para reverter."
-
-const LGPD_WINDOW_DAYS = 30
+const SUCCESS_MESSAGE = `Conta marcada para exclusao. Voce tem ${LGPD_WINDOW_DAYS} dias para reverter.`
 
 const NOOP_EQUALIZE_MS = 250
 

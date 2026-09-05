@@ -115,6 +115,24 @@ async function handleAccountDeletion(req: Request, res: Response) {
 > `tokenVersion` to Redis best-effort. The account route calls only `verifyAccessToken` +
 > `softDeleteAccount`. See `atomic-account-lifecycle-invalidation.md` — do NOT copy the naive
 > non-transactional `deleteUser`/`restoreUser` example above into new lifecycle routes.
+>
+> **Implemented shape (T16, 2026-09-05):** the legacy-window-expiry / hard-delete is implemented
+> as a **Vercel Cron job** (`src/jobs/hard-delete-accounts.ts`), triggered daily at 03:00 UTC via
+> `GET /api/cron/hard-delete` (`src/app/api/cron/hard-delete/route.ts`, `runtime = "nodejs"`,
+> guarded by `Authorization: Bearer $CRON_SECRET` — Vercel injects the header automatically on
+> scheduled runs; `vercel.json` declares no `Authorization` field). The job selects `User` records
+> with `deletedAt` older than 30 days, `isActive: false`, excluding already-anonymized
+> (`email NOT LIKE '%@deleted.local'`), then per account runs ONE **callback-style**
+> `prisma.$transaction(async (tx) => ...)` that **claims first**
+> (`tx.user.updateMany({ where: { id, deletedAt: { not: null } } })` — `count === 0` means the
+> account was restored between selection and execution → skipped, no deletes, no email), then
+> anonymizes `User` PII (email/providerId → hex digest `@deleted.local`, name/displayName →
+> `"Usuario Removido"`, nulling all sensitive fields, `isActive: false`, `tokenVersion` increment),
+> deletes `session`/`userProfile`/`subscription` rows and purges `VerificationToken` rows by
+> `identifier` (original email — no FK to User, not cascade-deleted). After commit: mirrors
+> `tokenVersion` to Redis and sends the best-effort final-deletion email
+> (`sendAccountDeletedFinalEmail(email, { deleteAfterDays: LGPD_WINDOW_DAYS })`). `deletedAt` is
+> preserved. Returns `{ processed, failed, errors }`. No schema change required.
 
 ### 5. Migration
 
@@ -150,7 +168,7 @@ await prisma.$executeRaw`
 4. **Edge cases**:
    - Concurrent deletions: use transactional updates with error handling — implemented as `softDeleteAccount(userId)` (single `prisma.$transaction` + Redis mirror; see `atomic-account-lifecycle-invalidation.md`).
    - Foreign key cascades: Decide whether cascading deletes should hard-delete or skip.
-   - Recovery window expiry: Auto-hard-delete after 30 days or mark as expired.
+   - Recovery window expiry: Auto-hard-delete after 30 days or mark as expired. **Implemented (T16):** `runHardDeleteJob()` in `src/jobs/hard-delete-accounts.ts` anonymizes accounts past the 30-day window.
 
 ## Sources
 
