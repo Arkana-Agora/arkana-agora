@@ -79,3 +79,19 @@ export const resetPasswordSchema = z
   })
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
+
+export const verifyEmailSchema = z
+  .object({
+    token: z.string().min(1, "Token obrigatorio").max(256, "Token invalido"),
+  })
+  .strict()
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>
+
+export const verifyEmailResendSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+  })
+  .strict()
+
+export type VerifyEmailResendInput = z.infer<typeof verifyEmailResendSchema>
