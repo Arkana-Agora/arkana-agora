@@ -1,6 +1,9 @@
 import type { NextAuthConfig } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import EmailProvider from "next-auth/providers/email"
+import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
+import { createRefreshSession, signAccessToken } from "@/services/token-service"
 
 if (
   process.env.NODE_ENV === "production" &&
@@ -43,17 +46,82 @@ const smtpServer = smtpConfigured
 const emailFrom =
   process.env.EMAIL_FROM ?? "Arkana Agora <nao-responda@arkanaagora.dev>"
 
+export interface CustomAuth {
+  accessToken: string
+  refreshToken: string
+  emittedAt: number
+}
+
+async function emitCustomTokens(
+  userId: string,
+  provider?: string,
+): Promise<CustomAuth | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      role: true,
+      plan: true,
+      tokenVersion: true,
+      isActive: true,
+      deletedAt: true,
+      emailVerified: true,
+      provider: true,
+    },
+  })
+
+  if (user === null || user.isActive === false || user.deletedAt !== null) {
+    logger.warn(
+      { userId },
+      "[auth:oauth-callback] inactive or deleted account - no custom token emission",
+    )
+    return null
+  }
+
+  if (user.emailVerified === null && provider === "google") {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: new Date() },
+    })
+  }
+
+  const accessToken = await signAccessToken({
+    id: user.id,
+    role: user.role,
+    plan: user.plan,
+    tokenVersion: user.tokenVersion,
+  })
+  const session = await createRefreshSession(user.id, {})
+
+  return {
+    accessToken,
+    refreshToken: session.rawToken,
+    emittedAt: Date.now(),
+  }
+}
+
 const callbacks = {
   signIn: () => true,
-  jwt({ token, user }) {
+  async jwt({ token, user, account }) {
     if (user?.id) {
       token.userId = user.id
+      if (!token.customAuth) {
+        const customAuth = await emitCustomTokens(user.id, account?.provider)
+        if (customAuth !== null) {
+          token.customAuth = customAuth
+        }
+      }
     }
     return token
   },
   session({ session, token }) {
     if (token.userId) {
       session.user.id = token.userId
+    }
+    const customAuth = token.customAuth as CustomAuth | undefined
+    if (customAuth?.accessToken) {
+      ;(session as typeof session & { accessToken?: string }).accessToken =
+        customAuth.accessToken
     }
     return session
   },

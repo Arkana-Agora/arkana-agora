@@ -1,6 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
 
 const AUTH_CONFIG_PATH = "@/auth/auth.config"
+
+beforeAll(async () => {
+  await import("@/lib/prisma")
+  delete process.env.AUTH_GOOGLE_ID
+  delete process.env.AUTH_GOOGLE_SECRET
+})
 
 type ProviderLike = {
   id: string
