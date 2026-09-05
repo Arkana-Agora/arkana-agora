@@ -559,3 +559,45 @@ describe("token service T7a - revokeAllSessions", () => {
     )
   })
 })
+
+describe("token service T15 - softDeleteAccount", () => {
+  it("soft-deleta (isActive=false, deletedAt) + revoga sessoes + bump tokenVersion na MESMA transacao", async () => {
+    prismaMock.session.updateMany.mockResolvedValue({ count: 2 })
+    prismaMock.user.update.mockResolvedValue({ id: "usr_1", tokenVersion: 6 })
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "usr_1",
+      tokenVersion: 6,
+    })
+    prismaMock.$transaction.mockImplementation(
+      async (cb: (tx: unknown) => unknown) =>
+        cb({ session: prismaMock.session, user: prismaMock.user }),
+    )
+    const { softDeleteAccount } = await import("@/services/token-service")
+
+    await softDeleteAccount("usr_1")
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "usr_1" },
+        data: expect.objectContaining({ revokedAt: expect.anything() }),
+      }),
+    )
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "usr_1" },
+        data: {
+          isActive: false,
+          deletedAt: expect.any(Date),
+          tokenVersion: { increment: 1 },
+        },
+      }),
+    )
+    expect(redisMock.set).toHaveBeenCalledWith(
+      "auth:tokenVersion:usr_1",
+      "6",
+      "EX",
+      expect.any(Number),
+    )
+  })
+})

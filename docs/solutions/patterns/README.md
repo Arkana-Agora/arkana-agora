@@ -39,7 +39,7 @@ This session addressed and documented multiple cross-cutting concerns:
    - Migration checklist and examples
    - Aligns with observability.md §2.1
 
-### Security Patterns (2)
+### Security Patterns (3)
 
 5. **`docs/solutions/patterns/security/auth-uniform-response-timing-equalization.md`**
    - Uniform-200 is not enough for anti-enumeration — response timing is a second channel
@@ -47,14 +47,20 @@ This session addressed and documented multiple cross-cutting concerns:
    - Used in magic-link, forgot-password, verify-email/resend; test asserts `>= 240ms`
    - Rate limit (RNF-AUTH-004, 1/min) is separate and deferred to T27 — do not conflate
 
+6. **`docs/solutions/patterns/security/atomic-account-lifecycle-invalidation.md`** _(2026-09-05, T15)_
+   - Credential invalidation + account state change must be ONE `prisma.$transaction` (session revoke + `isActive`/`deletedAt` + single `tokenVersion` bump), Redis mirror best-effort after commit
+   - Implemented: `softDeleteAccount`/`revokeAllSessions` in `src/services/token-service.ts`
+   - Anti-enumeration no-op must equalize body + `cache-control: no-store` header + 250ms floor (headers are a 3rd channel)
+   - Route calls ONE service function; never chain `user.update` + `bumpTokenVersion` + `revokeAllSessions` in a route
+
 ## Pattern Coverage
 
 | Pattern Category | Files Created | Key Learnings |
 |------------------|--------------|---------------|
-| Security | 3 | GDPR soft-delete, providerId normalization, uniform-response timing equalization |
+| Security | 4 | GDPR soft-delete, providerId normalization, uniform-response timing equalization, atomic account lifecycle invalidation |
 | Backend | 1 | Admin health rich metadata |
 | Observability | 1 | Logger migration pattern |
-| **Total** | **5** | **5 reusable patterns** |
+| **Total** | **6** | **6 reusable patterns** |
 
 ## Related Changes
 

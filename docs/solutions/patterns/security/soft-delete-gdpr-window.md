@@ -109,6 +109,13 @@ async function handleAccountDeletion(req: Request, res: Response) {
 
 **Gotcha:** Always return 200 for user-initiated deletions (even failed) to prevent email enumeration attacks.
 
+> **Implemented shape (T15, 2026-09-05):** the real soft-delete in `src/services/token-service.ts`
+> is `softDeleteAccount(userId)` — ONE `prisma.$transaction` that revokes every `Session` and sets
+> `isActive: false` + `deletedAt` + one `tokenVersion` increment atomically, then mirrors
+> `tokenVersion` to Redis best-effort. The account route calls only `verifyAccessToken` +
+> `softDeleteAccount`. See `atomic-account-lifecycle-invalidation.md` — do NOT copy the naive
+> non-transactional `deleteUser`/`restoreUser` example above into new lifecycle routes.
+
 ### 5. Migration
 
 ```typescript
@@ -141,7 +148,7 @@ await prisma.$executeRaw`
 3. **REST API idempotency**: Use 404 for unknown IDs and 410 (Gone) for soft-deleted records in read operations.
 
 4. **Edge cases**:
-   - Concurrent deletions: Use transactional updates with error handling.
+   - Concurrent deletions: use transactional updates with error handling — implemented as `softDeleteAccount(userId)` (single `prisma.$transaction` + Redis mirror; see `atomic-account-lifecycle-invalidation.md`).
    - Foreign key cascades: Decide whether cascading deletes should hard-delete or skip.
    - Recovery window expiry: Auto-hard-delete after 30 days or mark as expired.
 

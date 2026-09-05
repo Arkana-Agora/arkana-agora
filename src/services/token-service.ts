@@ -433,3 +433,43 @@ export async function revokeAllSessions(userId: string): Promise<void> {
 
   logger.info(`[auth:logout] todas as sessoes revogadas p/ ${userId}`)
 }
+
+export async function softDeleteAccount(userId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.session.updateMany({
+      where: { userId },
+      data: { revokedAt: new Date() },
+    })
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        isActive: false,
+        deletedAt: new Date(),
+        tokenVersion: { increment: 1 },
+      },
+    })
+  })
+
+  if (redis) {
+    try {
+      const fresh = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tokenVersion: true },
+      })
+      if (fresh) {
+        await redis.set(
+          tokenVersionCacheKey(userId),
+          String(fresh.tokenVersion),
+          "EX",
+          ACCESS_TOKEN_TTL_SECONDS,
+        )
+      }
+    } catch {
+      logger.warn(
+        "[auth:account] falha ao espelhar tokenVersion no Redis pos soft delete",
+      )
+    }
+  }
+
+  logger.info(`[auth:account] conta soft-deletada (LGPD) p/ ${userId}`)
+}

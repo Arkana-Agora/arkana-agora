@@ -285,13 +285,14 @@ Authorization: Bearer <accessToken>
 
 ### Resposta — 200 OK
 
+> **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
+> wrapper `data` — idêntico ao de `DELETE /api/v1/auth/account`. A resposta é a **mesma 200**
+> para sucesso, e-mail de confirmação divergente e usuário inexistente (anti-enumeração, com
+> piso de 250ms no no-op via `equalizeNoopTiming`).
+
 ```json
 {
-  "data": {
-    "message": "Sua conta será excluída em 30 dias. Para cancelar, acesse sua conta antes do prazo.",
-    "scheduledDeletionDate": "2025-02-14T10:30:00Z",
-    "supportEmail": "suporte@arkanaagora.com.br"
-  }
+  "message": "Conta marcada para exclusao. Voce tem 30 dias para reverter."
 }
 ```
 
@@ -299,9 +300,9 @@ Authorization: Bearer <accessToken>
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Confirmação inválida |
-| 401 | `AUTH_INVALID_CREDENTIALS` | Email de confirmação incorreto |
-| 409 | `ACCOUNT_ALREADY_SCHEDULED_FOR_DELETION` | Exclusão já agendada |
+| 401 | `AUTH_TOKEN_INVALID` | Access token ausente ou inválido |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa (`isActive=false`/`deletedAt`) |
+| 422 | `VALIDATION_ERROR` | Body inválido, e-mail ausente/inválido ou corpo não-JSON (Zod, com `details` por campo) |
 
 ---
 
