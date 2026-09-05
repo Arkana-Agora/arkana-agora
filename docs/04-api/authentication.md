@@ -9,13 +9,18 @@
 > `POST /auth/verify-email` (T30) e `POST /auth/verify-email/resend` (T30)
 > que já estão implementados**
 > (ver seções abaixo).
-> O ponto de anexo da camada custom são os callbacks `jwt`/`session` em `src/auth/auth.config.ts`.
+> A emissão da Custom JWT Layer nos callbacks OAuth/magic link (`src/auth/auth.config.ts`) está
+> **implementada** (T8/C14): o callback `jwt` chama `emitCustomTokens` (idempotente) após identidade
+> confirmada, o callback `session` expõe `session.accessToken`, e o wrapper
+> `src/app/api/auth/[...nextauth]/route.ts` define o cookie `refreshToken` httpOnly e reescreve o
+> redirect para `/dashboard` **sem tokens na URL** (ver [Visão Geral](#visão-geral)).
 
 > **Módulo**: `src/app/api/v1/auth/` (Sprint 1) + `src/app/api/auth/[...nextauth]` (Auth.js v5 — ADR-010) | **Auth Provider**: Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter mínimo, JWT strategy) | **Session (MVP)**: cookie JWT do Auth.js | **Session (Sprint 1)**: Custom JWT (access/refresh)
 
 ## Sumário
 
 - [Visão Geral](#visão-geral)
+- [Fluxo OAuth / magic link (callbacks Auth.js — T8)](#fluxo-oauth--magic-link-callbacks-authjs--t8)
 - [POST /auth/register](#post-authregister)
 - [POST /auth/login](#post-authlogin)
 - [POST /auth/social](#post-authsocial) _(deprecated)_
@@ -52,6 +57,28 @@
 │         │   └──────────────┘
 └─────────┘<── Bearer access_token → POST /auth/refresh (rotação)
 ```
+
+### Fluxo OAuth / magic link (callbacks Auth.js — T8)
+
+O login via Google (`/api/auth/callback/google`) ou magic link (`/api/auth/callback/email`) é
+confirmado pelo **Auth.js v5** em `/api/auth/*` (ADR-010). Após a identidade confirmada, o callback
+`jwt` em `src/auth/auth.config.ts` chama **`emitCustomTokens`** (T8/C14), idempotente por sessão JWT:
+
+1. Busca o `User` (`isActive`/`deletedAt`/`emailVerified`/`provider`).
+2. **LGPD**: conta inativa/deletada → log warn + **sem emissão** (só o cookie de sessão do Auth.js).
+3. **C12**: Google com `emailVerified === null` → `prisma.user.update({ emailVerified: new Date() })`.
+4. Emite `signAccessToken({ id, role, plan, tokenVersion })` + `createRefreshSession(user.id, {})`
+   e grava em `token.customAuth` (uma única execução por sessão).
+5. Callback `session` expõe `session.accessToken` (consumido pela AuthStore — T25).
+
+O wrapper `src/app/api/auth/[...nextauth]/route.ts` (`finalizeAuthResponse`) então:
+- define o cookie **`refreshToken`** httpOnly+Secure (`Path=/api/v1/auth`, `SameSite=Strict`, `Max-Age=30d`),
+  preservando o cookie de sessão do Auth.js (`set-cookie` via `headers.append`);
+- reescreve o `Location` para **`/dashboard`** — **sem tokens na URL**.
+
+> Relacionados: Google OAuth configurado em `src/auth/auth.config.ts` (condicional a
+> `AUTH_GOOGLE_ID`+`AUTH_GOOGLE_SECRET`); magic link via `EmailProvider` (`maxAge: 15*60`).
+> **Fora de escopo**: Facebook OAuth (C7); re-implementação do fluxo OAuth em `/api/v1/auth/*`.
 
 ### Tipos de sessão
 

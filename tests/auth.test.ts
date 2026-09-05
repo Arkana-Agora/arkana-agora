@@ -19,11 +19,32 @@ const mockUser = {
   isActive: true,
 } as const
 
+const dbUserFixture = {
+  id: "usr_1",
+  role: "USER",
+  plan: "FREE",
+  tokenVersion: 0,
+  isActive: true,
+  deletedAt: null,
+  emailVerified: null,
+  provider: "GOOGLE",
+  providerId: "google-subject-123",
+} as const
+
+const refreshSessionFixture = {
+  rawToken: "rt_custom",
+  tokenHash: "hash_rt",
+  familyId: "fam_1",
+  tokenId: "tokid_1",
+  expiresAt: new Date("2026-10-01T00:00:00Z"),
+}
+
 const prismaMock = vi.hoisted(() => ({
   user: {
     create: vi.fn(),
     update: vi.fn(),
     findFirst: vi.fn(),
+    findUnique: vi.fn(),
   },
   verificationToken: {
     create: vi.fn(),
@@ -31,7 +52,19 @@ const prismaMock = vi.hoisted(() => ({
   },
 }))
 
+const tokenServiceMock = vi.hoisted(() => ({
+  signAccessToken: vi.fn(),
+  createRefreshSession: vi.fn(),
+}))
+
+const loggerMock = vi.hoisted(() => ({
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+  newReqId: vi.fn(() => "req-callback-1"),
+}))
+
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
+vi.mock("@/services/token-service", () => tokenServiceMock)
+vi.mock("@/lib/logger", () => loggerMock)
 
 const notFoundError = Object.assign(new Error("not found"), { code: "P2025" })
 const uniqueViolationError = Object.assign(new Error("unique"), {
@@ -40,6 +73,9 @@ const uniqueViolationError = Object.assign(new Error("unique"), {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  prismaMock.user.findUnique.mockResolvedValue(dbUserFixture)
+  tokenServiceMock.signAccessToken.mockResolvedValue("at_custom")
+  tokenServiceMock.createRefreshSession.mockResolvedValue(refreshSessionFixture)
 })
 
 describe("prismaAdapter — normalização e mapeamento", () => {
@@ -279,5 +315,131 @@ describe("authCallbacks", () => {
   it("signIn permite o fluxo por padrão", async () => {
     const result = await authCallbacks.signIn()
     expect(result).toBe(true)
+  })
+
+  it("jwt emite custom tokens (signAccessToken + createRefreshSession) e anexa customAuth no sign-in", async () => {
+    const result = await authCallbacks.jwt({
+      token: { sub: "usr_1" },
+      user: { id: "usr_1", name: "Google User", email: "maria@email.com" },
+      account: { provider: "google", type: "oauth", providerAccountId: "g1" },
+      trigger: "signIn",
+    } as unknown as JwtParams)
+
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "usr_1" } }),
+    )
+    expect(tokenServiceMock.signAccessToken).toHaveBeenCalledWith({
+      id: "usr_1",
+      role: "USER",
+      plan: "FREE",
+      tokenVersion: 0,
+    })
+    expect(tokenServiceMock.createRefreshSession).toHaveBeenCalledWith(
+      "usr_1",
+      expect.any(Object),
+    )
+    expect(result.customAuth).toEqual({
+      accessToken: "at_custom",
+      refreshToken: "rt_custom",
+      emittedAt: expect.any(Number),
+    })
+    expect(result.userId).toBe("usr_1")
+    expect(result.sub).toBe("usr_1")
+  })
+
+  it("jwt é idempotente: não re-emite quando customAuth já está anexado", async () => {
+    const result = await authCallbacks.jwt({
+      token: {
+        sub: "usr_1",
+        userId: "usr_1",
+        customAuth: { accessToken: "at_old", refreshToken: "rt_old" },
+      },
+      user: { id: "usr_1", name: "Google User", email: "maria@email.com" },
+      account: { provider: "google", type: "oauth", providerAccountId: "g1" },
+      trigger: "signIn",
+    } as unknown as JwtParams)
+
+    expect(tokenServiceMock.signAccessToken).not.toHaveBeenCalled()
+    expect(tokenServiceMock.createRefreshSession).not.toHaveBeenCalled()
+    expect(result.customAuth).toEqual({
+      accessToken: "at_old",
+      refreshToken: "rt_old",
+    })
+  })
+
+  it("jwt auto-verifica Google (C12): marca emailVerified quando sign-in google e user não verificado", async () => {
+    const result = await authCallbacks.jwt({
+      token: { sub: "usr_1" },
+      user: { id: "usr_1", name: "Google User", email: "maria@email.com" },
+      account: { provider: "google", type: "oauth", providerAccountId: "g1" },
+      trigger: "signIn",
+    } as unknown as JwtParams)
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: "usr_1" },
+      data: { emailVerified: expect.any(Date) },
+    })
+    expect(result.customAuth).toBeDefined()
+    expect(tokenServiceMock.signAccessToken).toHaveBeenCalledTimes(1)
+  })
+
+  it("jwt não emite custom tokens p/ usuário LGPD (inativo/deletado) e loga warn", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      ...dbUserFixture,
+      isActive: false,
+    })
+
+    const result = await authCallbacks.jwt({
+      token: { sub: "usr_1" },
+      user: { id: "usr_1", name: "Maria", email: "maria@email.com" },
+      account: { provider: "google", type: "oauth", providerAccountId: "g1" },
+      trigger: "signIn",
+    } as unknown as JwtParams)
+
+    expect(tokenServiceMock.signAccessToken).not.toHaveBeenCalled()
+    expect(tokenServiceMock.createRefreshSession).not.toHaveBeenCalled()
+    expect(result.customAuth).toBeUndefined()
+    expect(loggerMock.logger.warn).toHaveBeenCalled()
+  })
+
+  it("session não re-emite e preserva token quando user não está presente (session refresh)", async () => {
+    const result = await authCallbacks.jwt({
+      token: { sub: "usr_1", userId: "usr_1" },
+    } as unknown as JwtParams)
+
+    expect(tokenServiceMock.signAccessToken).not.toHaveBeenCalled()
+    expect(tokenServiceMock.createRefreshSession).not.toHaveBeenCalled()
+    expect(result.userId).toBe("usr_1")
+  })
+
+  it("session expõe accessToken custom do token (customAuth) + userId", async () => {
+    const session = { user: { name: "Maria", email: "maria@email.com" } }
+    const result = await authCallbacks.session({
+      session,
+      token: {
+        sub: "usr_1",
+        userId: "usr_1",
+        customAuth: { accessToken: "at_custom", refreshToken: "rt_custom" },
+      },
+    } as unknown as SessionParams)
+
+    expect(result.user.id).toBe("usr_1")
+    expect(result.user.email).toBe("maria@email.com")
+    expect(
+      (result as typeof result & { accessToken?: string }).accessToken,
+    ).toBe("at_custom")
+  })
+
+  it("session sem customAuth não expõe accessToken (mantém mínimo)", async () => {
+    const session = { user: { name: "Maria", email: "maria@email.com" } }
+    const result = await authCallbacks.session({
+      session,
+      token: { sub: "usr_1", userId: "usr_1" },
+    } as unknown as SessionParams)
+
+    expect(result.user.id).toBe("usr_1")
+    expect(
+      (result as typeof result & { accessToken?: string }).accessToken,
+    ).toBeUndefined()
   })
 })
