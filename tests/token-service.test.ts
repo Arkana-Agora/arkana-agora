@@ -22,7 +22,6 @@ const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }))
 
-vi.mock("@/lib/redis", () => ({ redis: redisMock }))
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 
 const PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
@@ -82,6 +81,7 @@ const createdUser = {
 beforeEach(() => {
   vi.stubEnv("JWT_PRIVATE_KEY", PRIVATE_KEY)
   vi.stubEnv("JWT_PUBLIC_KEY", PUBLIC_KEY)
+  vi.doMock("@/lib/redis", () => ({ redis: redisMock }))
   vi.clearAllMocks()
 })
 
@@ -92,7 +92,7 @@ afterEach(() => {
 
 describe("token service T7a", () => {
   it("sha256 produz hash hex de 64 chars do valor", async () => {
-    const { sha256 } = await import("@/services/token-service")
+    const { sha256 } = await import("@/lib/crypto")
     const hash = sha256("refresh-abc")
     expect(hash).toHaveLength(64)
     expect(hash).toMatch(/^[0-9a-f]{64}$/)
@@ -445,6 +445,7 @@ describe("token service T7a - bumpTokenVersion", () => {
       id: "usr_1",
       tokenVersion: 1,
     })
+    prismaMock.user.findUnique.mockResolvedValue({ tokenVersion: 1 })
     const { bumpTokenVersion } = await import("@/services/token-service")
 
     await bumpTokenVersion("usr_1")
@@ -461,6 +462,37 @@ describe("token service T7a - bumpTokenVersion", () => {
       "EX",
       expect.any(Number),
     )
+  })
+})
+
+describe("token service T7a - mirrorTokenVersion", () => {
+  it("espelha a tokenVersion atual no Redis com TTL do access token", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ tokenVersion: 3 })
+    const { mirrorTokenVersion } = await import("@/services/token-service")
+
+    await mirrorTokenVersion("usr_1")
+
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "usr_1" },
+      select: { tokenVersion: true },
+    })
+    expect(redisMock.set).toHaveBeenCalledWith(
+      "auth:tokenVersion:usr_1",
+      "3",
+      "EX",
+      expect.any(Number),
+    )
+  })
+
+  it("e best-effort e nao toca Redis/prisma quando Redis esta indisponivel", async () => {
+    vi.resetModules()
+    vi.doMock("@/lib/redis", () => ({ redis: undefined }))
+    const { mirrorTokenVersion } = await import("@/services/token-service")
+
+    await mirrorTokenVersion("usr_1")
+
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
+    expect(redisMock.set).not.toHaveBeenCalled()
   })
 })
 

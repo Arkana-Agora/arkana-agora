@@ -214,4 +214,20 @@ describe("email helpers (T3 - Resend provider)", () => {
       infoSpy.mockRestore()
     }
   })
+
+  it("sendAccountDeletedFinalEmail informa a exclusao definitiva", async () => {
+    const { sendAccountDeletedFinalEmail } = await import(EMAIL_PATH)
+    const res = await sendAccountDeletedFinalEmail("user@example.com", {
+      deleteAfterDays: 30,
+    })
+
+    expect(res.data?.id).toBe("mock-email-id")
+    expect(sendMock).toHaveBeenCalledTimes(1)
+    expectFromDefaults(payloadAt(0))
+    expect(payloadAt(0).subject).toBe(
+      "Sua conta do Arkana Agora foi excluida definitivamente",
+    )
+    expect(payloadAt(0).html).toContain("periodo de carencia de 30 dias")
+    expect(payloadAt(0).text).toContain("crie uma nova conta")
+  })
 })

@@ -211,3 +211,22 @@ permanentemente apagada apos <strong>${deleteAfterDays} dias</strong>.</p>
     `Sua conta foi marcada para exclusao e sera apagada apos ${deleteAfterDays} dias. Voce pode reverter dentro desse periodo.`,
   )
 }
+
+export async function sendAccountDeletedFinalEmail(
+  to: string,
+  { deleteAfterDays }: { deleteAfterDays: number },
+): Promise<CreateEmailResponse> {
+  const email = assertSingleRecipient(to)
+  return sendEmail(
+    email,
+    "account-hard-deleted",
+    "Sua conta do Arkana Agora foi excluida definitivamente",
+    wrap(
+      `<h1>Conta excluida</h1><p>Conforme solicitado, seus dados pessoais foram
+removidos apos o periodo de carencia de ${deleteAfterDays} dias.</p>
+<p>Se esta decisao foi um engano, nenhuma acao e possivel — crie uma nova conta
+para voltar a usar o Arkana Agora.</p>`,
+    ),
+    `Seus dados pessoais foram removidos apos o periodo de carencia de ${deleteAfterDays} dias. Se a exclusao foi um engano, crie uma nova conta.`,
+  )
+}
