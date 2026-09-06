@@ -7,7 +7,7 @@
 > `POST /auth/magic-link/verify` (T10), `POST /auth/forgot-password` (T11),
 > `POST /auth/reset-password` (T12), `POST /auth/refresh` (T13), `POST /auth/logout` (T14),
 > `POST /auth/verify-email` (T30), `POST /auth/verify-email/resend` (T30),
-> `DELETE /auth/account` (T15) e `GET /cron/hard-delete` (T16)
+> `DELETE /auth/account` (T15), `GET /cron/hard-delete` (T16) e `POST /auth/restore-account` (T17)
 > que já estão implementados**
 > (ver seções abaixo).
 > A emissão da Custom JWT Layer nos callbacks OAuth/magic link (`src/auth/auth.config.ts`) está
@@ -35,6 +35,7 @@
 - [POST /auth/verify-email/resend](#post-authverify-emailresend)
 - [GET /auth/me](#get-authme)
 - [DELETE /auth/account](#delete-authaccount)
+- [POST /auth/restore-account](#post-authrestore-account)
 - [GET /cron/hard-delete](#get-cronhard-delete)
 - [Códigos de Erro](#códigos-de-erro)
 
@@ -368,7 +369,7 @@ Content-Type: application/json
 
 > **Nota**: Sempre retorna 200 para evitar enumeração de e-mails.
 
-> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration endpoint (future) sets `deletedAt = NULL` and `isActive = true` within 30-day window per sprint-0.clarifications.md. Past the window, the T16 cron job (`GET /cron/hard-delete`) anonymizes the account — see the section below.
+> **LGPD Soft-Delete (30-day window):** User soft-delete uses `deletedAt DateTime?` field. Active users are filtered by `isActive = true AND deletedAt IS NULL`. Restoration is implemented via `POST /auth/restore-account` (T17, see section below) which sets `deletedAt = NULL` and `isActive = true` within the 30-day window. Past the window, the T16 cron job (`GET /cron/hard-delete`) anonymizes the account — see the section below.
 
 ### Erros
 
@@ -930,6 +931,98 @@ Header `Cache-Control: no-store` na resposta 200.
 
 ---
 
+## POST /auth/restore-account
+
+Restaura uma conta **não autenticada** dentro da janela LGPD de 30 dias (RF-AUTH-008, T17).
+
+> **Status (T17 implementado):** implementado em `src/app/api/v1/auth/restore-account/route.ts`.
+> Após o soft delete a conta está inacessível por autenticação (`verifyToken`/`refresh` barram
+> `isActive=false` e o `tokenVersion` foi bumpado), então a prova de posse é **e-mail + senha**
+> (compare bcrypt do `passwordHash`). A restauração segue o padrão atômico do ciclo de vida:
+> **claim idempotente** numa `prisma.$transaction` callback-style
+> (`updateMany({ where: { id, email, isActive: false, deletedAt: { not: null, gte } } })` →
+> `count === 0` = já restaurada/anonimizada em paralelo → no-op 200 idêntico) que aplica
+> `isActive: true` + `deletedAt: null` + `tokenVersion: { increment: 1 }`, com espelho Redis
+> (`mirrorTokenVersion`) **após** o commit e log de segurança `AUTH_ACCOUNT_RESTORED`.
+
+### Requisição
+
+> **Anti-enumeração:** a resposta é **sempre idêntica** (`200 { message }` abaixo) para conta
+> restaurada, senha incorreta, e-mail inexistente, conta ativa, conta anonimizada (hard delete já
+> rodou — a busca pelo e-mail original não encontra a conta) e restauração concorrente. No no-op,
+> a rota aguarda 250 ms (`equalizeNoopTiming`) antes de responder. O **400 só ocorre após prova de
+> posse** (senha correta) — não vaza enumeração.
+
+```http
+POST /api/v1/auth/restore-account
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "maria@email.com",
+  "password": "SenhaSecreta123!"
+}
+```
+
+### Validação
+
+Schema compartilhado em `src/lib/validators/auth.ts` (`restoreAccountSchema`):
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `email` | string | Sim | Formato e-mail válido (normalizado para minúsculas na consulta — S7) |
+| `password` | string | Sim | Regra de login (mín. 1 char — prova de posse da senha existente) |
+
+`.strict()` rejeita campos extras.
+
+### Comportamento
+
+1. Valida corpo (422 `VALIDATION_ERROR` com `details`; corpo não-JSON → 422 sem detalhes)
+2. Busca `User` por e-mail (lowercase)
+3. **Prova de posse:** `bcrypt.compare(password, passwordHash)` — senha incorreta ou e-mail
+   inexistente/anonimizado → no-op 200 idêntico (com piso de 250 ms)
+4. **Conta não está em soft-delete** (`isActive === true || deletedAt === null`) → no-op 200 idêntico
+5. **Janela expirada** (`deletedAt` há mais de 30 dias, `LGPD_WINDOW_DAYS` em `src/lib/lgpd.ts`)
+   com posse provada → **400 `AUTH_RESTORE_WINDOW_EXPIRED`** (os dados ainda estão no banco até o
+   cron rodar; a restauração é rejeitada)
+6. Dentro da janela → transação **callback-style** com claim idempotente
+   (`where { id, email, isActive: false, deletedAt: { not: null, gte: windowStart } }`) que aplica
+   `isActive: true`, `deletedAt: null`, `tokenVersion: { increment: 1 }`; `count === 0` caso
+   paralelo (restaurada/anonimizada) → no-op 200 idêntico
+7. Após o commit: `mirrorTokenVersion(userId)` (best-effort) + log de segurança
+   `AUTH_ACCOUNT_RESTORED`
+8. Retorna **200 `{ message }`** com `Cache-Control: no-store`
+
+> **Sem criação de sessão:** o usuário restaurado faz login normalmente
+> (`POST /auth/login`) — o tokenVersion bumpado invalida qualquer token residual e o mirror Redis
+> mantém a consistência. Nenhuma revalidação de e-mail é exigida (o `emailVerified` é preservado
+> durante a janela).
+
+### Resposta — 200 OK
+
+> **Nota (contrato canônico):** body plano (flat) `{ message }`, sem wrapper `data` — idêntico
+> em todos os casos (sucesso, senha incorreta, conta inexistente, conta ativa, conta anonimizada,
+> restauração concorrente).
+
+```json
+{
+  "message": "Se a conta estava na janela de restauracao, o acesso foi restabelecido"
+}
+```
+
+Header `Cache-Control: no-store` na resposta 200.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 400 | `AUTH_RESTORE_WINDOW_EXPIRED` | Posse provada, mas a janela de 30 dias expirou (restauração rejeitada) |
+| 422 | `VALIDATION_ERROR` | Corpo não-JSON, e-mail/senha vazios ou campo extra (Zod, com `details`) |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
+
+---
+
 ## GET /cron/hard-delete
 
 Job agendado (Vercel Cron) que anonimiza contas cujo soft-delete expirou a mais de 30 dias (LGPD, T16).
@@ -1056,6 +1149,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_EMAIL_VERIFY_EXPIRED` | 410 | Token de verificação de e-mail expirado (24 h) | Reenviar verificação |
 | `AUTH_RESET_TOKEN_INVALID` | 401 | Token de reset inválido (inexistente, tipo errado, já usado ou usuário inativo/deletado) | Solicitar novo link |
 | `AUTH_RESET_TOKEN_EXPIRED` | 410 | Token de reset expirado (1 h) | Solicitar novo link |
+| `AUTH_RESTORE_WINDOW_EXPIRED` | 400 | Posse provada, mas janela de 30 dias expirada | Solicitar suporte |
 | `AUTH_UNDER_AGE` | 422 | Menor de 18 anos | Bloquear cadastro |
 
 > **Nota:** `AUTH_UNDER_AGE` não faz parte do contrato canônico de register (S11) — o cadastro

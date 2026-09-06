@@ -134,6 +134,23 @@ async function handleAccountDeletion(req: Request, res: Response) {
 > (`sendAccountDeletedFinalEmail(email, { deleteAfterDays: LGPD_WINDOW_DAYS })`). `deletedAt` is
 > preserved. Returns `{ processed, failed, errors }`. No schema change required.
 
+> **Implemented shape (T17, 2026-09-05):** the restoration endpoint
+> `POST /api/v1/auth/restore-account` (`src/app/api/v1/auth/restore-account/route.ts`) is
+> **unauthenticated** — after soft-delete the account cannot authenticate (`verifyToken`/`refresh`
+> block `isActive=false` and `tokenVersion` was bumped), so proof of ownership is **email +
+> password** (`bcrypt.compare`; equals the "revalidar email/credenciais" requirement). It follows
+> the same **idempotent claim** discipline as T16: ONE callback-style
+> `prisma.$transaction(async (tx) => ...)` that claims first
+> (`tx.user.updateMany({ where: { id, email, isActive: false, deletedAt: { not: null, gte: windowStart } } })`
+> — `count === 0` means the account was restored or anonymized concurrently → no-op 200 identical),
+> then sets `isActive: true` + `deletedAt: null` + `tokenVersion: { increment: 1 }`. After commit:
+> mirrors `tokenVersion` to Redis (best-effort) and logs `AUTH_ACCOUNT_RESTORED`. Anti-enumeration:
+> identical `200 { message }` (+250 ms equalize) for wrong password, unknown/anonymized email,
+> active account and concurrent restore; **400 `AUTH_RESTORE_WINDOW_EXPIRED` only after proof of
+> possession** outside the window (owner confirmed → no enumeration risk). No session is created on
+> restore — the user logs in afterwards. Do NOT copy the naive non-transactional `restoreUser`
+> example above.
+
 ### 5. Migration
 
 ```typescript
