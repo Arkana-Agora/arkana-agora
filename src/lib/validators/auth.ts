@@ -103,3 +103,12 @@ export const deleteAccountSchema = z
   .strict()
 
 export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>
+
+export const restoreAccountSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+    password: passwordSchema,
+  })
+  .strict()
+
+export type RestoreAccountInput = z.infer<typeof restoreAccountSchema>

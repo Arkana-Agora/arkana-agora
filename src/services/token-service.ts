@@ -383,6 +383,29 @@ export async function mirrorTokenVersion(userId: string): Promise<void> {
   }
 }
 
+export async function mirrorTokenVersionWithRetry(
+  userId: string,
+  maxRetries = 3,
+): Promise<void> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await mirrorTokenVersion(userId)
+      return
+    } catch (error) {
+      if (attempt === maxRetries) {
+        logger.error(
+          { err: error, userId, attempt },
+          "[token-service] falha ao sincronizar token version no Redis apos tentativas",
+        )
+        // Don't fail the operation if Redis sync fails - just log it
+        return
+      }
+      // Wait before retry with exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+    }
+  }
+}
+
 export async function revokeRefreshSession(
   rawToken: string,
   expectedUserId: string,
