@@ -93,7 +93,7 @@ Consider extracting to a separate module when you see multiple of these:
 ## 9. MODERN TYPESCRIPT PATTERNS
 
 - Use modern ES6+ features: destructuring, spread, optional chaining
-- Leverage TypeScript 6+ features: satisfies operator, const type parameters
+- Leverage TypeScript 5+ features: satisfies operator, const type parameters
 - Prefer immutable patterns over mutation
 - Use functional patterns where appropriate (map, filter, reduce)
 

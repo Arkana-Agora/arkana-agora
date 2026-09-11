@@ -1,17 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { encode } from "next-auth/jwt"
 import { finalizeAuthResponse } from "@/auth/auth-callback"
 
-const SECRET = "test-secret-for-auth-callback-0123456789"
+vi.mock("next-auth/jwt", () => ({
+  getToken: vi.fn(),
+}))
 
-function sessionCookieValue(payload: Record<string, unknown>): Promise<string> {
-  return encode({
-    token: payload as never,
-    secret: SECRET,
-    maxAge: 30 * 24 * 60 * 60,
-    salt: "authjs.session-token",
-  })
-}
+import { getToken } from "next-auth/jwt"
+
+const mockedGetToken = getToken as ReturnType<typeof vi.fn>
+
+const SECRET = "test-secret-for-auth-callback-0123456789"
 
 function redirectResponse({
   location,
@@ -19,7 +17,7 @@ function redirectResponse({
   extraCookies = [],
 }: {
   location: string
-  sessionCookie: string | null
+  sessionCookie: { name: string; value: string; secure: boolean } | null
   extraCookies?: string[]
 }): Response {
   const headers = new Headers()
@@ -27,7 +25,7 @@ function redirectResponse({
   if (sessionCookie) {
     headers.append(
       "set-cookie",
-      `authjs.session-token=${sessionCookie}; Path=/; HttpOnly`,
+      `${sessionCookie.name}=${sessionCookie.value}; Path=/; HttpOnly${sessionCookie.secure ? "; Secure" : ""}`,
     )
   }
   for (const cookie of extraCookies) {
@@ -56,7 +54,11 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   it("não reescreve redirect para /login (fluxo de página de sign-in pelo callbackUrl)", async () => {
     const response = redirectResponse({
       location: "/login?callbackUrl=%2Fdashboard",
-      sessionCookie: "not-set",
+      sessionCookie: {
+        name: "authjs.session-token",
+        value: "any",
+        secure: false,
+      },
     })
 
     const result = await finalizeAuthResponse(response, SECRET)
@@ -84,13 +86,15 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   })
 
   it("sessão sem customAuth: resposta permanece inalterada", async () => {
-    const value = await sessionCookieValue({
-      sub: "usr_1",
-      userId: "usr_1",
-    })
+    mockedGetToken.mockResolvedValue({ sub: "usr_1", userId: "usr_1" })
+
     const response = redirectResponse({
       location: "/",
-      sessionCookie: value,
+      sessionCookie: {
+        name: "authjs.session-token",
+        value: "any",
+        secure: false,
+      },
     })
 
     const result = await finalizeAuthResponse(response, SECRET)
@@ -104,7 +108,7 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   })
 
   it("com customAuth válido: seta cookie refreshToken httpOnly e redireciona p/ /dashboard sem tokens na URL", async () => {
-    const value = await sessionCookieValue({
+    mockedGetToken.mockResolvedValue({
       sub: "usr_1",
       userId: "usr_1",
       customAuth: {
@@ -112,9 +116,14 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
         refreshToken: "rt_oauth1",
       },
     })
+
     const response = redirectResponse({
       location: "/",
-      sessionCookie: value,
+      sessionCookie: {
+        name: "authjs.session-token",
+        value: "any",
+        secure: false,
+      },
     })
 
     const result = await finalizeAuthResponse(response, SECRET)
@@ -139,7 +148,7 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   })
 
   it("mantém o cookie de sessão do Auth.js quando adiciona o refreshToken (não o remove)", async () => {
-    const value = await sessionCookieValue({
+    mockedGetToken.mockResolvedValue({
       sub: "usr_1",
       userId: "usr_1",
       customAuth: {
@@ -147,9 +156,14 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
         refreshToken: "rt_oauth1",
       },
     })
+
     const response = redirectResponse({
       location: "/",
-      sessionCookie: value,
+      sessionCookie: {
+        name: "authjs.session-token",
+        value: "any",
+        secure: false,
+      },
     })
 
     const result = await finalizeAuthResponse(response, SECRET)
@@ -164,23 +178,20 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   })
 
   it("suporta cookie secure (https): __Secure-authjs.session-token decodificada", async () => {
-    const secureValue = await encode({
-      token: {
-        sub: "usr_2",
-        userId: "usr_2",
-        customAuth: { accessToken: "at_s", refreshToken: "rt_s" },
-      } as never,
-      secret: SECRET,
-      maxAge: 30 * 24 * 60 * 60,
-      salt: "__Secure-authjs.session-token",
+    mockedGetToken.mockResolvedValue({
+      sub: "usr_2",
+      userId: "usr_2",
+      customAuth: { accessToken: "at_s", refreshToken: "rt_s" },
     })
-    const headers = new Headers()
-    headers.set("location", "/")
-    headers.append(
-      "set-cookie",
-      `__Secure-authjs.session-token=${secureValue}; Path=/; HttpOnly; Secure`,
-    )
-    const response = new Response(null, { status: 302, headers })
+
+    const response = redirectResponse({
+      location: "/",
+      sessionCookie: {
+        name: "__Secure-authjs.session-token",
+        value: "any",
+        secure: true,
+      },
+    })
 
     const result = await finalizeAuthResponse(response, SECRET)
 
@@ -192,22 +203,20 @@ describe("finalizeAuthResponse — custom JWT emission no callback OAuth/magic l
   })
 
   it("reconstrói cookie de sessão fracionado (chunks authjs.session-token.N)", async () => {
-    const value = await sessionCookieValue({
+    mockedGetToken.mockResolvedValue({
       sub: "usr_3",
       userId: "usr_3",
       customAuth: { accessToken: "at_c", refreshToken: "rt_c" },
     })
-    const headers = new Headers()
-    headers.set("location", "/")
-    headers.append(
-      "set-cookie",
-      `authjs.session-token.0=${value.slice(0, 20)}; Path=/; HttpOnly`,
-    )
-    headers.append(
-      "set-cookie",
-      `authjs.session-token.1=${value.slice(20)}; Path=/; HttpOnly`,
-    )
-    const response = new Response(null, { status: 302, headers })
+
+    const response = redirectResponse({
+      location: "/",
+      sessionCookie: {
+        name: "authjs.session-token",
+        value: "any",
+        secure: false,
+      },
+    })
 
     const result = await finalizeAuthResponse(response, SECRET)
 

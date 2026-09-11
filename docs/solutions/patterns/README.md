@@ -1,66 +1,102 @@
 # Documentation Maintenance — Pattern Registry
 
-> **Date**: 2026-08-11
-> **Session**: Unplanned work to fix critical issues and document reusable patterns
+> **Date**: 2026-09-10
+> **Session**: Documentation refresh to align pattern registry with current state
 
 ## Context
 
-This session addressed and documented multiple cross-cutting concerns:
-- GDPR/LGPD soft-delete implementation
-- Auth provider ID normalization conventions
-- Admin health endpoint rich metadata variant
-- Logger migration pattern (console.error → Pino)
+This refresh ensures the pattern registry reflects all documented solutions in `docs/solutions/`. Pattern status is categorized as:
+- **Current** — implemented and actively used
+- **Pending** — documented but not yet implemented
+- **Resolved** — problem pattern solved, now stable
 
 ## Documentation Created
 
 ### Security Patterns
 
-1. **`docs/solutions/patterns/security/soft-delete-gdpr-window.md`**
+1. **`docs/solutions/patterns/security/soft-delete-gdpr-window.md`** (2026-09-05)
    - Soft-delete with 30-day restoration window for GDPR/LGPD compliance
    - Key pattern: `isActive = true AND deletedAt IS NULL` filtering
    - Migration sequence for nullable → NOT NULL columns
+   - **Implemented**: T15 (atomic soft-delete), T16 (hard-delete job), T17 (restore endpoint)
 
 2. **`docs/solutions/patterns/security/providerid-normalization-convention.md`**
    - Provider-specific normalization: EMAIL → lowercase email, OAuth → subject ID
    - Aligns with `email @unique` constraint
    - Uses `@@unique([provider, providerId])` composite constraint
 
-### Backend Patterns
-
-3. **`docs/solutions/patterns/backend/admin-health-rich-metadata.md`**
-   - Rich metadata variant of health envelope for admin dashboards
-   - Per-service metrics: latency, connection pool, SSL expiry, memory usage
-   - Distinguishes `/api/health` (simple) vs `/admin/system/health` (rich)
-
-### Observability Patterns
-
-4. **`docs/solutions/patterns/observability/logger-migration-stopgap.md`**
-   - Two-phase migration: console.error stopgap → Pino
-   - Migration checklist and examples
-   - Aligns with observability.md §2.1
-
-### Security Patterns (3)
-
-5. **`docs/solutions/patterns/security/auth-uniform-response-timing-equalization.md`**
+3. **`docs/solutions/patterns/security/auth-uniform-response-timing-equalization.md`**
    - Uniform-200 is not enough for anti-enumeration — response timing is a second channel
    - Timing floor (`NOOP_EQUALIZE_MS = 250`) on the no-op branch via `equalizeNoopTiming()`
    - Used in magic-link, forgot-password, verify-email/resend; test asserts `>= 240ms`
    - Rate limit (RNF-AUTH-004, 1/min) is separate and deferred to T27 — do not conflate
+   - **Implemented**: T9, T11, T30, T15 (all four auth endpoints)
 
-6. **`docs/solutions/patterns/security/atomic-account-lifecycle-invalidation.md`** _(2026-09-05, T15)_
+4. **`docs/solutions/patterns/security/atomic-account-lifecycle-invalidation.md`** (2026-09-05, T15)
    - Credential invalidation + account state change must be ONE `prisma.$transaction` (session revoke + `isActive`/`deletedAt` + single `tokenVersion` bump), Redis mirror best-effort after commit
    - Implemented: `softDeleteAccount`/`revokeAllSessions` in `src/services/token-service.ts`
    - Anti-enumeration no-op must equalize body + `cache-control: no-store` header + 250ms floor (headers are a 3rd channel)
    - Route calls ONE service function; never chain `user.update` + `bumpTokenVersion` + `revokeAllSessions` in a route
 
+### Backend Patterns
+
+5. **`docs/solutions/patterns/backend/health-check-envelope.md`** (2026-08-11, established)
+   - Base health check envelope with derived status, neutral optional services, time-boxed DB check
+   - Per-service checks (database, redis, future AI), status derived from aggregate
+   - **Implemented**: `GET /api/health` with Redis as optional service
+   - Logging migrated to Pino via `@/lib/logger` with `[health]` prefix
+
+6. **`docs/solutions/patterns/backend/admin-health-rich-metadata.md`** (Pending)
+   - Rich metadata variant of health envelope for admin dashboards
+   - Per-service metrics: latency, connection pool, SSL expiry, memory usage
+   - Distinguishes `/api/health` (simple) vs `/admin/system/health` (rich)
+   - **Status**: Documented pattern, not yet implemented
+
+### Observability Patterns
+
+7. **`docs/solutions/patterns/observability/logger-migration-stopgap.md`**
+   - Two-phase migration: console.error stopgap → Pino
+   - Migration checklist and examples
+   - Aligns with observability.md §2.1
+   - **Status**: Phase 2 landed for health-check surface (Pino logging via `@/lib/logger`), remaining stopgap in `src/auth/auth.config.ts:88` deferred
+
+### CI/CD Patterns
+
+8. **`docs/solutions/patterns/ci-cd/multi-target-build-simulation.md`** (2026-08-24)
+   - Single `next.config.ts` serving three targets (Vercel, Docker, CI) via `VERCEL=1` marker
+   - Post-object mutation pattern, never inline ternary
+   - Local simulation before push (assert `.next/standalone` presence)
+   - `upload-artifact@v4` requires `include-hidden-files: true` for dot-dirs
+   - **Status**: Current and actively used
+
+9. **`docs/solutions/ci-cd/artifact-upload-dot-dirs.md`** (2026-08-24, Resolved)
+   - Fix for `upload-artifact@v4.4.0` breaking change — dot-dirs excluded by default
+   - Requires `include-hidden-files: true` for `.next/`, `.github/`, `.turbo/`
+   - **Status**: Solved, historical reference for future dot-dir uploads
+
+10. **`docs/solutions/ci-cd/vercel-build-nft-enoent.md`** (2026-08-24, Resolved)
+    - Fix for Vercel build failing with ENOENT when adapter active + standalone enabled
+    - `VERCEL=1` guard prevents standalone emission in Vercel builds
+    - Removal condition: vercel/next.js#97287 reaches stable tracked release
+    - **Status**: Solved with documented re-evaluation condition
+
+### Operations Patterns
+
+11. **`docs/solutions/operations/health-endpoint-contract.md`** (2026-08-11, Resolved)
+    - Problem/solution for health endpoint contract violation
+    - Fix: derived status, time-boxed DB check, APP_VERSION from `src/lib/version.ts`, Pino logging
+    - **Status**: Fully resolved, Redis as optional service, Pino logging active
+
 ## Pattern Coverage
 
-| Pattern Category | Files Created | Key Learnings |
-|------------------|--------------|---------------|
-| Security | 4 | GDPR soft-delete, providerId normalization, uniform-response timing equalization, atomic account lifecycle invalidation |
-| Backend | 1 | Admin health rich metadata |
-| Observability | 1 | Logger migration pattern |
-| **Total** | **6** | **6 reusable patterns** |
+| Pattern Category | Files Created | Status |
+|------------------|--------------|--------|
+| Security | 4 | 3 Current, 1 Pending (account lifecycle) |
+| Backend | 2 | 1 Current, 1 Pending (admin health) |
+| Observability | 1 | 1 Current (partially) |
+| CI/CD | 3 | 1 Current, 2 Resolved |
+| Operations | 1 | 1 Resolved |
+| **Total** | **11** | **6 Current, 2 Pending, 3 Resolved** |
 
 ## Related Changes
 
@@ -101,7 +137,7 @@ These patterns should be referenced in:
    - Use providerId normalization convention
    - Implement soft-delete for account deletion
    - Use admin health pattern for admin endpoints
-3. **Document ADR-005 migration path** for versioned routes
+ 3. **Document ADR-005 migration path** for versioned routes
 
 ## Sources
 
