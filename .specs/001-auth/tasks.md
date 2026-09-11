@@ -49,8 +49,8 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 18 | Criar componente AuthLayout com design responsivo | pending | 2 | - |
-| 19 | Criar componente LoginForm com validacao client-side | pending | 3 | 7, 8, 18 |
+| 18 | Criar componente AuthLayout com design responsivo | done | 2 | - |
+| 19 | Criar componente LoginForm com validacao client-side | done | 3 | 7, 8, 18 |
 | 20 | Criar componente RegisterForm com indicador de forca de senha | pending | 3 | 6, 18 |
 | 21 | Criar componente MagicLinkForm com feedback visual | pending | 2 | 9, 18 |
 | 22 | Criar componente ForgotPasswordForm | pending | 1.5 | 11, 18 |
@@ -61,7 +61,7 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 25 | Implementar AuthStore no Zustand com persistencia | pending | 3 | 7, 8 |
+| 25 | Implementar AuthStore no Zustand com persistencia (prototipo minimo em `src/stores/auth-store.ts` criado no T19 — persistencia pendente) | pending | 3 | 7, 8 |
 | 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
 | 27 | Implementar rate limiting (Redis) por IP/email (login, magic link, reset) | pending | 3 | infra |
 | 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |

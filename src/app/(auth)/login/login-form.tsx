@@ -1,96 +1,149 @@
 "use client"
 
 import { useState } from "react"
-import type { FormEvent } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Eye, EyeOff } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { loginSchema, type LoginInput } from "@/lib/validators/auth"
+import { useAuthStore } from "@/stores/auth-store"
 
-type Status = "idle" | "loading" | "sent" | "error"
-
-const EMAIL_SEND_ERROR =
-  "Não foi possível enviar o link de acesso. Tente novamente."
+const SERVER_ERROR_MESSAGES: Record<string, string> = {
+  AUTH_INVALID_CREDENTIALS: "E-mail ou senha invalidos",
+  AUTH_ACCOUNT_SUSPENDED: "Sua conta esta suspensa",
+  AUTH_ACCOUNT_LOCKED: "Conta bloqueada temporariamente",
+  AUTH_RATE_LIMITED: "Muitas tentativas de login tente novamente em instantes",
+  VALIDATION_ERROR: "Dados de entrada invalidos",
+}
 
 export function LoginForm() {
-  const [email, setEmail] = useState("")
-  const [status, setStatus] = useState<Status>("idle")
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const login = useAuthStore((state) => state.login)
+  const [showPassword, setShowPassword] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
 
-  async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setStatus("loading")
-    setError(null)
-    try {
-      const result = await signIn("email", {
-        email: email.trim(),
-        redirect: false,
-        callbackUrl: "/dashboard",
-      })
-      if (result?.error) {
-        setStatus("error")
-        setError(EMAIL_SEND_ERROR)
-      } else {
-        setStatus("sent")
-      }
-    } catch {
-      setStatus("error")
-      setError(EMAIL_SEND_ERROR)
-    }
-  }
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  })
 
   async function handleGoogleSignIn() {
-    setStatus("loading")
-    setError(null)
     try {
       await signIn("google", { callbackUrl: "/dashboard" })
-    } catch {
-      setStatus("error")
-      setError("Não foi possível entrar com o Google. Tente novamente.")
+    } catch (err) {
+      if (!(err instanceof Error && err.message === "NEXT_REDIRECT")) {
+        setServerError("Erro ao entrar com Google")
+      }
     }
   }
 
-  if (status === "sent") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Enviamos um link de acesso para <strong>{email}</strong>. Verifique sua
-        caixa de entrada.
-      </p>
-    )
+  async function onSubmit(data: LoginInput) {
+    setServerError(null)
+    try {
+      await login(data.email.trim(), data.password)
+      router.push("/dashboard")
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_EMAIL_NOT_VERIFIED") {
+        router.push(
+          `/auth/verify-email?email=${encodeURIComponent(data.email.trim())}`,
+        )
+        return
+      }
+      const stateMessage =
+        err instanceof Error ? SERVER_ERROR_MESSAGES[err.message] : undefined
+      setServerError(stateMessage ?? "Erro ao fazer login")
+    }
   }
 
   return (
-    <form onSubmit={handleEmailSubmit} className="grid gap-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4" noValidate>
       <div className="grid gap-2">
         <Label htmlFor="email">E-mail</Label>
         <Input
           id="email"
-          name="email"
           type="email"
           autoComplete="email"
-          required
           maxLength={254}
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
           placeholder="voce@email.com"
-          aria-invalid={status === "error" || undefined}
-          aria-describedby={status === "error" ? "login-error" : undefined}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? "email-error" : undefined}
+          {...register("email")}
         />
+        {errors.email && (
+          <p
+            id="email-error"
+            role="alert"
+            className="text-sm font-medium text-destructive"
+          >
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
-      {status === "error" && (
-        <p
-          id="login-error"
-          className="text-sm font-medium text-destructive"
-          role="alert"
-        >
-          {error}
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Senha</Label>
+          <Link
+            href="/forgot-password"
+            className="text-xs text-muted-foreground hover:text-primary"
+          >
+            Esqueci minha senha
+          </Link>
+        </div>
+        <div className="relative">
+          <Input
+            id="password"
+            data-testid="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="Sua senha"
+            className="pr-10"
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? "password-error" : undefined}
+            {...register("password")}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+          >
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        {errors.password && (
+          <p
+            id="password-error"
+            role="alert"
+            className="text-sm font-medium text-destructive"
+          >
+            {errors.password.message}
+          </p>
+        )}
+      </div>
+
+      {serverError && (
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {serverError}
         </p>
       )}
 
-      <Button type="submit" disabled={status === "loading"}>
-        {status === "loading" ? "Enviando..." : "Enviar link de acesso"}
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Entrando..." : "Entrar"}
       </Button>
 
       <div className="relative my-1 text-center text-xs text-muted-foreground">
@@ -101,11 +154,23 @@ export function LoginForm() {
       <Button
         type="button"
         variant="outline"
-        disabled={status === "loading"}
+        disabled={isSubmitting}
         onClick={handleGoogleSignIn}
       >
         Entrar com Google
       </Button>
+
+      <div className="flex flex-col items-center gap-1 text-sm">
+        <Link
+          href="/magic-link"
+          className="text-muted-foreground hover:text-primary"
+        >
+          Entrar com magic link
+        </Link>
+        <Link href="/register" className="text-primary hover:underline">
+          Criar conta
+        </Link>
+      </div>
     </form>
   )
 }

@@ -164,7 +164,7 @@
 | email | string | Sim |
 | password | string | Sim |
 
-**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }` + Set-Cookie refreshToken (httpOnly, SameSite=Strict, Path=/api/v1/auth, Max-Age=30d)
+**Response 200**: `{ accessToken, user: { id, name, displayName, email, role, plan, avatar } }` + Set-Cookie refreshToken (httpOnly, SameSite=Strict, Path=/api/v1/auth, Max-Age=30d) + Set-Cookie cookie de sessao do Auth.js (ADR-011: `authjs.session-token`/`__Secure-authjs.session-token`, Path=/, HttpOnly, SameSite=Lax, Max-Age=30d, Secure em HTTPS; payload `{ sub, userId, customAuth }` via `encode` de `next-auth/jwt`; exige `AUTH_SECRET`)
 **Response 422**: `{ error: { code: "VALIDATION_ERROR", message, details } }`
 **Response 403**: `{ error: { code: "AUTH_ACCOUNT_LOCKED", retryAfter: 900 } }` (5 falhas consecutivas)
 **Response 429**: `{ error: { code: "AUTH_RATE_LIMITED", retryAfter } }` (limite de volume por IP, 5/15min)
@@ -217,7 +217,7 @@ redirect final para `/dashboard` **sem tokens na URL**.
 **Response 422**: `{ error: "VALIDATION_ERROR" }` — token ausente, acima de 256 chars, campo extra (schema `.strict()`) ou corpo nao-JSON
 **Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
 
-**Decisoes**: reusar o tipo literal `"EMAIL"` existente no schema (prisma `VerificationToken.type String` — nao criar tipo novo); janela de 24h identica ao envio da task 6; valida LGPD antes de marcar verificado (usuario inativo/deletado nao reativa conta via token vigente). O frontend redireciona ao login apos confirmacao; ver `isAuthenticated` (design §6) que exige `emailVerified === true`.
+**Decisoes**: reusar o tipo literal `"EMAIL"` existente no schema (prisma `VerificationToken.type String` — nao criar tipo novo); janela de 24h identica ao envio da task 6; valida LGPD antes de marcar verificado (usuario inativo/deletado nao reativa conta via token vigente). O frontend redireciona ao login apos confirmacao; ver `isAuthenticated` (design §5) que e definido no sucesso do `login()`.
 
 ### POST /api/v1/auth/verify-email/resend
 **Descricao**: Reenvia o email de verificacao (RF-AUTH-005). Regenera um novo token `EMAIL` de 24h substituindo quaisquer tokens anteriores do mesmo endereco e envia por email; se o envio falhar, o token permanece persistido (precedente task 6) e a resposta e identica.
@@ -386,8 +386,7 @@ interface AuthState {
     role: 'USER' | 'PROFESSIONAL' | 'ADMIN';
     plan: 'FREE' | 'PLUS';
     avatar: string | null;
-    emailVerified: boolean;
-  } | null;
+  } | null; // alinhado ao payload de POST /api/v1/auth/login (sem emailVerified)
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -408,7 +407,7 @@ interface AuthState {
 - `isLoading` e `true` durante qualquer operacao assincrona de auth
 - `error` e automaticamente limpo apos 5 segundos (useEffect)
 - `user` e persistido no localStorage (para evitar re-login em reload)
-- `isAuthenticated` e derivado de `user !== null && user.emailVerified === true`
+- `isAuthenticated` e definido como `true` apenas no sucesso do `login()` (implementado: `user` so e armazenado em resposta 200 com `accessToken`; `AUTH_EMAIL_NOT_VERIFIED` lanca erro sem armazenar `user`)
 
 ---
 
