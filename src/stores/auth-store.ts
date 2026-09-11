@@ -10,8 +10,13 @@ interface User {
   role: string
   plan: string
   avatar: string | null
-  emailVerified: boolean
 }
+
+type LoginResponse =
+  | { accessToken: string; user: User }
+  | { error: { code: string; message: string } }
+
+export type { User }
 
 interface AuthState {
   user: User | null
@@ -30,33 +35,33 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
-    const res = await fetch("/api/v1/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    })
-    const data = await res.json()
-
-    if (res.ok) {
-      set({
-        user: data.user,
-        isAuthenticated: true,
-        isLoading: false,
+    try {
+      const res = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       })
-      return
-    }
+      const data = (await res.json()) as LoginResponse
 
-    set({ isLoading: false })
-
-    if (data.error?.code === "AUTH_EMAIL_NOT_VERIFIED") {
-      if (data.user) {
-        set({ user: data.user, isAuthenticated: false })
+      if (res.ok && "user" in data) {
+        set({ user: data.user, isAuthenticated: true })
+        return
       }
-      throw new Error("AUTH_EMAIL_NOT_VERIFIED")
-    }
 
-    set({ error: data.error?.message ?? "Erro ao fazer login" })
-    throw new Error(data.error?.code ?? "UNKNOWN_ERROR")
+      if ("error" in data) {
+        set({ error: data.error.message })
+        throw new Error(data.error.code)
+      }
+
+      throw new Error("UNKNOWN_ERROR")
+    } catch (err) {
+      if (err instanceof Error && err.message !== "AUTH_EMAIL_NOT_VERIFIED") {
+        set((state) => ({ error: state.error ?? "Erro ao fazer login" }))
+      }
+      throw err
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
   clearError: () => set({ error: null }),

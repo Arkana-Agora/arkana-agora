@@ -203,6 +203,42 @@ export async function POST(request: Request): Promise<Response> {
   )
   response.headers.set("set-cookie", buildAuthCookie(session.rawToken))
 
+  // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize credentials login
+  const authSecret = process.env.AUTH_SECRET
+  if (!authSecret) {
+    logger.error(
+      { reqId, userId: user.id },
+      "[auth:login] AUTH_SECRET ausente — impossivel cunhar sessao Auth.js",
+    )
+    throw new Error(
+      "AUTH_SECRET environment variable is required for session token issuance",
+    )
+  }
+  const { encode } = await import("next-auth/jwt")
+  const isSecure = new URL(request.url).protocol === "https:"
+  const sessionJwtMaxAge = REFRESH_COOKIE_MAX_AGE
+  const sessionCookieName = isSecure
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token"
+  const sessionToken = await encode({
+    token: {
+      sub: user.id,
+      userId: user.id,
+      customAuth: {
+        accessToken,
+        refreshToken: session.rawToken,
+        emittedAt: Date.now(),
+      },
+    },
+    secret: authSecret,
+    salt: sessionCookieName,
+    maxAge: sessionJwtMaxAge,
+  })
+  response.headers.append(
+    "set-cookie",
+    `${sessionCookieName}=${sessionToken}; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}; Max-Age=${sessionJwtMaxAge}`,
+  )
+
   // TODO: Production check: validate SameSite=Strict cookie attribute in production
   // Enable during development: `if (process.env.NODE_ENV === "production") { ... }`
 

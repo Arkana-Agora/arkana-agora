@@ -37,6 +37,16 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   })
 
+  async function handleGoogleSignIn() {
+    try {
+      await signIn("google", { callbackUrl: "/dashboard" })
+    } catch (err) {
+      if (!(err instanceof Error && err.message === "NEXT_REDIRECT")) {
+        setServerError("Erro ao entrar com Google")
+      }
+    }
+  }
+
   async function onSubmit(data: LoginInput) {
     setServerError(null)
     try {
@@ -145,7 +155,7 @@ export function LoginForm() {
         type="button"
         variant="outline"
         disabled={isSubmitting}
-        onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+        onClick={handleGoogleSignIn}
       >
         Entrar com Google
       </Button>

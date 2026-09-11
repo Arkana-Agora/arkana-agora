@@ -187,6 +187,9 @@ describe("LoginForm", () => {
       })
 
       resolveLogin()
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith("/dashboard")
+      })
     })
 
     it("displays error message on AUTH_INVALID_CREDENTIALS", async () => {

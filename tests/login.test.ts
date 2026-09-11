@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const prismaMock = vi.hoisted(() => ({
@@ -52,6 +53,7 @@ async function callPost(body: unknown, ip = "127.0.0.1"): Promise<Response> {
 }
 
 beforeEach(() => {
+  process.env.AUTH_SECRET = "test-secret"
   vi.clearAllMocks()
   resetRateLimiter()
   tokenServiceMock.signAccessToken.mockResolvedValue("access.jwt.token")
@@ -67,6 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  delete process.env.AUTH_SECRET
   vi.resetModules()
 })
 
@@ -235,5 +238,80 @@ describe("POST /api/v1/auth/login (T7)", () => {
     bcryptMock.compare.mockResolvedValue(false)
     const again = await callPost(validBody())
     expect(again.status).toBe(401)
+  })
+
+  describe("ponte de sessao Auth.js (ADR-011)", () => {
+    it("emite cookie authjs.session-token decodificavel com userId/sub e customAuth no login http", async () => {
+      process.env.AUTH_SECRET = "test-secret-session"
+      prismaMock.user.findFirst.mockResolvedValue(activeUser)
+      bcryptMock.compare.mockResolvedValue(true)
+
+      const res = await callPost(validBody())
+      expect(res.status).toBe(200)
+
+      const sessionCookie = res.headers
+        .getSetCookie()
+        .find((c) => c.startsWith("authjs.session-token="))
+      expect(sessionCookie).toBeTruthy()
+
+      const token = sessionCookie?.split(";")[0]?.split("=").splice(1).join("=")
+      const { decode } = await import("next-auth/jwt")
+      const decoded = await decode({
+        token: token || "",
+        secret: "test-secret-session",
+        salt: "authjs.session-token",
+      })
+
+      expect(decoded?.userId).toBe("usr_1")
+      expect(decoded?.sub).toBe("usr_1")
+      const customAuth = decoded?.customAuth as
+        { accessToken: string; refreshToken: string } | undefined
+      expect(customAuth?.accessToken).toBe("access.jwt.token")
+      expect(customAuth?.refreshToken).toBe("refresh-raw-token")
+    })
+
+    it("usa __Secure-authjs.session-token com atributo Secure/SameSite=Lax em https", async () => {
+      process.env.AUTH_SECRET = "test-secret-session"
+      prismaMock.user.findFirst.mockResolvedValue(activeUser)
+      bcryptMock.compare.mockResolvedValue(true)
+
+      const { POST } = await import("@/app/api/v1/auth/login/route")
+      const res = await POST(
+        new Request("https://arkanaagora.dev/api/v1/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(validBody()),
+        }),
+      )
+
+      const sessionCookie = res.headers
+        .getSetCookie()
+        .find((c) => c.startsWith("__Secure-authjs.session-token="))
+      expect(sessionCookie).toBeTruthy()
+      expect(sessionCookie).toContain("HttpOnly")
+      expect(sessionCookie).toContain("SameSite=Lax")
+      expect(sessionCookie).toContain("Secure")
+    })
+
+    it("nao emite cookie de sessao Auth.js em login com credenciais invalidas", async () => {
+      process.env.AUTH_SECRET = "test-secret-session"
+      prismaMock.user.findFirst.mockResolvedValue(activeUser)
+      bcryptMock.compare.mockResolvedValue(false)
+
+      const res = await callPost(validBody())
+      expect(res.status).toBe(401)
+      const sessionCookie = res.headers
+        .getSetCookie()
+        .find((c) => c.includes("session-token"))
+      expect(sessionCookie).toBeUndefined()
+    })
+
+    it("lanca erro claro se AUTH_SECRET ausente no caminho de sucesso", async () => {
+      delete process.env.AUTH_SECRET
+      prismaMock.user.findFirst.mockResolvedValue(activeUser)
+      bcryptMock.compare.mockResolvedValue(true)
+
+      await expect(callPost(validBody())).rejects.toThrowError(/AUTH_SECRET/)
+    })
   })
 })
