@@ -26,6 +26,7 @@
     "*.{json,md,css}": "bunx prettier --write"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.7.1",
     "@prisma/client": "^6.5.0",
     "@sentry/nextjs": "^10.71.0",
     "@tailwindcss/postcss": "^4",

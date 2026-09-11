@@ -6,7 +6,7 @@
 
 ## Descrição
 
-O módulo de autenticação do **Arkana Agora** é responsável por gerenciar o ciclo de vida do usuário, desde o login inicial até o encerramento da conta. A camada de login do MVP é o **Auth.js v5** (`next-auth@5.0.0-beta.32` pinado — ADR-010, que supersede a cláusula "NextAuth.js v4 + adapter Prisma" do ADR-009) com **adapter Prisma mínimo** e estratégia de sessão **JWT**: **Google OAuth** e **magic link** são os fluxos do MVP, e a sessão real é o **cookie JWT do Auth.js** exposto em `/api/auth/*` (handler em `src/app/api/auth/[...nextauth]`). A **Custom JWT Layer** (access RS256 de 15 min + refresh rotativo de 30 dias, ADR-009 Gate B) é o estado-alvo da **Sprint 1**, com ponto de anexo nos callbacks `jwt`/`session` de `src/auth/auth.config.ts`. E-mail/senha (credentials), Facebook OAuth e as rotas `/api/v1/auth/*` (incluindo o rate limit de magic link) também são **Sprint 1**.
+O módulo de autenticação do **Arkana Agora** é responsável por gerenciar o ciclo de vida do usuário, desde o login inicial até o encerramento da conta. A camada de login do MVP é o **Auth.js v5** (`next-auth@5.0.0-beta.32` pinado — ADR-010, que supersede a cláusula "NextAuth.js v4 + adapter Prisma" do ADR-009) com **adapter Prisma mínimo** e estratégia de sessão **JWT**: **Google OAuth** e **magic link** são os fluxos do MVP, e a sessão real é o **cookie JWT do Auth.js** exposto em `/api/auth/*` (handler em `src/app/api/auth/[...nextauth]`). A **Custom JWT Layer** (access RS256 de 15 min + refresh rotativo de 30 dias, ADR-009 Gate B) é o estado-alvo da **Sprint 1**, com ponto de anexo nos callbacks `jwt`/`session` de `src/auth/auth.config.ts`. Facebook OAuth e as rotas `/api/v1/auth/*` (incluindo o rate limit de magic link) também são **Sprint 1** — o login por e-mail/senha (credentials) já foi entregue na Sprint 1: backend `POST /api/v1/auth/login` (T7) + frontend `LoginForm` (T19).
 
 O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth/callback/email`): token **single-use** com validade de **15 minutos** via model `VerificationToken` (`type = "MAGIC_LINK"`, deletado na redenção); em dev, sem SMTP, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console em vez de enviar.
 
@@ -23,6 +23,8 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
 - **Verificação de e-mail** — Sprint 1: **T30 implementado** — `POST /api/v1/auth/verify-email` (redime `VerificationToken type=EMAIL` single-use 24h; 401 `AUTH_EMAIL_VERIFY_INVALID` / 410 `AUTH_EMAIL_VERIFY_EXPIRED`; guarda LGPD; marca `emailVerified` + `bumpTokenVersion`) e `POST /api/v1/auth/verify-email/resend` (reenvio anti-enumeração, 200 uniforme)
 - **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
+- **LoginForm (frontend)** — Sprint 1: **T19 implementado** — `src/app/(auth)/login/login-form.tsx` rework: campos e-mail + senha com toggle de visibilidade (`aria-label` "Mostrar senha"/"Ocultar senha"), validação client-side via react-hook-form + `zodResolver(loginSchema)` (de `src/lib/validators/auth.ts`), botão "Entrar" com loading; chama `useAuthStore.login(email, password)` (POST `/api/v1/auth/login`), redireciona para `/dashboard` em sucesso e para `/auth/verify-email?email=...` em `AUTH_EMAIL_NOT_VERIFIED`; mapeia `AUTH_INVALID_CREDENTIALS`/`AUTH_ACCOUNT_SUSPENDED`/`AUTH_ACCOUNT_LOCKED`/`AUTH_RATE_LIMITED`/`VALIDATION_ERROR` para mensagens amigáveis; Google via `signIn("google", { callbackUrl: "/dashboard" })`; links para `/magic-link`, `/forgot-password` e `/register`
+- **AuthStore (Zustand)** — Sprint 1: **protótipo mínimo (T19)** — `src/stores/auth-store.ts` com `user`, `isAuthenticated`, `isLoading`, `error`, `login(email, password)` (POST `/api/v1/auth/login`) e `clearError`; persistência (T25) e interceptor Axios (T26) pendentes
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
@@ -66,14 +68,15 @@ Preencha em `.env` (dev local) e nas variáveis de ambiente de produção/stagin
 
 ## Fluxo Principal (MVP)
 
-1. O usuário acessa `/login` e escolhe **magic link** ou **Entrar com Google**
-2. **Magic link**: o usuário informa o e-mail; o `EmailProvider` do Auth.js gera o token em `VerificationToken` e envia o link (15 min, single-use; em dev, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console)
-3. O clique no link autentica no callback `/api/auth/callback/email` (o token é deletado na redenção — single-use)
-4. **Google OAuth**: o Auth.js redireciona para o consent screen; no callback `/api/auth/callback/google`, o adapter mínimo busca/cria o usuário (`getUserByAccount`/`getUserByEmail`/`createUser` + `linkAccount`)
-5. A sessão é o **cookie JWT do Auth.js** (JWT strategy) — o Auth.js não grava sessões no banco
-6. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })` e, em nível de route group, pelo guard `src/app/(app)/layout.tsx` (`auth()` + `redirect("/login")` — F2B); sem sessão válida, redireciona para `/login`
-7. **Sprint 1**: a Custom JWT Layer assume após o callback (callbacks `jwt`/`session` em `src/auth/auth.config.ts`): access token (15 min, RS256) + refresh token rotativo (30 dias)
-8. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h — T11 implementado) e exclusão de conta (LGPD, 30 dias — T15 soft delete implementado + T16 hard-delete cron implementado)
+1. O usuário acessa `/login` — o `LoginForm` (T19) oferece **e-mail + senha** como fluxo principal, com alternativas **Entrar com Google** e **Entrar com magic link**
+2. **E-mail + senha**: validação client-side (react-hook-form + `zodResolver(loginSchema)`); `useAuthStore.login(email, password)` chama `POST /api/v1/auth/login`; sucesso → `/dashboard`; `AUTH_EMAIL_NOT_VERIFIED` → `/auth/verify-email?email=...`; demais erros mapeados para mensagens amigáveis
+3. **Magic link**: o usuário informa o e-mail; o `EmailProvider` do Auth.js gera o token em `VerificationToken` e envia o link (15 min, single-use; em dev, `AUTH_EMAIL_SKIP_SEND=true` loga o link no console)
+4. O clique no link autentica no callback `/api/auth/callback/email` (o token é deletado na redenção — single-use)
+5. **Google OAuth**: o Auth.js redireciona para o consent screen; no callback `/api/auth/callback/google`, o adapter mínimo busca/cria o usuário (`getUserByAccount`/`getUserByEmail`/`createUser` + `linkAccount`)
+6. A sessão é o **cookie JWT do Auth.js** (JWT strategy) — o Auth.js não grava sessões no banco
+7. Rotas protegidas (`/dashboard/:path*`) são validadas em `src/proxy.ts` via `getToken({ secret: AUTH_SECRET })` e, em nível de route group, pelo guard `src/app/(app)/layout.tsx` (`auth()` + `redirect("/login")` — F2B); sem sessão válida, redireciona para `/login`
+8. **Sprint 1**: a Custom JWT Layer assume após o callback (callbacks `jwt`/`session` em `src/auth/auth.config.ts`): access token (15 min, RS256) + refresh token rotativo (30 dias)
+9. **Sprint 1**: rate limit de magic link (3/hora — T9 implementado), recuperação de senha (1h — T11 implementado) e exclusão de conta (LGPD, 30 dias — T15 soft delete implementado + T16 hard-delete cron implementado)
 
 ---
 
@@ -294,6 +297,8 @@ hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
 | Proteção de rotas (`src/proxy.ts` + `src/app/(app)/layout.tsx`) | MVP |
 | Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
 | Login e-mail/senha (`POST /api/v1/auth/login`) | Sprint 1 — **T7 implementado** |
+| LoginForm (frontend, `src/app/(auth)/login/login-form.tsx`) | Sprint 1 — **T19 implementado** |
+| AuthStore (Zustand, `src/stores/auth-store.ts`) | Sprint 1 — **protótipo mínimo (T19); persistência pendente (T25)** |
 | Refresh de token (`POST /api/v1/auth/refresh`) | Sprint 1 — **T13 implementado** |
 | Logout (`POST /api/v1/auth/logout`) | Sprint 1 — **T14 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |
