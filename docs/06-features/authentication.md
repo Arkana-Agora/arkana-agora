@@ -22,9 +22,9 @@ O magic link usa o `EmailProvider` do Auth.js (id `"email"`, callback `/api/auth
 - **Proteção de rotas** — MVP (duas camadas): `src/proxy.ts` (Next 16, matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`) + guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` e `redirect("/login")` sem sessão — adicionado na F2B, defesa em profundidade)
 - **Cadastro por e-mail e senha** — Sprint 1: **T6 implementado** — `POST /api/v1/auth/register` (validação de formato/força da senha via Zod, hash bcrypt custo 12, verificação de e-mail com token 24h; **não faz auto-login**)
 - **Verificação de e-mail** — Sprint 1: **T30 implementado** — `POST /api/v1/auth/verify-email` (redime `VerificationToken type=EMAIL` single-use 24h; 401 `AUTH_EMAIL_VERIFY_INVALID` / 410 `AUTH_EMAIL_VERIFY_EXPIRED`; guarda LGPD; marca `emailVerified` + `bumpTokenVersion`) e `POST /api/v1/auth/verify-email/resend` (reenvio anti-enumeração, 200 uniforme)
-- **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d)
-- **LoginForm (frontend)** — Sprint 1: **T19 implementado** — `src/app/(auth)/login/login-form.tsx` rework: campos e-mail + senha com toggle de visibilidade (`aria-label` "Mostrar senha"/"Ocultar senha"), validação client-side via react-hook-form + `zodResolver(loginSchema)` (de `src/lib/validators/auth.ts`), botão "Entrar" com loading; chama `useAuthStore.login(email, password)` (POST `/api/v1/auth/login`), redireciona para `/dashboard` em sucesso e para `/auth/verify-email?email=...` em `AUTH_EMAIL_NOT_VERIFIED`; mapeia `AUTH_INVALID_CREDENTIALS`/`AUTH_ACCOUNT_SUSPENDED`/`AUTH_ACCOUNT_LOCKED`/`AUTH_RATE_LIMITED`/`VALIDATION_ERROR` para mensagens amigáveis; Google via `signIn("google", { callbackUrl: "/dashboard" })`; links para `/magic-link`, `/forgot-password` e `/register`
-- **AuthStore (Zustand)** — Sprint 1: **protótipo mínimo (T19)** — `src/stores/auth-store.ts` com `user`, `isAuthenticated`, `isLoading`, `error`, `login(email, password)` (POST `/api/v1/auth/login`) e `clearError`; persistência (T25) e interceptor Axios (T26) pendentes
+- **Login por e-mail e senha** — Sprint 1: **T7 implementado** — `POST /api/v1/auth/login` (Zod `loginSchema`, lockout de conta 5 falhas/15min, rate limit por IP 5/15min, anti-enumeração, access RS256 + refresh session 30d; **ADR-011**: no sucesso também cunha o cookie de sessão do Auth.js — `authjs.session-token`/`__Secure-authjs.session-token` via `encode` de `next-auth/jwt` — para os guards do `/dashboard` reconhecerem o login por credenciais)
+- **LoginForm (frontend)** — Sprint 1: **T19 implementado** — `src/app/(auth)/login/login-form.tsx` rework: campos e-mail + senha com toggle de visibilidade (`aria-label` "Mostrar senha"/"Ocultar senha"), validação client-side via react-hook-form + `zodResolver(loginSchema)` (de `src/lib/validators/auth.ts`), botão "Entrar" com loading; chama `useAuthStore.login(email, password)` (POST `/api/v1/auth/login`), redireciona para `/dashboard` em sucesso e para `/auth/verify-email?email=...` em `AUTH_EMAIL_NOT_VERIFIED`; mapeia `AUTH_INVALID_CREDENTIALS`/`AUTH_ACCOUNT_SUSPENDED`/`AUTH_ACCOUNT_LOCKED`/`AUTH_RATE_LIMITED`/`VALIDATION_ERROR` para mensagens amigáveis; Google via `signIn("google", { callbackUrl: "/dashboard" })` em `handleGoogleSignIn` (try/catch: `NEXT_REDIRECT` é engolido, demais erros mapeados para mensagem amigável); links para `/magic-link`, `/forgot-password` e `/register`
+- **AuthStore (Zustand)** — Sprint 1: **protótipo mínimo (T19)** — `src/stores/auth-store.ts` com `user`, `isAuthenticated`, `isLoading`, `error`, `login(email, password)` (POST `/api/v1/auth/login`) e `clearError`; `login()` endurecido (review 6-agentes): try/catch/finally com `isLoading` sempre resetado, resposta tipada via união `LoginResponse` (`{ accessToken, user } | { error: { code, message } }`), `User` alinhado ao payload da API (`{ id, name, email, displayName, role, plan, avatar }`, sem `emailVerified`) e `export type { User }`; persistência (T25) e interceptor Axios (T26) pendentes
 - **Refresh de token** — Sprint 1: **T13 implementado** — `POST /api/v1/auth/refresh` (lê `refreshToken` do cookie httpOnly, chama `rotateRefresh`, rotação com mesmo `familyId`, reuso revoga família, `200 { accessToken, expiresIn }` + Set-Cookie)
 - **Logout** — Sprint 1: **T14 implementado** — `POST /api/v1/auth/logout` (lê access token do `Authorization: Bearer`, verifica via `verifyAccessToken`, delega revogação a `revokeRefreshSession`/`revokeAllSessions` do `token-service.ts`, limpa cookie de refresh, `200 { message }` flat)
 - **Login via OAuth (Facebook)** — Sprint 1 (não faz parte da camada de login do MVP, ADR-010)
@@ -142,6 +142,10 @@ Segunda rota da **Custom JWT Layer** (Fase 2) implementada em
 - **200** → `{ accessToken, user: { id, name, email, displayName, role, plan, avatar } }`
   — **body plano (flat), sem wrapper `data`** + `Set-Cookie: refreshToken`
   (`Path=/api/v1/auth`, `HttpOnly`, `SameSite=Strict`, `Max-Age=2592000` = 30 dias)
+  + `Set-Cookie` do cookie de sessão do Auth.js (ADR-011): `authjs.session-token` (HTTP) /
+  `__Secure-authjs.session-token` (HTTPS), `Path=/`, `HttpOnly`, `SameSite=Lax`,
+  `Max-Age=2592000` (30 dias), `Secure` em HTTPS — payload `{ sub, userId, customAuth }`
+  via `encode` de `next-auth/jwt`; exige `AUTH_SECRET` (lança erro claro se ausente)
 - **422** `VALIDATION_ERROR` — falha de validação Zod (com `details` por campo)
 - **403** `AUTH_ACCOUNT_LOCKED` — 5 falhas consecutivas (body com `retryAfter: 900`)
 - **429** `AUTH_RATE_LIMITED` — limite de volume por IP (5/15min; body com `retryAfter`)
@@ -164,9 +168,13 @@ Segunda rota da **Custom JWT Layer** (Fase 2) implementada em
 
 ### Testes
 
-`tests/login.test.ts` — testes vitest cobrindo o contrato do login (validação, lockout,
+`tests/login.test.ts` — 15 testes vitest cobrindo o contrato do login (validação, lockout,
 rate limit, suspensão, email não verificado, credenciais inválidas, sucesso com accessToken
-+ refresh cookie).
++ refresh cookie) e a ponte de sessão Auth.js (ADR-011: emissão/decode do cookie de sessão,
+variante `__Secure-` em HTTPS, ausência de cookie em credenciais inválidas, erro claro sem
+`AUTH_SECRET`). `tests/auth-store.test.ts` — 7 testes vitest do AuthStore (sucesso, credenciais
+inválidas, email não verificado, código desconhecido, falha de rede, resposta não-JSON,
+`clearError`).
 
 ---
 
@@ -298,7 +306,7 @@ hash bcrypt custo 12, revogação de sessões, 200 flat, 401/410/422/500).
 | Cadastro e-mail/senha (`POST /api/v1/auth/register`) | Sprint 1 — **T6 implementado** |
 | Login e-mail/senha (`POST /api/v1/auth/login`) | Sprint 1 — **T7 implementado** |
 | LoginForm (frontend, `src/app/(auth)/login/login-form.tsx`) | Sprint 1 — **T19 implementado** |
-| AuthStore (Zustand, `src/stores/auth-store.ts`) | Sprint 1 — **protótipo mínimo (T19); persistência pendente (T25)** |
+| AuthStore (Zustand, `src/stores/auth-store.ts`) | Sprint 1 — **protótipo mínimo (T19); `login()` endurecido (try/catch/finally, `LoginResponse` tipada, `User` sem `emailVerified`); persistência pendente (T25)** |
 | Refresh de token (`POST /api/v1/auth/refresh`) | Sprint 1 — **T13 implementado** |
 | Logout (`POST /api/v1/auth/logout`) | Sprint 1 — **T14 implementado** |
 | Login OAuth (Facebook) | Sprint 1 |

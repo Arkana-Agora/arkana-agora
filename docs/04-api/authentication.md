@@ -233,14 +233,19 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
     "displayName": "Maria Silva",
     "role": "USER",
     "plan": "FREE",
-    "avatar": null,
-    "emailVerified": null
+    "avatar": null
   }
 }
 ```
 
 > **Nota**: o `refreshToken` nunca é retornado no body — é definido via `Set-Cookie` httpOnly
-> (`Path=/api/v1/auth`, `HttpOnly`, `SameSite=Strict`, `Max-Age=2592000` = 30 dias).
+> (`Path=/api/v1/auth`, `HttpOnly`, `SameSite=Strict`, `Max-Age=2592000` = 30 dias). No sucesso,
+> a rota também cunha o **cookie de sessão do Auth.js** (ADR-011) — `authjs.session-token`
+> (HTTP) / `__Secure-authjs.session-token` (HTTPS), `Path=/`, `HttpOnly`, `SameSite=Lax`,
+> `Max-Age=2592000`, `Secure` em HTTPS — via `encode` de `next-auth/jwt` com payload
+> `{ sub, userId, customAuth: { accessToken, refreshToken, emittedAt } }`, para que os guards do
+> `/dashboard` (`src/proxy.ts` `getToken` + `src/app/(app)/layout.tsx` `auth()`) reconheçam o
+> login por credenciais. Exige `AUTH_SECRET` (a rota lança erro claro se ausente).
 
 ### Comportamento
 
@@ -251,7 +256,7 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
 5. Conta suspensa (`isActive=false` ou `deletedAt` set) → 403 `AUTH_ACCOUNT_SUSPENDED`
 6. E-mail não verificado (`emailVerified=null`) → 401 `AUTH_EMAIL_NOT_VERIFIED`
 7. Compara hash bcrypt (custo 12); falha → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
-8. Sucesso: `signAccessToken` (RS256, 15min, claims `role`/`plan`/`tokenVersion`) + `createRefreshSession` (Session 30d) + `Set-Cookie` refreshToken
+8. Sucesso: `signAccessToken` (RS256, 15min, claims `role`/`plan`/`tokenVersion`) + `createRefreshSession` (Session 30d) + `Set-Cookie` refreshToken + cookie de sessão do Auth.js (ADR-011 — `encode` de `next-auth/jwt`, payload `{ sub, userId, customAuth }`)
 9. Reseta contador de falhas da conta
 
 ### Erros
