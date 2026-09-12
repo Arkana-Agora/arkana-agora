@@ -1,10 +1,17 @@
-import { randomBytes } from "node:crypto"
+import { validateCsrfToken } from "@/lib/csrf"
+import { sendVerificationEmail } from "@/lib/email/email"
+import { logger, newReqId } from "@/lib/logger"
+import { prisma } from "@/lib/prisma"
+import {
+  isRegisterIpLimited,
+  isRegisterLimited,
+  recordRegisterAttempt,
+  recordRegisterIpAttempt,
+} from "@/lib/rate-limit"
+import { registerSchema } from "@/lib/validators/auth"
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { logger, newReqId } from "@/lib/logger"
-import { registerSchema } from "@/lib/validators/auth"
-import { sendVerificationEmail } from "@/lib/email/email"
+import { randomBytes } from "node:crypto"
 
 export const dynamic = "force-dynamic"
 
@@ -23,7 +30,14 @@ function isUniqueViolation(error: unknown): boolean {
 function errorResponse(
   reqId: string,
   status: number,
-  body: { error: { code: string; message: string; details?: unknown[] } },
+  body: {
+    error: {
+      code: string
+      message: string
+      details?: unknown[]
+      retryAfter?: number
+    }
+  },
 ): Response {
   return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
 }
@@ -33,6 +47,12 @@ function getBaseUrl(): string {
     process.env.AUTH_URL ??
     process.env.NEXT_PUBLIC_APP_URL ??
     "http://localhost:3000"
+  )
+}
+
+function getIp(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
   )
 }
 
@@ -70,16 +90,41 @@ export async function POST(request: Request): Promise<Response> {
   const { name, email, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
 
-  const existing = await prisma.user.findFirst({
-    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
-    select: { id: true },
-  })
-  if (existing) {
-    logger.info({ reqId }, "[auth:register] email ja cadastrado")
-    return errorResponse(reqId, 409, {
+  const ip = getIp(request)
+
+  const ipLimit = isRegisterIpLimited(ip)
+  if (!ipLimit.allowed) {
+    logger.warn({ reqId, ip }, "[auth:register] limite de tentativas por IP")
+    return errorResponse(reqId, 429, {
       error: {
-        code: "AUTH_EMAIL_ALREADY_EXISTS",
-        message: "E-mail ja cadastrado",
+        code: "AUTH_RATE_LIMITED",
+        message: "Muitas tentativas de cadastro tente novamente em instantes",
+        retryAfter: ipLimit.retryAfter,
+      },
+    })
+  }
+
+  const emailLimit = isRegisterLimited(normalizedEmail)
+  if (!emailLimit.allowed) {
+    logger.warn(
+      { reqId, email: normalizedEmail },
+      "[auth:register] limite de cadastro por email",
+    )
+    return errorResponse(reqId, 429, {
+      error: {
+        code: "AUTH_RATE_LIMITED",
+        message: "Muitas tentativas de cadastro tente novamente em instantes",
+        retryAfter: emailLimit.retryAfter,
+      },
+    })
+  }
+
+  if (!validateCsrfToken(request)) {
+    logger.warn({ reqId }, "[auth:register] CSRF token invalido")
+    return errorResponse(reqId, 403, {
+      error: {
+        code: "CSRF_TOKEN_INVALID",
+        message: "Token CSRF invalido",
       },
     })
   }
@@ -88,29 +133,43 @@ export async function POST(request: Request): Promise<Response> {
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_LIFETIME_MS)
 
   try {
-    const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
-    const [user] = await prisma.$transaction([
-      prisma.user.create({
-        data: {
-          name,
-          displayName: name,
-          email: normalizedEmail,
-          passwordHash,
-          role: "USER",
-          plan: "FREE",
-          provider: "EMAIL",
-          providerId: normalizedEmail,
-        },
-      }),
-      prisma.verificationToken.create({
-        data: {
-          identifier: normalizedEmail,
-          token,
-          type: "EMAIL",
-          expiresAt,
-        },
-      }),
-    ])
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+      select: { id: true },
+    })
+
+    if (!existing) {
+      const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
+      const [user] = await prisma.$transaction([
+        prisma.user.create({
+          data: {
+            name,
+            displayName: name,
+            email: normalizedEmail,
+            passwordHash,
+            role: "USER",
+            plan: "FREE",
+            provider: "EMAIL",
+            providerId: normalizedEmail,
+          },
+        }),
+        prisma.verificationToken.create({
+          data: {
+            identifier: normalizedEmail,
+            token,
+            type: "EMAIL",
+            expiresAt,
+          },
+        }),
+      ])
+
+      logger.info({ reqId, userId: user.id }, "[auth:register] conta criada")
+    } else {
+      logger.info(
+        { reqId },
+        "[auth:register] email ja cadastrado — resposta uniforme anti-enumeracao",
+      )
+    }
 
     const baseUrl = getBaseUrl()
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
@@ -123,29 +182,26 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    logger.info({ reqId, userId: user.id }, "[auth:register] conta criada")
+    recordRegisterAttempt(normalizedEmail)
+    recordRegisterIpAttempt(ip)
 
     return NextResponse.json(
       {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          emailVerified: user.emailVerified,
-        },
-        message: "Email de verificacao enviado",
+        message:
+          "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
       },
       { status: 201 },
     )
   } catch (error) {
     if (isUniqueViolation(error)) {
       logger.info({ reqId }, "[auth:register] corrida de email unico (P2002)")
-      return errorResponse(reqId, 409, {
-        error: {
-          code: "AUTH_EMAIL_ALREADY_EXISTS",
-          message: "E-mail ja cadastrado",
+      return NextResponse.json(
+        {
+          message:
+            "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
         },
-      })
+        { status: 201 },
+      )
     }
     logger.error({ err: error, reqId }, "[auth:register] falha ao criar conta")
     return errorResponse(reqId, 500, {
