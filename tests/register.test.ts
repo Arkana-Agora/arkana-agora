@@ -18,6 +18,20 @@ vi.mock("@/lib/email/email", () => ({
   sendVerificationEmail: sendVerificationEmailMock,
 }))
 
+// Mock rate limiter
+const rateLimitMock = vi.hoisted(() => ({
+  isRegisterIpLimited: vi.fn(),
+  isRegisterLimited: vi.fn(),
+  recordRegisterAttempt: vi.fn(),
+  recordRegisterIpAttempt: vi.fn(),
+}))
+vi.mock("@/lib/rate-limit", () => ({
+  isRegisterIpLimited: rateLimitMock.isRegisterIpLimited,
+  isRegisterLimited: rateLimitMock.isRegisterLimited,
+  recordRegisterAttempt: rateLimitMock.recordRegisterAttempt,
+  recordRegisterIpAttempt: rateLimitMock.recordRegisterIpAttempt,
+}))
+
 const createdUser = {
   id: "usr_reg1",
   name: "Maria Silva",
@@ -42,12 +56,20 @@ function validBody() {
   }
 }
 
-async function callPost(body: unknown): Promise<Response> {
+async function callPost(
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> {
   const { POST } = await import("@/app/api/v1/auth/register/route")
   return POST(
     new Request("http://localhost:3000/api/v1/auth/register", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": "test-csrf-token",
+        cookie: "__Host-csrf-token=test-csrf-token",
+        ...headers,
+      },
       body: JSON.stringify(body),
     }),
   )
@@ -59,6 +81,14 @@ beforeEach(() => {
     data: { id: "email_1" },
     error: null,
   })
+  rateLimitMock.isRegisterIpLimited.mockReturnValue({
+    allowed: true,
+    retryAfter: 0,
+  })
+  rateLimitMock.isRegisterLimited.mockReturnValue({
+    allowed: true,
+    retryAfter: 0,
+  })
 })
 
 afterEach(() => {
@@ -66,7 +96,7 @@ afterEach(() => {
 })
 
 describe("POST /api/v1/auth/register (T6)", () => {
-  it("cria usuário e retorna 201 com user e message, sem auto-login", async () => {
+  it("cria usuário e retorna 201 com message uniforme (anti-enumeration)", async () => {
     prismaMock.user.findFirst.mockResolvedValue(null)
     prismaMock.user.create.mockResolvedValue(createdUser)
     prismaMock.verificationToken.create.mockResolvedValue({ id: "vt_1" })
@@ -75,15 +105,11 @@ describe("POST /api/v1/auth/register (T6)", () => {
     const json = await res.json()
 
     expect(res.status).toBe(201)
-    expect(json.user).toEqual({
-      id: "usr_reg1",
-      name: "Maria Silva",
-      email: "maria@email.com",
-      emailVerified: null,
-    })
-    expect(json.message).toBeTruthy()
+    expect(json.message).toBe(
+      "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
+    )
+    expect(json.user).toBeUndefined()
     expect(json.accessToken).toBeUndefined()
-    expect(json.user.passwordHash).toBeUndefined()
   })
 
   it("persiste usuario com role USER, plan FREE, provider EMAIL e providerId lowercase", async () => {
@@ -140,26 +166,30 @@ describe("POST /api/v1/auth/register (T6)", () => {
     expect(verificationUrl).not.toContain("/api/v1/auth/verify-email")
   })
 
-  it("retorna 409 AUTH_EMAIL_ALREADY_EXISTS quando email ja existe", async () => {
+  it("retorna 201 uniforme quando email ja existe (anti-enumeration)", async () => {
     prismaMock.user.findFirst.mockResolvedValue(createdUser)
 
     const res = await callPost(validBody())
     const json = await res.json()
 
-    expect(res.status).toBe(409)
-    expect(json.error.code).toBe("AUTH_EMAIL_ALREADY_EXISTS")
+    expect(res.status).toBe(201)
+    expect(json.message).toBe(
+      "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
+    )
     expect(prismaMock.user.create).not.toHaveBeenCalled()
-    expect(sendVerificationEmailMock).not.toHaveBeenCalled()
+    expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1)
   })
 
-  it("retorna 409 AUTH_EMAIL_ALREADY_EXISTS quando email ja cadastrado (case-insensitive)", async () => {
+  it("retorna 201 uniforme quando email ja cadastrado (case-insensitive)", async () => {
     prismaMock.user.findFirst.mockResolvedValue(createdUser)
 
     const res = await callPost({ ...validBody(), email: "MARIA@EMAIL.COM" })
     const json = await res.json()
 
-    expect(res.status).toBe(409)
-    expect(json.error.code).toBe("AUTH_EMAIL_ALREADY_EXISTS")
+    expect(res.status).toBe(201)
+    expect(json.message).toBe(
+      "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
+    )
   })
 
   it("retorna 422 VALIDATION_ERROR para senha fraca (sem maiuscula)", async () => {
@@ -227,7 +257,7 @@ describe("POST /api/v1/auth/register (T6)", () => {
     expect(prismaMock.verificationToken.create).toHaveBeenCalledTimes(1)
   })
 
-  it("retorna 409 AUTH_EMAIL_ALREADY_EXISTS na corrida P2002 do user.create", async () => {
+  it("retorna 201 uniforme na corrida P2002 do user.create (anti-enumeration)", async () => {
     prismaMock.user.findFirst.mockResolvedValue(null)
     prismaMock.user.create.mockRejectedValue({
       code: "P2002",
@@ -237,8 +267,10 @@ describe("POST /api/v1/auth/register (T6)", () => {
     const res = await callPost(validBody())
     const json = await res.json()
 
-    expect(res.status).toBe(409)
-    expect(json.error.code).toBe("AUTH_EMAIL_ALREADY_EXISTS")
+    expect(res.status).toBe(201)
+    expect(json.message).toBe(
+      "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
+    )
   })
 
   it("retorna 500 INTERNAL_ERROR com meta.requestId quando a token falha", async () => {
@@ -276,8 +308,46 @@ describe("POST /api/v1/auth/register (T6)", () => {
     const json = await res.json()
 
     expect(res.status).toBe(201)
-    expect(json.user.id).toBe("usr_reg1")
+    expect(json.message).toBe(
+      "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
+    )
     expect(prismaMock.user.create).toHaveBeenCalledTimes(1)
     expect(prismaMock.verificationToken.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("retorna 429 AUTH_RATE_LIMITED quando IP excede limite", async () => {
+    rateLimitMock.isRegisterIpLimited.mockReturnValueOnce({
+      allowed: false,
+      retryAfter: 900,
+    })
+
+    const res = await callPost(validBody())
+    const json = await res.json()
+
+    expect(res.status).toBe(429)
+    expect(json.error.code).toBe("AUTH_RATE_LIMITED")
+    expect(json.error.retryAfter).toBe(900)
+  })
+
+  it("retorna 429 AUTH_RATE_LIMITED quando email excede limite", async () => {
+    rateLimitMock.isRegisterLimited.mockReturnValueOnce({
+      allowed: false,
+      retryAfter: 900,
+    })
+
+    const res = await callPost(validBody())
+    const json = await res.json()
+
+    expect(res.status).toBe(429)
+    expect(json.error.code).toBe("AUTH_RATE_LIMITED")
+    expect(json.error.retryAfter).toBe(900)
+  })
+
+  it("retorna 403 CSRF_TOKEN_INVALID quando token CSRF invalido", async () => {
+    const res = await callPost(validBody(), { "x-csrf-token": "invalid-token" })
+    const json = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(json.error.code).toBe("CSRF_TOKEN_INVALID")
   })
 })

@@ -1,5 +1,6 @@
 "use client"
 
+import type { RegisterInput } from "@/lib/validators/auth"
 import { create } from "zustand"
 
 interface User {
@@ -16,7 +17,30 @@ type LoginResponse =
   | { accessToken: string; user: User }
   | { error: { code: string; message: string } }
 
+type RegisterUser = {
+  id: string
+  name: string
+  email: string
+  emailVerified: string | null
+}
+
+type RegisterResponse =
+  | { user: RegisterUser; message: string }
+  | { error: { code: string; message: string } }
+
 export type { User }
+
+function isRegisterSuccess(
+  data: RegisterResponse,
+): data is { user: RegisterUser; message: string } {
+  return "user" in data
+}
+
+function isRegisterError(
+  data: RegisterResponse,
+): data is { error: { code: string; message: string } } {
+  return "error" in data
+}
 
 interface AuthState {
   user: User | null
@@ -24,6 +48,7 @@ interface AuthState {
   isLoading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<void>
+  register: (data: RegisterInput) => Promise<void>
   clearError: () => void
 }
 
@@ -57,6 +82,44 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (err) {
       if (err instanceof Error && err.message !== "AUTH_EMAIL_NOT_VERIFIED") {
         set((state) => ({ error: state.error ?? "Erro ao fazer login" }))
+      }
+      throw err
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  register: async (data: RegisterInput) => {
+    set({ isLoading: true, error: null })
+    try {
+      const csrfToken = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("__Host-csrf-token="))
+        ?.split("=")[1]
+
+      const res = await fetch("/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken ?? "",
+        },
+        body: JSON.stringify(data),
+      })
+      const responseData = (await res.json()) as RegisterResponse
+
+      if (res.ok && isRegisterSuccess(responseData)) {
+        return
+      }
+
+      if (isRegisterError(responseData)) {
+        set({ error: responseData.error.message })
+        throw new Error(responseData.error.code)
+      }
+
+      throw new Error("UNEXPECTED_RESPONSE")
+    } catch (err) {
+      if (err instanceof Error && err.message !== "AUTH_EMAIL_ALREADY_EXISTS") {
+        set((state) => ({ error: state.error ?? "Erro ao criar conta" }))
       }
       throw err
     } finally {

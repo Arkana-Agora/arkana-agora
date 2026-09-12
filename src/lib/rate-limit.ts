@@ -27,6 +27,12 @@ const MAX_MAGIC_LINK_IP_ATTEMPTS = (() => {
   return value
 })()
 
+const REGISTER_WINDOW_MS = 15 * 60 * 1000
+const MAX_REGISTER_IP_ATTEMPTS = Number(
+  process.env.MAX_REGISTER_IP_ATTEMPTS ?? 5,
+)
+const MAX_REGISTER_PER_EMAIL = Number(process.env.MAX_REGISTER_PER_EMAIL ?? 3)
+
 const PASSWORD_RESET_WINDOW_MS = 60 * 60 * 1000
 
 const MAX_PASSWORD_RESET_PER_EMAIL = (() => {
@@ -46,7 +52,11 @@ interface Entry {
 
 const store = new Map<string, Entry>()
 
-function prune(key: string, now: number): Entry | undefined {
+function prune(
+  key: string,
+  now: number,
+  _windowMs?: number,
+): Entry | undefined {
   const entry = store.get(key)
   if (!entry || entry.resetAt <= now) {
     store.delete(key)
@@ -133,6 +143,40 @@ export function isMagicLinkIpLimited(ip: string): RateCheck {
 
 export function recordMagicLinkIpAttempt(ip: string): void {
   record(`magic-link:ip:${ip}`, Date.now(), MAGIC_LINK_WINDOW_MS)
+}
+
+export function isRegisterLimited(email: string): RateCheck {
+  const now = Date.now()
+  const key = `register:email:${email.toLowerCase()}`
+  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  if (entry && entry.count >= MAX_REGISTER_PER_EMAIL) {
+    const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return { allowed: false, retryAfter }
+  }
+  return { allowed: true, retryAfter: 0 }
+}
+
+export function recordRegisterAttempt(email: string): void {
+  record(
+    `register:email:${email.toLowerCase()}`,
+    Date.now(),
+    REGISTER_WINDOW_MS,
+  )
+}
+
+export function isRegisterIpLimited(ip: string): RateCheck {
+  const now = Date.now()
+  const key = `register:ip:${ip}`
+  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  if (entry && entry.count >= MAX_REGISTER_IP_ATTEMPTS) {
+    const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return { allowed: false, retryAfter }
+  }
+  return { allowed: true, retryAfter: 0 }
+}
+
+export function recordRegisterIpAttempt(ip: string): void {
+  record(`register:ip:${ip}`, Date.now(), REGISTER_WINDOW_MS)
 }
 
 export function isPasswordResetLimited(email: string): RateCheck {
