@@ -1,5 +1,18 @@
 import { logger } from "@/lib/logger"
 
+/**
+ * In-memory rate limiter using Map.
+ * WARNING: This implementation is NOT suitable for production deployments
+ * in serverless/edge environments (Vercel, AWS Lambda, etc.) where each
+ * invocation gets a fresh process and the rate limit state is lost.
+ * 
+ * TODO(T25): Replace with Redis-backed rate limiter (Upstash, Vercel KV, or similar)
+ * for production deployments that require cross-instance rate limiting.
+ * 
+ * Current implementation uses in-memory Map with sliding window expiration.
+ * Works correctly in single-process development environments only.
+ */
+
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000)
 const MAX_CONSECUTIVE_FAILURES = Number(
   process.env.MAX_CONSECUTIVE_FAILURES ?? 5,
@@ -19,7 +32,7 @@ const MAX_MAGIC_LINK_PER_EMAIL = (() => {
 
 const MAX_MAGIC_LINK_IP_ATTEMPTS = (() => {
   const raw = process.env.MAX_MAGIC_LINK_IP_ATTEMPTS
-  if (raw === undefined) return 20
+  if (raw === undefined) return 3
   const value = Number(raw)
   if (!Number.isFinite(value) || value < 1) {
     throw new Error(`Invalid MAX_MAGIC_LINK_IP_ATTEMPTS: ${raw}`)
