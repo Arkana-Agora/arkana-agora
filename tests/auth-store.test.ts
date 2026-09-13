@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
 import { useAuthStore } from "@/stores/auth-store"
 
 const user = {
@@ -245,6 +246,125 @@ describe("auth-store", () => {
       const state = useAuthStore.getState()
       expect(state.isLoading).toBe(false)
       expect(state.error).toBe("Erro ao criar conta")
+    })
+  })
+
+  describe("sendMagicLink", () => {
+    it("envia magic link com sucesso: reseta isLoading, nao autentica, nao armazena user", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse(
+            { message: "Magic link enviado se o e-mail estiver cadastrado" },
+            true,
+            200,
+          ),
+        )
+
+      const result = await useAuthStore.getState().sendMagicLink("alice@example.com")
+
+      expect(result.success).toBe(true)
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/magic-link",
+        expect.objectContaining({ method: "POST" }),
+      )
+    })
+
+    it("rate limit: retorna erro com codigo e retryAfter", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_MAGIC_LINK_RATE_LIMIT",
+              message: "Muitos magic links solicitados, tente novamente mais tarde",
+              retryAfter: 1200,
+            },
+          },
+          false,
+          429,
+        ),
+      )
+
+      const result = await useAuthStore.getState().sendMagicLink("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("AUTH_MAGIC_LINK_RATE_LIMIT")
+      expect(result.retryAfter).toBe(1200)
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe("Muitos magic links solicitados, tente novamente mais tarde")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("e-mail vazio: retorna VALIDATION_ERROR sem chamar a API", async () => {
+      global.fetch = vi.fn()
+
+      const result = await useAuthStore.getState().sendMagicLink("   ")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("VALIDATION_ERROR")
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it("codigo de erro desconhecido do servidor: normaliza para UNKNOWN_ERROR", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "SOME_NEW_SERVER_CODE",
+              message: "Novo erro do servidor",
+            },
+          },
+          false,
+          500,
+        ),
+      )
+
+      const result = await useAuthStore.getState().sendMagicLink("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("UNKNOWN_ERROR")
+      expect(result.message).toBe("Novo erro do servidor")
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe("Novo erro do servidor")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("falha de rede: reseta isLoading, retorna NETWORK_ERROR e mensagem amigavel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore.getState().sendMagicLink("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("NETWORK_ERROR")
+      expect(result.message).toBe("Erro ao enviar magic link")
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBe("Erro ao enviar magic link")
+    })
+
+    it("resposta nao-JSON (500): reseta isLoading e define erro generico", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore.getState().sendMagicLink("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("UNEXPECTED_RESPONSE")
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBe("Resposta inesperada do servidor")
     })
   })
 })
