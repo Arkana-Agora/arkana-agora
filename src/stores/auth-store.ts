@@ -1,6 +1,6 @@
 "use client"
 
-import type { RegisterInput } from "@/lib/validators/auth"
+import type { RegisterInput, ResetPasswordInput } from "@/lib/validators/auth"
 import { create } from "zustand"
 
 interface User {
@@ -44,6 +44,22 @@ export type ForgotPasswordResult =
       message?: string
     }
 
+export type ResetPasswordErrorCode =
+  | "AUTH_RESET_TOKEN_INVALID"
+  | "AUTH_RESET_TOKEN_EXPIRED"
+  | "VALIDATION_ERROR"
+  | "NETWORK_ERROR"
+  | "UNEXPECTED_RESPONSE"
+  | "UNKNOWN_ERROR"
+
+export type ResetPasswordResult =
+  | { success: true; message?: string }
+  | {
+      success: false
+      code: ResetPasswordErrorCode
+      message?: string
+    }
+
 export type { User }
 
 const KNOWN_MAGIC_LINK_CODES = [
@@ -56,6 +72,15 @@ const KNOWN_MAGIC_LINK_CODES = [
 
 const KNOWN_FORGOT_PASSWORD_CODES = [
   "AUTH_FORGOT_RATE_LIMIT",
+  "VALIDATION_ERROR",
+  "NETWORK_ERROR",
+  "UNEXPECTED_RESPONSE",
+  "UNKNOWN_ERROR",
+] as const
+
+const KNOWN_RESET_PASSWORD_CODES = [
+  "AUTH_RESET_TOKEN_INVALID",
+  "AUTH_RESET_TOKEN_EXPIRED",
   "VALIDATION_ERROR",
   "NETWORK_ERROR",
   "UNEXPECTED_RESPONSE",
@@ -108,6 +133,13 @@ function normalizeForgotPasswordCode(code: string): ForgotPasswordErrorCode {
   ) as ForgotPasswordErrorCode
 }
 
+function normalizeResetPasswordCode(code: string): ResetPasswordErrorCode {
+  return normalizeAuthErrorCode(
+    code,
+    KNOWN_RESET_PASSWORD_CODES,
+  ) as ResetPasswordErrorCode
+}
+
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
@@ -117,6 +149,7 @@ interface AuthState {
   register: (data: RegisterInput) => Promise<void>
   sendMagicLink: (email: string) => Promise<MagicLinkResult>
   forgotPassword: (email: string) => Promise<ForgotPasswordResult>
+  resetPassword: (data: ResetPasswordInput) => Promise<ResetPasswordResult>
   clearError: () => void
 }
 
@@ -340,6 +373,79 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } catch (err) {
       const message = "Erro ao enviar link de recuperacao"
+      set({ error: message })
+      if (err instanceof TypeError) {
+        return { success: false, code: "NETWORK_ERROR", message }
+      }
+      return { success: false, code: "UNKNOWN_ERROR", message }
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  resetPassword: async (data: ResetPasswordInput) => {
+    const token = data.token.trim()
+    if (!token) {
+      set({
+        error: "Link de redefinicao de senha invalido",
+      })
+      return {
+        success: false,
+        code: "AUTH_RESET_TOKEN_INVALID",
+        message: "Link de redefinicao de senha invalido",
+      }
+    }
+
+    set({ isLoading: true, error: null })
+    try {
+      const res = await fetch("/api/v1/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          password: data.password,
+          passwordConfirmation: data.passwordConfirmation,
+        }),
+      })
+      let responseData: unknown
+      try {
+        responseData = await res.json()
+      } catch {
+        set({ error: "Resposta inesperada do servidor" })
+        return {
+          success: false,
+          code: "UNEXPECTED_RESPONSE",
+          message: "Resposta inesperada do servidor",
+        }
+      }
+
+      if (
+        res.ok &&
+        responseData &&
+        typeof responseData === "object" &&
+        "message" in responseData &&
+        typeof responseData.message === "string"
+      ) {
+        return { success: true, message: responseData.message }
+      }
+
+      const errorData = parseErrorResponse(responseData)
+      if (errorData) {
+        set({ error: errorData.message })
+        return {
+          success: false,
+          code: normalizeResetPasswordCode(errorData.code),
+          message: errorData.message,
+        }
+      }
+
+      return {
+        success: false,
+        code: "UNEXPECTED_RESPONSE",
+        message: "Resposta inesperada do servidor",
+      }
+    } catch (err) {
+      const message = "Erro ao redefinir a senha"
       set({ error: message })
       if (err instanceof TypeError) {
         return { success: false, code: "NETWORK_ERROR", message }

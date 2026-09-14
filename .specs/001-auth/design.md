@@ -55,6 +55,9 @@
 - Token extraido da URL (query param `?token=...`)
 - Mensagem de erro para token invalido/expirado
 - Redirecionamento automatico para login apos sucesso (delay 2s)
+- Token ausente/vazio: tratado server-side na `page.tsx` — painel "Link de redefinicao de senha invalido" com link "Solicitar novo link" → /forgot-password, sem chamada de API; o form nao monta sem token
+- Sucesso: painel role="status" com a mensagem da API ("Senha redefinida com sucesso") + "Redirecionando para o login..." e redirect via `router.replace("/login")` apos 2s; sucesso decoupled da mensagem (booleano `isSuccess` dedicado — cobre `message: ""`); token removido da URL via `history.replaceState` antes do redirect
+- **Implementado (T23)**: `src/app/(auth)/reset-password/reset-password-form.tsx` + pagina `src/app/(auth)/reset-password/page.tsx`
 
 ### 1.7 AuthGuard
 - Componente de rota protegida (wrapper)
@@ -404,6 +407,7 @@ interface AuthState {
   loginWithGoogle: () => void; // redirect
   sendMagicLink: (email: string) => Promise<MagicLinkResult>;
   forgotPassword: (email: string) => Promise<ForgotPasswordResult>;
+  resetPassword: (data: ResetPasswordInput) => Promise<ResetPasswordResult>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: (email: string) => Promise<void>;
@@ -417,8 +421,9 @@ interface AuthState {
 - `error` e automaticamente limpo apos 5 segundos (useEffect)
 - `user` e persistido no localStorage (para evitar re-login em reload)
 - `isAuthenticated` e definido como `true` apenas no sucesso do `login()` (implementado: `user` so e armazenado em resposta 200 com `accessToken`; `AUTH_EMAIL_NOT_VERIFIED` lanca erro sem armazenar `user`)
-- `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`, usado pelas 4 acoes — login/register/sendMagicLink/forgotPassword); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` (429 com `retryAfter` repassado no resultado) e falha de rede
+- `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`, usado pelas 5 acoes — login/register/sendMagicLink/forgotPassword/resetPassword); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` (429 com `retryAfter` repassado no resultado) e falha de rede
 - `forgotPassword` nao autentica — apenas envia o link de recuperacao; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `ForgotPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ForgotPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ForgotPasswordErrorCode` = `"AUTH_FORGOT_RATE_LIMIT" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; e-mail vazio → `VALIDATION_ERROR` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao "Se o e-mail estiver cadastrado..."); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`); 429 `AUTH_FORGOT_RATE_LIMIT` (sem `retryAfter`); codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeAuthErrorCode` (helper simplificado, sem genérico, recebe `readonly string[]`, retorna `string`, compartilhado com `normalizeMagicLinkCode`/`normalizeForgotPasswordCode`); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao enviar link de recuperacao"
+- `resetPassword` redime o token `PASSWORD_RESET` (single-use) chamando `POST /api/v1/auth/reset-password` com `{ token, password, passwordConfirmation }`; retorna `ResetPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ResetPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ResetPasswordErrorCode` = `"AUTH_RESET_TOKEN_INVALID" | "AUTH_RESET_TOKEN_EXPIRED" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; token vazio → `AUTH_RESET_TOKEN_INVALID` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"`); erros parseados via `parseErrorResponse`; codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeAuthErrorCode` (compartilhado com `normalizeResetPasswordCode`); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao redefinir a senha"
 
 ---
 
