@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { useAuthStore } from "@/stores/auth-store"
+import { useAuthStore, type User } from "@/stores/auth-store"
 
-const user = {
+const user: User = {
   id: "user-1",
   name: "Alice",
   email: "alice@example.com",
@@ -699,6 +699,119 @@ describe("auth-store", () => {
       expect(result.code).toBe("AUTH_RESET_TOKEN_INVALID")
       expect(global.fetch).not.toHaveBeenCalled()
       expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+  })
+
+  describe("refreshSession", () => {
+    it("sucesso: renova via cookie (POST sem body) e mantem autenticado", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ accessToken: "access-456", expiresIn: 900 }),
+        )
+
+      const result = await useAuthStore.getState().refreshSession()
+
+      expect(result).toBe(true)
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/refresh",
+        expect.objectContaining({ method: "POST" }),
+      )
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.user).toEqual(user)
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("restabelece autenticacao apos reload: user null vira true sem user", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ accessToken: "access-456" }))
+
+      const result = await useAuthStore.getState().refreshSession()
+
+      expect(result).toBe(true)
+      expect(useAuthStore.getState().isAuthenticated).toBe(true)
+      expect(useAuthStore.getState().user).toBeNull()
+    })
+
+    it("falha com 401: retorna false, limpa user e define error legivel", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_REFRESH_TOKEN_EXPIRED",
+              message: "Falha ao renovar sessao",
+            },
+          },
+          false,
+          401,
+        ),
+      )
+
+      const result = await useAuthStore.getState().refreshSession()
+
+      expect(result).toBe(false)
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
+      expect(state.error).toBe("Falha ao renovar sessao")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("resposta 200 sem accessToken: retorna false e limpa user", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue(mockJsonResponse({}))
+
+      expect(await useAuthStore.getState().refreshSession()).toBe(false)
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
+    })
+
+    it("resposta nao-JSON: retorna false, limpa user e reseta isLoading", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      expect(await useAuthStore.getState().refreshSession()).toBe(false)
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.error).toBe("Resposta inesperada do servidor")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("falha de rede (TypeError): retorna false, seta error mas preserva sessao", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      expect(await useAuthStore.getState().refreshSession()).toBe(false)
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.user).toEqual(user)
+      expect(state.error).toBe("Erro ao reconectar sessao")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("chamadas concorrentes compartilham a mesma requisicao (single-flight)", async () => {
+      let resolveFetch!: (r: Response) => void
+      global.fetch = vi.fn().mockReturnValue(
+        new Promise<Response>((r) => {
+          resolveFetch = r
+        }),
+      )
+      const first = useAuthStore.getState().refreshSession()
+      const second = useAuthStore.getState().refreshSession()
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      resolveFetch(mockJsonResponse({ accessToken: "access-789" }))
+      const [a, b] = await Promise.all([first, second])
+      expect(a).toBe(true)
+      expect(b).toBe(true)
     })
   })
 })
