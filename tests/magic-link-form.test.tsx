@@ -14,7 +14,11 @@ const { mockSendMagicLink } = vi.hoisted(() => ({
 
 vi.mock("@/stores/auth-store", () => ({
   useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    const state = { sendMagicLink: mockSendMagicLink, isLoading: false, error: null }
+    const state = {
+      sendMagicLink: mockSendMagicLink,
+      isLoading: false,
+      error: null,
+    }
     return typeof selector === "function" ? selector(state) : state
   },
 }))
@@ -40,7 +44,9 @@ describe("MagicLinkForm", () => {
 
     it("renders informative message before submit", () => {
       render(<MagicLinkForm />)
-      expect(screen.getByText(/enviamos um link de acesso/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/enviamos um link de acesso/i),
+      ).toBeInTheDocument()
     })
 
     it("does not show informative message after success", async () => {
@@ -53,7 +59,9 @@ describe("MagicLinkForm", () => {
       fireEvent.click(screen.getByRole("button", { name: /^enviar link$/i }))
 
       await waitFor(() => {
-        expect(screen.queryByText(/enviamos um link de acesso/i)).not.toBeInTheDocument()
+        expect(
+          screen.queryByText(/enviamos um link de acesso/i),
+        ).not.toBeInTheDocument()
       })
     })
 
@@ -67,7 +75,9 @@ describe("MagicLinkForm", () => {
     it("does not render resend button before any send", () => {
       render(<MagicLinkForm />)
       expect(
-        screen.queryByRole("button", { name: /reenviar|enviar link novamente/i }),
+        screen.queryByRole("button", {
+          name: /reenviar|enviar link novamente/i,
+        }),
       ).not.toBeInTheDocument()
     })
 
@@ -136,9 +146,7 @@ describe("MagicLinkForm", () => {
       fireEvent.click(screen.getByRole("button", { name: /^enviar link$/i }))
 
       await waitFor(() => {
-        expect(
-          screen.getByRole("button", { name: /enviando/i }),
-        ).toBeDisabled()
+        expect(screen.getByRole("button", { name: /enviando/i })).toBeDisabled()
       })
 
       await act(async () => {
@@ -156,7 +164,9 @@ describe("MagicLinkForm", () => {
       fireEvent.click(screen.getByRole("button", { name: /^enviar link$/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/verifique sua caixa de entrada/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(/verifique sua caixa de entrada/i),
+        ).toBeInTheDocument()
       })
       expect(screen.getByTestId("envelope-icon")).toBeInTheDocument()
     })
@@ -265,9 +275,13 @@ describe("MagicLinkForm", () => {
         resolveSend({ success: true })
       })
 
-      expect(screen.getByText(/verifique sua caixa de entrada/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/verifique sua caixa de entrada/i),
+      ).toBeInTheDocument()
 
-      const resendButton = screen.getByRole("button", { name: /reenviar em 60s/i })
+      const resendButton = screen.getByRole("button", {
+        name: /reenviar em 60s/i,
+      })
       expect(resendButton).toBeDisabled()
     })
 
@@ -282,7 +296,9 @@ describe("MagicLinkForm", () => {
         resolveSend({ success: true })
       })
 
-      expect(screen.getByRole("button", { name: /reenviar em 60s/i })).toBeDisabled()
+      expect(
+        screen.getByRole("button", { name: /reenviar em 60s/i }),
+      ).toBeDisabled()
 
       advanceCooldown()
 

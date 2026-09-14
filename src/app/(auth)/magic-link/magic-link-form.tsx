@@ -15,14 +15,19 @@ import { useAuthStore, type MagicLinkErrorCode } from "@/stores/auth-store"
 const RESEND_COOLDOWN_SECONDS = 60
 
 const SERVER_ERROR_MESSAGES: Partial<Record<MagicLinkErrorCode, string>> = {
-  AUTH_MAGIC_LINK_RATE_LIMIT: "Muitos magic links solicitados, tente novamente mais tarde",
+  AUTH_MAGIC_LINK_RATE_LIMIT:
+    "Muitos magic links solicitados, tente novamente mais tarde",
   NETWORK_ERROR: "Erro ao enviar magic link",
   UNEXPECTED_RESPONSE: "Resposta inesperada do servidor",
   UNKNOWN_ERROR: "Erro inesperado, tente novamente",
 }
 
 function getErrorMessage(code?: MagicLinkErrorCode): string {
-  return (code ? SERVER_ERROR_MESSAGES[code] : SERVER_ERROR_MESSAGES.UNKNOWN_ERROR) ?? "Erro ao enviar magic link"
+  return (
+    (code
+      ? SERVER_ERROR_MESSAGES[code]
+      : SERVER_ERROR_MESSAGES.UNKNOWN_ERROR) ?? "Erro ao enviar magic link"
+  )
 }
 
 export function MagicLinkForm() {
@@ -98,7 +103,11 @@ export function MagicLinkForm() {
           {...register("email")}
         />
         {errors.email && (
-          <p id="email-error" role="alert" className="text-sm font-medium text-destructive">
+          <p
+            id="email-error"
+            role="alert"
+            className="text-sm font-medium text-destructive"
+          >
             {errors.email.message}
           </p>
         )}

@@ -37,7 +37,12 @@ export type MagicLinkErrorCode =
 
 export type MagicLinkResult =
   | { success: true; message?: string }
-  | { success: false; code: MagicLinkErrorCode; message?: string; retryAfter?: number }
+  | {
+      success: false
+      code: MagicLinkErrorCode
+      message?: string
+      retryAfter?: number
+    }
 
 export type { User }
 
@@ -145,7 +150,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     const trimmed = email.trim()
     if (!trimmed) {
       set({ error: "E-mail obrigatório" })
-      return { success: false, code: "VALIDATION_ERROR", message: "E-mail obrigatório" }
+      return {
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "E-mail obrigatório",
+      }
     }
 
     set({ isLoading: true, error: null })
@@ -160,15 +169,28 @@ export const useAuthStore = create<AuthState>((set) => ({
         data = await res.json()
       } catch {
         set({ error: "Resposta inesperada do servidor" })
-        return { success: false, code: "UNEXPECTED_RESPONSE", message: "Resposta inesperada do servidor" }
+        return {
+          success: false,
+          code: "UNEXPECTED_RESPONSE",
+          message: "Resposta inesperada do servidor",
+        }
       }
 
-      if (res.ok && typeof data === "object" && data !== null && "message" in data) {
+      if (
+        res.ok &&
+        typeof data === "object" &&
+        data !== null &&
+        "message" in data
+      ) {
         return { success: true, message: (data as { message: string }).message }
       }
 
       if (typeof data === "object" && data !== null && "error" in data) {
-        const { code, message, retryAfter } = (data as { error: { code: string; message: string; retryAfter?: number } }).error
+        const { code, message, retryAfter } = (
+          data as {
+            error: { code: string; message: string; retryAfter?: number }
+          }
+        ).error
         set({ error: message })
         return {
           success: false,
@@ -178,7 +200,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       }
 
-      return { success: false, code: "UNEXPECTED_RESPONSE", message: "Resposta inesperada do servidor" }
+      return {
+        success: false,
+        code: "UNEXPECTED_RESPONSE",
+        message: "Resposta inesperada do servidor",
+      }
     } catch (err) {
       const message = "Erro ao enviar magic link"
       set({ error: message })
