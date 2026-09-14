@@ -523,4 +523,182 @@ describe("auth-store", () => {
       expect(state.error).toBe("Resposta inesperada do servidor")
     })
   })
+
+  describe("resetPassword", () => {
+    const payload = {
+      token: "token-123",
+      password: "NovaSenha1!",
+      passwordConfirmation: "NovaSenha1!",
+    }
+
+    it("sucesso: envia token+senha, retorna success e reseta isLoading", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ message: "Senha redefinida com sucesso" }),
+        )
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+
+      expect(result.success).toBe(true)
+      if (!result.success) throw new Error("esperado sucesso")
+      expect(result.message).toBe("Senha redefinida com sucesso")
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/reset-password",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify(payload),
+        }),
+      )
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBeNull()
+    })
+
+    it("sucesso: aceita qualquer 200 com message sem depender do texto", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Senha alterada" }))
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+
+      expect(result.success).toBe(true)
+    })
+
+    it("token invalido (401): retorna AUTH_RESET_TOKEN_INVALID", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_RESET_TOKEN_INVALID",
+              message: "Token de redefinicao de senha invalido",
+            },
+          },
+          false,
+          401,
+        ),
+      )
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("AUTH_RESET_TOKEN_INVALID")
+      expect(result.message).toBe("Token de redefinicao de senha invalido")
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe("Token de redefinicao de senha invalido")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("token expirado (410): retorna AUTH_RESET_TOKEN_EXPIRED", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_RESET_TOKEN_EXPIRED",
+              message:
+                "Sessao de redefinicao de senha expirada, solicite um novo link",
+            },
+          },
+          false,
+          410,
+        ),
+      )
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("AUTH_RESET_TOKEN_EXPIRED")
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("validacao (422): retorna VALIDATION_ERROR", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados de entrada invalidos",
+            },
+          },
+          false,
+          422,
+        ),
+      )
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("VALIDATION_ERROR")
+    })
+
+    it("codigo de erro desconhecido: normaliza para UNKNOWN_ERROR", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "SOME_NEW_SERVER_CODE",
+              message: "Novo erro do servidor",
+            },
+          },
+          false,
+          500,
+        ),
+      )
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("UNKNOWN_ERROR")
+      expect(result.message).toBe("Novo erro do servidor")
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("falha de rede: retorna NETWORK_ERROR e mensagem amigavel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("NETWORK_ERROR")
+      expect(result.message).toBe("Erro ao redefinir a senha")
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe("Erro ao redefinir a senha")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("resposta nao-JSON: retorna UNEXPECTED_RESPONSE", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore.getState().resetPassword(payload)
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("UNEXPECTED_RESPONSE")
+      expect(useAuthStore.getState().error).toBe(
+        "Resposta inesperada do servidor",
+      )
+    })
+
+    it("token vazio: nao chama fetch e retorna AUTH_RESET_TOKEN_INVALID", async () => {
+      global.fetch = vi.fn()
+
+      const result = await useAuthStore.getState().resetPassword({
+        token: "   ",
+        password: "NovaSenha1!",
+        passwordConfirmation: "NovaSenha1!",
+      })
+      if (result.success) throw new Error("esperado falha")
+
+      expect(result.code).toBe("AUTH_RESET_TOKEN_INVALID")
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+  })
 })
