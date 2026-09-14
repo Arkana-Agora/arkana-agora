@@ -1,21 +1,21 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
-import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Eye, EyeOff, CheckCircle } from "lucide-react"
+import { CheckCircle, Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
+import { useState } from "react"
+import { useForm, useWatch } from "react-hook-form"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { registerSchema, type RegisterInput } from "@/lib/validators/auth"
 import {
   getPasswordStrength,
   MAX_SCORE,
-  STRENGTH_LABELS,
   STRENGTH_BAR_COLORS,
+  STRENGTH_LABELS,
 } from "@/lib/password-strength"
+import { registerSchema, type RegisterInput } from "@/lib/validators/auth"
 import { useAuthStore } from "@/stores/auth-store"
 
 const SERVER_ERROR_MESSAGES: Record<string, string> = {
@@ -32,7 +32,7 @@ export function RegisterForm() {
   const {
     register: registerField,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -45,7 +45,7 @@ export function RegisterForm() {
     },
   })
 
-  const password = watch("password")
+  const password = useWatch({ name: "password", control })
   const strength = password.length > 0 ? getPasswordStrength(password) : null
 
   async function onSubmit(data: RegisterInput) {

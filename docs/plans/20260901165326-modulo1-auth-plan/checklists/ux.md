@@ -12,7 +12,7 @@ Domínio: `ux` — requisitos de experiência/interface
 ## Consistência e feedback
 - [ ] CHK-UX-005 As mensagens ao usuário estão em pt-BR e os termos de tela ("Esqueci minha senha", "Entrar com Google", etc.) são consistentes entre telas? [Consistency]
 - [ ] CHK-UX-006 O indicador de força de senha (RegisterForm) tem critérios definidos (fraca/média/forte) e uma regra objetiva de cálculo? [Measurability]
-- [ ] CHK-UX-007 O feedback visual do MagicLinkForm ("verifique sua caixa de entrada") e o timer de reenvio (60s) estão especificados? [Measurability]
+- [x] CHK-UX-007 O feedback visual do MagicLinkForm ("verifique sua caixa de entrada") e o timer de reenvio (60s) estão especificados? [Measurability]
 - [ ] CHK-UX-008 A barra de progresso de força e a validação client-side (Zod) têm regras idênticas às do servidor (S9)? [Consistency]
 
 ## Rotas e navegação

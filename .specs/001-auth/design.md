@@ -31,9 +31,12 @@
 
 ### 1.4 MagicLinkForm
 - Campo unico: email
-- Mensagem informativa: "Enviaremos um link de acesso para seu email"
-- Feedback visual apos envio: icone de envelope animado com texto "Verifique sua caixa de entrada"
-- Timer de reenvio (60 segundos)
+- Mensagem informativa: "Enviamos um link de acesso para seu email"
+- Feedback visual apos envio: icone de envelope animado (Mail do lucide-react com animate-pulse) com texto "Verifique sua caixa de entrada"
+- Timer de reenvio (60 segundos) com countdown
+- Validação client-side com react-hook-form + zodResolver(magicLinkSchema)
+- Mapeamento de erros: AUTH_MAGIC_LINK_RATE_LIMIT → "Muitos magic links solicitados, tente novamente mais tarde", falha de rede → "Erro ao enviar magic link"
+- Chama useAuthStore.sendMagicLink(email) (POST /api/v1/auth/magic-link)
 
 ### 1.5 ForgotPasswordForm
 - Campo unico: email
@@ -394,7 +397,7 @@ interface AuthState {
   // Acoes
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => void; // redirect
-  sendMagicLink: (email: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<MagicLinkResult>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: (email: string) => Promise<void>;
@@ -408,6 +411,7 @@ interface AuthState {
 - `error` e automaticamente limpo apos 5 segundos (useEffect)
 - `user` e persistido no localStorage (para evitar re-login em reload)
 - `isAuthenticated` e definido como `true` apenas no sucesso do `login()` (implementado: `user` so e armazenado em resposta 200 com `accessToken`; `AUTH_EMAIL_NOT_VERIFIED` lanca erro sem armazenar `user`)
+- `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` e falha de rede
 
 ---
 
@@ -417,7 +421,7 @@ interface AuthState {
 |---|---|---|---|
 | `/login` | LoginForm | Nao | Pagina de login principal |
 | `/register` | RegisterForm | Nao | Pagina de cadastro |
-| `/auth/magic-link` | MagicLinkForm | Nao | Solicitacao de magic link |
+| `/magic-link` | MagicLinkForm | Nao | Solicitacao de magic link |
 | `/auth/verify-email` | VerifyEmailPage | Nao | Tela "verifique seu email" |
 | `/auth/reset-password` | ResetPasswordForm | Nao | Redefinicao de senha |
 | `/auth/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link (redime token via `POST /api/v1/auth/magic-link/verify`) |

@@ -1,5 +1,18 @@
 import { logger } from "@/lib/logger"
 
+/**
+ * In-memory rate limiter using Map.
+ * WARNING: This implementation is NOT suitable for production deployments
+ * in serverless/edge environments (Vercel, AWS Lambda, etc.) where each
+ * invocation gets a fresh process and the rate limit state is lost.
+ *
+ * TODO(T25): Replace with Redis-backed rate limiter (Upstash, Vercel KV, or similar)
+ * for production deployments that require cross-instance rate limiting.
+ *
+ * Current implementation uses in-memory Map with sliding window expiration.
+ * Works correctly in single-process development environments only.
+ */
+
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000)
 const MAX_CONSECUTIVE_FAILURES = Number(
   process.env.MAX_CONSECUTIVE_FAILURES ?? 5,
@@ -19,7 +32,7 @@ const MAX_MAGIC_LINK_PER_EMAIL = (() => {
 
 const MAX_MAGIC_LINK_IP_ATTEMPTS = (() => {
   const raw = process.env.MAX_MAGIC_LINK_IP_ATTEMPTS
-  if (raw === undefined) return 20
+  if (raw === undefined) return 3
   const value = Number(raw)
   if (!Number.isFinite(value) || value < 1) {
     throw new Error(`Invalid MAX_MAGIC_LINK_IP_ATTEMPTS: ${raw}`)
@@ -52,11 +65,7 @@ interface Entry {
 
 const store = new Map<string, Entry>()
 
-function prune(
-  key: string,
-  now: number,
-  _windowMs?: number,
-): Entry | undefined {
+function prune(key: string, now: number): Entry | undefined {
   const entry = store.get(key)
   if (!entry || entry.resetAt <= now) {
     store.delete(key)
@@ -148,7 +157,7 @@ export function recordMagicLinkIpAttempt(ip: string): void {
 export function isRegisterLimited(email: string): RateCheck {
   const now = Date.now()
   const key = `register:email:${email.toLowerCase()}`
-  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  const entry = prune(key, now)
   if (entry && entry.count >= MAX_REGISTER_PER_EMAIL) {
     const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
     return { allowed: false, retryAfter }
@@ -167,7 +176,7 @@ export function recordRegisterAttempt(email: string): void {
 export function isRegisterIpLimited(ip: string): RateCheck {
   const now = Date.now()
   const key = `register:ip:${ip}`
-  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  const entry = prune(key, now)
   if (entry && entry.count >= MAX_REGISTER_IP_ATTEMPTS) {
     const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
     return { allowed: false, retryAfter }

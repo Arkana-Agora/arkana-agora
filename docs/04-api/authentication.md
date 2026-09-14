@@ -327,7 +327,7 @@ Envia link mágico por e-mail para login sem senha.
 > **Status (T9 implementado):** esta rota está **implementada** em
 > `src/app/api/v1/auth/magic-link/route.ts`. Zod `magicLinkSchema` (email-only, `.strict()` —
 > rejeita campos extras como `redirectUrl`), normaliza email para minúsculas, aplica rate limit
-> 3/h por email (`AUTH_MAGIC_LINK_RATE_LIMIT` 429) **e** 20/h por IP
+> 3/h por email (`AUTH_MAGIC_LINK_RATE_LIMIT` 429) **e** 3/h por IP
 > (`AUTH_MAGIC_LINK_RATE_LIMIT` 429 — mesmo código do limite por email), anti-enumeração (200 idêntico para
 > emails inexistentes/inativos/não verificados), gera token de 64 chars
 > (`randomBytes(32).toString("hex")`), persiste `VerificationToken type=MAGIC_LINK` com
@@ -338,6 +338,8 @@ Envia link mágico por e-mail para login sem senha.
 > de eliminá-la (residual documentado).
 > `POST /auth/magic-link/verify` (T10) — que redime o token — está **implementado** em
 > `src/app/api/v1/auth/magic-link/verify/route.ts` (contrato da seção abaixo).
+>
+> **Frontend (T21 implementado):** `MagicLinkForm` em `src/app/(auth)/magic-link/magic-link-form.tsx` — react-hook-form + `zodResolver(magicLinkSchema)`, campo único de e-mail, mensagem informativa "Enviamos um link de acesso para seu email", feedback visual animado (ícone `Mail` do lucide-react com `animate-pulse` + "Verifique sua caixa de entrada"), timer de reenvio de 60s com countdown, mapeamento de erros `AUTH_MAGIC_LINK_RATE_LIMIT` e falha de rede para mensagens amigáveis. Página em `src/app/(auth)/magic-link/page.tsx` (Card, título "Magic Link", `ThemeToggle`, `MagicLinkForm`).
 
 ### Requisição
 
@@ -381,7 +383,7 @@ Content-Type: application/json
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | Body inválido ou campo extra rejeitado (Zod, com `details` por campo) |
-| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail (`retryAfter` no body) |
+| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail ou por IP (`retryAfter` no body) |
 | 500 | `INTERNAL_ERROR` | Erro interno ao persistir token (inclui `meta.requestId`) |
 
 > **Nota:** falha no envio do e-mail **não** retorna erro — o 200 é mantido (token persistido,
