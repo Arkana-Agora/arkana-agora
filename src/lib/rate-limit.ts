@@ -65,11 +65,7 @@ interface Entry {
 
 const store = new Map<string, Entry>()
 
-function prune(
-  key: string,
-  now: number,
-  _windowMs?: number,
-): Entry | undefined {
+function prune(key: string, now: number): Entry | undefined {
   const entry = store.get(key)
   if (!entry || entry.resetAt <= now) {
     store.delete(key)
@@ -161,7 +157,7 @@ export function recordMagicLinkIpAttempt(ip: string): void {
 export function isRegisterLimited(email: string): RateCheck {
   const now = Date.now()
   const key = `register:email:${email.toLowerCase()}`
-  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  const entry = prune(key, now)
   if (entry && entry.count >= MAX_REGISTER_PER_EMAIL) {
     const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
     return { allowed: false, retryAfter }
@@ -180,7 +176,7 @@ export function recordRegisterAttempt(email: string): void {
 export function isRegisterIpLimited(ip: string): RateCheck {
   const now = Date.now()
   const key = `register:ip:${ip}`
-  const entry = prune(key, now, REGISTER_WINDOW_MS)
+  const entry = prune(key, now)
   if (entry && entry.count >= MAX_REGISTER_IP_ATTEMPTS) {
     const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
     return { allowed: false, retryAfter }
