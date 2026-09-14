@@ -3,12 +3,16 @@
 import type { RegisterInput, ResetPasswordInput } from "@/lib/validators/auth"
 import { create } from "zustand"
 
+export type UserRole = "USER" | "PROFESSIONAL" | "ADMIN"
+
+let refreshInFlight: Promise<boolean> | null = null
+
 interface User {
   id: string
   name: string
   email: string
   displayName: string | null
-  role: string
+  role: UserRole
   plan: string
   avatar: string | null
 }
@@ -150,6 +154,7 @@ interface AuthState {
   sendMagicLink: (email: string) => Promise<MagicLinkResult>
   forgotPassword: (email: string) => Promise<ForgotPasswordResult>
   resetPassword: (data: ResetPasswordInput) => Promise<ResetPasswordResult>
+  refreshSession: () => Promise<boolean>
   clearError: () => void
 }
 
@@ -454,6 +459,64 @@ export const useAuthStore = create<AuthState>((set) => ({
     } finally {
       set({ isLoading: false })
     }
+  },
+
+  refreshSession: () => {
+    if (refreshInFlight) return refreshInFlight
+
+    const promise = (async () => {
+      set({ isLoading: true, error: null })
+      try {
+        const res: Response = await fetch("/api/v1/auth/refresh", {
+          method: "POST",
+        })
+        let data: unknown
+        try {
+          data = await res.json()
+        } catch {
+          set({
+            user: null,
+            isAuthenticated: false,
+            error: "Resposta inesperada do servidor",
+          })
+          return false
+        }
+
+        if (
+          res.ok &&
+          data &&
+          typeof data === "object" &&
+          "accessToken" in data &&
+          typeof data.accessToken === "string"
+        ) {
+          set({ isAuthenticated: true })
+          return true
+        }
+
+        const errorData = parseErrorResponse(data)
+        set({
+          user: null,
+          isAuthenticated: false,
+          error: errorData?.message ?? "Sessao expirada",
+        })
+        return false
+      } catch (err) {
+        if (err instanceof TypeError) {
+          set({ error: "Erro ao reconectar sessao" })
+          return false
+        }
+        set({ user: null, isAuthenticated: false, error: "Sessao expirada" })
+        return false
+      } finally {
+        set({ isLoading: false })
+      }
+    })()
+
+    refreshInFlight = promise
+    promise.finally(() => {
+      if (refreshInFlight === promise) refreshInFlight = null
+    })
+    return promise
   },
 
   clearError: () => set({ error: null }),
