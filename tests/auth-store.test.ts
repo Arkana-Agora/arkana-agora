@@ -380,4 +380,147 @@ describe("auth-store", () => {
       expect(state.error).toBe("Resposta inesperada do servidor")
     })
   })
+
+  describe("forgotPassword", () => {
+    it("e-mail vazio: retorna VALIDATION_ERROR sem chamar a API", async () => {
+      global.fetch = vi.fn()
+
+      const result = await useAuthStore.getState().forgotPassword("   ")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("VALIDATION_ERROR")
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it("sucesso: retorna mensagem e reseta isLoading", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse({
+          message:
+            "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha",
+        }),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+
+      expect(result.success).toBe(true)
+      if (!result.success) throw new Error("esperado sucesso")
+      expect(result.message).toContain("instrucoes para redefinir sua senha")
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/forgot-password",
+        expect.objectContaining({ method: "POST" }),
+      )
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBeNull()
+    })
+
+    it("sucesso: aceita qualquer 200 com message sem depender do texto", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ message: "Link de recuperacao gerado" }),
+        )
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+
+      expect(result.success).toBe(true)
+    })
+
+    it("rate limit: retorna erro com codigo", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_FORGOT_RATE_LIMIT",
+              message:
+                "Muitos pedidos de recuperacao de senha, tente novamente mais tarde",
+            },
+          },
+          false,
+          429,
+        ),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("AUTH_FORGOT_RATE_LIMIT")
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe(
+        "Muitos pedidos de recuperacao de senha, tente novamente mais tarde",
+      )
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("codigo de erro desconhecido do servidor: normaliza para UNKNOWN_ERROR", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "SOME_NEW_SERVER_CODE",
+              message: "Novo erro do servidor",
+            },
+          },
+          false,
+          500,
+        ),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("UNKNOWN_ERROR")
+      expect(result.message).toBe("Novo erro do servidor")
+
+      const state = useAuthStore.getState()
+      expect(state.error).toBe("Novo erro do servidor")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("falha de rede: reseta isLoading, retorna NETWORK_ERROR e mensagem amigavel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("NETWORK_ERROR")
+      expect(result.message).toBe("Erro ao enviar link de recuperacao")
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBe("Erro ao enviar link de recuperacao")
+    })
+
+    it("resposta nao-JSON (500): reseta isLoading e define erro generico", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore
+        .getState()
+        .forgotPassword("alice@example.com")
+      if (result.success) throw new Error("esperado falha no envio")
+
+      expect(result.code).toBe("UNEXPECTED_RESPONSE")
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.error).toBe("Resposta inesperada do servidor")
+    })
+  })
 })
