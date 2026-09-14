@@ -43,6 +43,11 @@
 - Botao "Enviar link de recuperacao"
 - Feedback de sucesso com instrucoes
 - Link de retorno ao login
+- Validação client-side com react-hook-form + zodResolver(forgotPasswordSchema)
+- Mapeamento de erros: AUTH_FORGOT_RATE_LIMIT → "Muitos pedidos de recuperacao de senha, tente novamente mais tarde", NETWORK_ERROR → "Erro ao enviar link de recuperacao", UNEXPECTED_RESPONSE → "Resposta inesperada do servidor", UNKNOWN_ERROR → "Erro inesperado, tente novamente"
+- Chama useAuthStore.forgotPassword(email) (POST /api/v1/auth/forgot-password)
+- Sucesso: substitui o formulario por painel role="status" com a mensagem da API + link "Voltar ao login"
+- **Implementado (T22)**: `src/app/(auth)/forgot-password/forgot-password-form.tsx` + pagina `src/app/(auth)/forgot-password/page.tsx`
 
 ### 1.6 ResetPasswordForm
 - Campos: nova senha, confirmar nova senha
@@ -245,7 +250,7 @@ redirect final para `/dashboard` **sem tokens na URL**.
 **Response 200**: `{ message: "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha" }` (flat, sem wrapper `data`; idêntico para email existente ou não — anti-enumeração; no-op para conta inativa/deletada também responde 200)
 
 **Response 422**: `{ error: "VALIDATION_ERROR" }` (email invalido, campo extra ou corpo nao-JSON)
-**Response 429**: `{ error: "AUTH_FORGOT_RATE_LIMIT", retryAfter: N }` — 3 pedidos/hora por email, janela 1h (env `MAX_PASSWORD_RESET_PER_EMAIL`). Contagem registrada antes do lookup do usuario (anti-spam — emails inexistentes consomem cota).
+**Response 429**: `{ error: "AUTH_FORGOT_RATE_LIMIT" }` — 3 pedidos/hora por email, janela 1h (env `MAX_PASSWORD_RESET_PER_EMAIL`). Contagem registrada antes do lookup do usuario (anti-spam — emails inexistentes consomem cota).
 **Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
 
 **Decisoes**: sem limite por IP; sem gate de `emailVerified` (qualquer email cadastrado ativo recebe reset, verificado ou nao); token `VerificationToken type=PASSWORD_RESET` 64 chars hex com `expiresAt` 1h; anti-enumeração por tempo e **piso** de 250ms no no-op (`equalizeNoopTiming`), nao equalizacao exata.
@@ -398,6 +403,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => void; // redirect
   sendMagicLink: (email: string) => Promise<MagicLinkResult>;
+  forgotPassword: (email: string) => Promise<ForgotPasswordResult>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: (email: string) => Promise<void>;
@@ -411,7 +417,8 @@ interface AuthState {
 - `error` e automaticamente limpo apos 5 segundos (useEffect)
 - `user` e persistido no localStorage (para evitar re-login em reload)
 - `isAuthenticated` e definido como `true` apenas no sucesso do `login()` (implementado: `user` so e armazenado em resposta 200 com `accessToken`; `AUTH_EMAIL_NOT_VERIFIED` lanca erro sem armazenar `user`)
-- `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` e falha de rede
+- `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`, usado pelas 4 acoes — login/register/sendMagicLink/forgotPassword); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` (429 com `retryAfter` repassado no resultado) e falha de rede
+- `forgotPassword` nao autentica — apenas envia o link de recuperacao; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `ForgotPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ForgotPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ForgotPasswordErrorCode` = `"AUTH_FORGOT_RATE_LIMIT" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; e-mail vazio → `VALIDATION_ERROR` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao "Se o e-mail estiver cadastrado..."); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`); 429 `AUTH_FORGOT_RATE_LIMIT` (sem `retryAfter`); codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeAuthErrorCode` (helper simplificado, sem genérico, recebe `readonly string[]`, retorna `string`, compartilhado com `normalizeMagicLinkCode`/`normalizeForgotPasswordCode`); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao enviar link de recuperacao"
 
 ---
 
@@ -422,6 +429,7 @@ interface AuthState {
 | `/login` | LoginForm | Nao | Pagina de login principal |
 | `/register` | RegisterForm | Nao | Pagina de cadastro |
 | `/magic-link` | MagicLinkForm | Nao | Solicitacao de magic link |
+| `/forgot-password` | ForgotPasswordForm | Nao | Recuperacao de senha (envio de link) |
 | `/auth/verify-email` | VerifyEmailPage | Nao | Tela "verifique seu email" |
 | `/auth/reset-password` | ResetPasswordForm | Nao | Redefinicao de senha |
 | `/auth/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link (redime token via `POST /api/v1/auth/magic-link/verify`) |

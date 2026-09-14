@@ -123,7 +123,7 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 - **Limite de volume por IP**: 5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`.
 - **Magic link por email**: 3/hora por email → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkLimited`/`recordMagicLinkRequest`).
 - **Magic link por IP**: 3/hora por IP → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkIpLimited`/`recordMagicLinkIpAttempt`; mesmo código do limite por email — não há `AUTH_MAGIC_LINK_IP_RATE_LIMIT`). Ajustado de 20/h para 3/h no review T21 (decisão de produto).
-- **Forgot-password por email**: 3/hora por email → 429 `AUTH_FORGOT_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isPasswordResetLimited`/`recordPasswordResetRequest`, env `MAX_PASSWORD_RESET_PER_EMAIL`). A contagem é registrada antes da verificação de existência do usuário (anti-spam).
+- **Forgot-password por email**: 3/hora por email → 429 `AUTH_FORGOT_RATE_LIMIT` (1h window, `src/lib/rate-limit.ts` `isPasswordResetLimited`/`recordPasswordResetRequest`, env `MAX_PASSWORD_RESET_PER_EMAIL`). A contagem é registrada antes da verificação de existência do usuário (anti-spam).
 - **Audit de reset de senha** (design §7.6): pedidos de recuperação de senha são logados com **IP** (`x-forwarded-for`) e **user agent** em `[auth:forgot-password]` (`src/app/api/v1/auth/forgot-password/route.ts`).
 - **`POST /api/v1/auth/reset-password` (T12) NÃO tem rate limit** — decisão consciente; rate limiting (incl. Redis-based) é tarefa posterior (T27). Não confundir com o limite de **emissão** de tokens (forgot-password 3/h por email), que já existe.
 - `resetRateLimiter()` limpa o store (usado em testes).

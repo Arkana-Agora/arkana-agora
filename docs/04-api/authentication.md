@@ -604,7 +604,7 @@ Content-Type: application/json
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON |
-| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (`retryAfter` em segundos; janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`) |
+| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`) |
 | 500 | `INTERNAL_ERROR` | Falha DB/SMTP desconhecida (inclui `meta.requestId`, C13) |
 
 A contagem é registrada **antes** da verificação de existência do usuário, então pedidos de
