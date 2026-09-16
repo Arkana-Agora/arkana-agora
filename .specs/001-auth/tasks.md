@@ -61,7 +61,7 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 25 | Implementar AuthStore no Zustand com persistencia (prototipo minimo em `src/stores/auth-store.ts` criado no T19 — persistencia pendente) | pending | 3 | 7, 8 |
+| 25 | Implementar AuthStore no Zustand com persistencia (prototipo minimo em `src/stores/auth-store.ts` criado no T19 — persistencia pendente) | done | 3 | 7, 8 |
 | 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
 | 27 | Implementar rate limiting (Redis) por IP/email (login, magic link, reset) | pending | 3 | infra |
 | 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |

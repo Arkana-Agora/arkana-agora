@@ -73,7 +73,7 @@ confirmado pelo **Auth.js v5** em `/api/auth/*` (ADR-010). Após a identidade co
 3. **C12**: Google com `emailVerified === null` → `prisma.user.update({ emailVerified: new Date() })`.
 4. Emite `signAccessToken({ id, role, plan, tokenVersion })` + `createRefreshSession(user.id, {})`
    e grava em `token.customAuth` (uma única execução por sessão).
-5. Callback `session` expõe `session.accessToken` (consumido pela AuthStore — T25).
+5. Callback `session` expõe `session.accessToken` (consumido pela AuthStore — T25: `logout()`/`deleteAccount()` leem via `getSession()` e enviam como Bearer).
 
 O wrapper `src/app/api/auth/[...nextauth]/route.ts` (`finalizeAuthResponse`) então:
 - define o cookie **`refreshToken`** httpOnly+Secure (`Path=/api/v1/auth`, `SameSite=Strict`, `Max-Age=30d`),
