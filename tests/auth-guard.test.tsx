@@ -1,8 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 
-const { mockRefreshSession, mockRouter, authState } = vi.hoisted(() => ({
-  mockRefreshSession: vi.fn(),
+const { mockRouter, authState } = vi.hoisted(() => ({
   mockRouter: { replace: vi.fn() },
   authState: { user: null as { role: string } | null, isAuthenticated: false },
 }))
@@ -16,15 +15,14 @@ vi.mock("@/stores/auth-store", () => ({
     const state = {
       user: authState.user,
       isAuthenticated: authState.isAuthenticated,
-      refreshSession: () =>
-        mockRefreshSession().then((ok: boolean) => {
-          authState.isAuthenticated = ok
-          return ok
-        }),
+      refreshSession: mockRefreshSession,
     }
-    return typeof selector === "function" ? selector(state) : state
+    return selector ? selector(state) : state
   },
 }))
+
+export const mockRefreshSession = vi.fn()
+export { mockRouter, authState }
 
 import { AuthGuard } from "@/components/auth/auth-guard"
 
@@ -32,10 +30,10 @@ describe("AuthGuard", () => {
   afterEach(() => cleanup())
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    authState.user = null
-    authState.isAuthenticated = false
     mockRefreshSession.mockReset()
+    vi.clearAllMocks()
+    authState.isAuthenticated = false
+    authState.user = null
   })
 
   describe("authenticated at mount", () => {
@@ -53,6 +51,7 @@ describe("AuthGuard", () => {
     })
 
     it("blocks when role mismatch and redirects to login", async () => {
+      mockRefreshSession.mockResolvedValue(true)
       authState.isAuthenticated = true
       authState.user = { role: "USER" }
       render(
@@ -102,6 +101,8 @@ describe("AuthGuard", () => {
 
       await act(async () => {
         resolveRefresh(true)
+        authState.isAuthenticated = true
+        authState.user = { role: "USER" }
       })
 
       expect(
@@ -112,6 +113,8 @@ describe("AuthGuard", () => {
 
     it("redirects to /login when refresh fails", async () => {
       mockRefreshSession.mockResolvedValue(false)
+      authState.isAuthenticated = false
+      authState.user = null
       render(
         <AuthGuard>
           <div data-testid="protected">Protected content</div>
@@ -126,6 +129,8 @@ describe("AuthGuard", () => {
 
     it("redirects to /login when refresh succeeds but requiredRole not met (user null)", async () => {
       mockRefreshSession.mockResolvedValue(true)
+      authState.isAuthenticated = true
+      authState.user = null
       render(
         <AuthGuard requiredRole="ADMIN">
           <div data-testid="protected">Protected content</div>
@@ -139,18 +144,30 @@ describe("AuthGuard", () => {
     })
 
     it("does not call refreshSession again after first mount", async () => {
-      mockRefreshSession.mockResolvedValue(true)
+      let resolveRefresh!: (value: boolean) => void
+      mockRefreshSession.mockReturnValue(
+        new Promise((resolve) => {
+          resolveRefresh = resolve
+        }),
+      )
+      authState.isAuthenticated = false
+      authState.user = null
       render(
         <AuthGuard>
           <div data-testid="protected">Protected content</div>
         </AuthGuard>,
       )
 
-      await waitFor(() => {
-        expect(screen.getByTestId("protected")).toBeInTheDocument()
+      expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        resolveRefresh(true)
+        authState.isAuthenticated = true
+        authState.user = { role: "USER" }
       })
 
       expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId("protected")).toBeInTheDocument()
     })
   })
 })
