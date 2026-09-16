@@ -1,15 +1,23 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAuthStore, type User, type UserRole } from "@/stores/auth-store"
+import {
+  useAuthStore,
+  type PartialUser,
+  type User,
+  type UserRole,
+} from "@/stores/auth-store"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 function passesRole(
-  user: User | null | undefined,
+  user: User | PartialUser | null | undefined,
   requiredRole?: UserRole,
 ): boolean {
-  return !requiredRole || user?.role === requiredRole
+  return (
+    !requiredRole ||
+    (user != null && "role" in user && user.role === requiredRole)
+  )
 }
 
 interface AuthGuardProps {
