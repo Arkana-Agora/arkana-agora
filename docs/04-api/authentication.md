@@ -73,7 +73,7 @@ confirmado pelo **Auth.js v5** em `/api/auth/*` (ADR-010). Após a identidade co
 3. **C12**: Google com `emailVerified === null` → `prisma.user.update({ emailVerified: new Date() })`.
 4. Emite `signAccessToken({ id, role, plan, tokenVersion })` + `createRefreshSession(user.id, {})`
    e grava em `token.customAuth` (uma única execução por sessão).
-5. Callback `session` expõe `session.accessToken` (consumido pela AuthStore — T25).
+5. Callback `session` expõe `session.accessToken` (consumido pela AuthStore — T25: `logout()`/`deleteAccount()` leem via `getSession()` e enviam como Bearer).
 
 O wrapper `src/app/api/auth/[...nextauth]/route.ts` (`finalizeAuthResponse`) então:
 - define o cookie **`refreshToken`** httpOnly+Secure (`Path=/api/v1/auth`, `SameSite=Strict`, `Max-Age=30d`),
@@ -464,11 +464,21 @@ Cookie: refreshToken=<rt_token>
 ```json
 {
   "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresIn": 900
+  "expiresIn": 900,
+  "user": {
+    "id": "usr_1",
+    "name": "Alice",
+    "email": "alice@example.com",
+    "displayName": null,
+    "avatar": null,
+    "role": "USER",
+    "plan": "FREE",
+    "emailVerified": true
+  }
 }
 ```
 
-> O novo refresh token rotacionado é entregue via `Set-Cookie` (mesmo `familyId`). Se um token já rotacionado for reenviado, toda a família é revogada.
+> O `user` reflete o estado atual da conta no banco (F1: corrige Google OAuth e qualquer login que não popula o client store). `emailVerified` é `boolean` (DB `DateTime?` → `true`/`false`). O novo refresh token rotacionado é entregue via `Set-Cookie` (mesmo `familyId`). Se um token já rotacionado for reenviado, toda a família é revogada.
 
 ### Erros
 

@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useAuthStore, type User } from "@/stores/auth-store"
 
+vi.mock("next-auth/react", () => ({
+  getSession: vi.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+}))
+
+import { getSession, signIn, signOut } from "next-auth/react"
+
 const user: User = {
   id: "user-1",
   name: "Alice",
@@ -10,6 +18,7 @@ const user: User = {
   role: "USER",
   plan: "FREE",
   avatar: null,
+  emailVerified: true,
 }
 
 function mockJsonResponse(
@@ -32,6 +41,7 @@ describe("auth-store", () => {
       isLoading: false,
       error: null,
     })
+    useAuthStore.getState().clearError()
     vi.restoreAllMocks()
   })
 
@@ -44,6 +54,7 @@ describe("auth-store", () => {
 
     const state = useAuthStore.getState()
     expect(state.user).toEqual(user)
+    expect(state.user?.emailVerified).toBe(true)
     expect(state.isAuthenticated).toBe(true)
     expect(state.isLoading).toBe(false)
     expect(state.error).toBeNull()
@@ -51,6 +62,45 @@ describe("auth-store", () => {
       "/api/v1/auth/login",
       expect.objectContaining({ method: "POST" }),
     )
+  })
+
+  it("login sem emailVerified no payload: deriva como true (S12)", async () => {
+    const userWithoutFlag = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      plan: user.plan,
+      avatar: user.avatar,
+    }
+    global.fetch = vi.fn().mockResolvedValue(
+      mockJsonResponse({
+        accessToken: "access-123",
+        user: userWithoutFlag,
+      }),
+    )
+
+    await useAuthStore.getState().login("alice@example.com", "secret")
+
+    const state = useAuthStore.getState()
+    expect(state.user?.emailVerified).toBe(true)
+    expect(state.isAuthenticated).toBe(true)
+  })
+
+  it("login com emailVerified null: nao autentica (deriva false)", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockJsonResponse({
+        accessToken: "access-123",
+        user: { ...user, emailVerified: null },
+      }),
+    )
+
+    await useAuthStore.getState().login("alice@example.com", "secret")
+
+    const state = useAuthStore.getState()
+    expect(state.user?.emailVerified).toBe(false)
+    expect(state.isAuthenticated).toBe(false)
   })
 
   it("login credenciais invalidas: define error legivel e lanca o codigo", async () => {
@@ -78,7 +128,7 @@ describe("auth-store", () => {
     expect(state.user).toBeNull()
   })
 
-  it("login e-mail nao verificado: lanca AUTH_EMAIL_NOT_VERIFIED sem armazenar user", async () => {
+  it("login e-mail nao verificado: guarda user parcial sem autenticar (C9)", async () => {
     global.fetch = vi.fn().mockResolvedValue(
       mockJsonResponse(
         {
@@ -88,7 +138,7 @@ describe("auth-store", () => {
           },
         },
         false,
-        403,
+        401,
       ),
     )
 
@@ -97,7 +147,10 @@ describe("auth-store", () => {
     ).rejects.toThrow("AUTH_EMAIL_NOT_VERIFIED")
 
     const state = useAuthStore.getState()
-    expect(state.user).toBeNull()
+    expect(state.user).toEqual({
+      email: "alice@example.com",
+      emailVerified: false,
+    })
     expect(state.isAuthenticated).toBe(false)
     expect(state.isLoading).toBe(false)
   })
@@ -155,6 +208,53 @@ describe("auth-store", () => {
     useAuthStore.setState({ error: "E-mail ou senha invalidos" })
     useAuthStore.getState().clearError()
     expect(useAuthStore.getState().error).toBeNull()
+  })
+
+  it("error auto-limpa apos 5 segundos", async () => {
+    vi.useFakeTimers()
+    try {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_INVALID_CREDENTIALS",
+              message: "E-mail ou senha invalidos",
+            },
+          },
+          false,
+          401,
+        ),
+      )
+
+      await expect(
+        useAuthStore.getState().login("alice@example.com", "errada"),
+      ).rejects.toThrow("AUTH_INVALID_CREDENTIALS")
+
+      expect(useAuthStore.getState().error).toBe("E-mail ou senha invalidos")
+
+      vi.advanceTimersByTime(5000)
+      expect(useAuthStore.getState().error).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("erro inalterado nao reinicia o timer de auto-limpeza", async () => {
+    vi.useFakeTimers()
+    try {
+      await useAuthStore.getState().sendMagicLink("")
+
+      vi.advanceTimersByTime(4000)
+
+      await useAuthStore.getState().sendMagicLink("")
+
+      expect(useAuthStore.getState().error).toBe("E-mail obrigatório")
+
+      vi.advanceTimersByTime(1000)
+      expect(useAuthStore.getState().error).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   describe("register", () => {
@@ -702,14 +802,134 @@ describe("auth-store", () => {
     })
   })
 
-  describe("refreshSession", () => {
-    it("sucesso: renova via cookie (POST sem body) e mantem autenticado", async () => {
-      useAuthStore.setState({ user, isAuthenticated: true })
+  describe("persist", () => {
+    const PERSIST_KEY = "arkana-auth"
+
+    it("login persiste o user no localStorage", async () => {
       global.fetch = vi
         .fn()
         .mockResolvedValue(
-          mockJsonResponse({ accessToken: "access-456", expiresIn: 900 }),
+          mockJsonResponse({ accessToken: "access-123", user }),
         )
+
+      useAuthStore.setState({ user: null, isAuthenticated: false })
+      await useAuthStore.getState().login("alice@example.com", "secret")
+
+      const raw = localStorage.getItem(PERSIST_KEY)
+      expect(raw).not.toBeNull()
+      const persisted = JSON.parse(raw!) as { state: { user: unknown } }
+      expect(persisted.state.user).toEqual(user)
+    })
+
+    it("rehydrate restaura o user e deriva isAuthenticated", async () => {
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({ state: { user }, version: 0 }),
+      )
+
+      await useAuthStore.persist.rehydrate()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toEqual(user)
+      expect(state.isAuthenticated).toBe(true)
+    })
+
+    it("rehydrate com user parcial (C9) nao autentica", async () => {
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({
+          state: { user: { email: "alice@example.com", emailVerified: false } },
+          version: 0,
+        }),
+      )
+
+      await useAuthStore.persist.rehydrate()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toEqual({
+        email: "alice@example.com",
+        emailVerified: false,
+      })
+      expect(state.isAuthenticated).toBe(false)
+    })
+
+    it("rehydrate com dado corrompido/sem shape valido: descarta o user", async () => {
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({
+          state: {
+            user: { email: 123, emailVerified: "sim" },
+            isAuthenticated: true,
+          },
+          version: 0,
+        }),
+      )
+
+      await useAuthStore.persist.rehydrate()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+    })
+    it("rehydrate com role fora do union (adulterado): descarta o user", async () => {
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({
+          state: { user: { ...user, role: "SUPERADMIN" } },
+          version: 0,
+        }),
+      )
+
+      await useAuthStore.persist.rehydrate()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+    })
+
+    it("rehydrate com shape parcial e role adulterado: descarta o user", async () => {
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({
+          state: {
+            user: {
+              email: "alice@example.com",
+              emailVerified: true,
+              role: "ADMIN",
+            },
+            isAuthenticated: true,
+          },
+          version: 0,
+        }),
+      )
+
+      await useAuthStore.persist.rehydrate()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+    })
+  })
+
+  describe("refreshSession", () => {
+    it("sucesso: renova via cookie (POST sem body), popula user do servidor e mantem autenticado", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse({
+          accessToken: "access-456",
+          expiresIn: 900,
+          user: {
+            id: "user-1",
+            name: "Alice",
+            email: "alice@example.com",
+            displayName: null,
+            role: "USER",
+            plan: "FREE",
+            avatar: null,
+            emailVerified: true,
+          },
+        }),
+      )
 
       const result = await useAuthStore.getState().refreshSession()
 
@@ -724,16 +944,29 @@ describe("auth-store", () => {
       expect(state.isLoading).toBe(false)
     })
 
-    it("restabelece autenticacao apos reload: user null vira true sem user", async () => {
-      global.fetch = vi
-        .fn()
-        .mockResolvedValue(mockJsonResponse({ accessToken: "access-456" }))
+    it("refresh com user nao verificado: desautentica", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse({
+          accessToken: "access-456",
+          user: {
+            id: "user-1",
+            name: "Alice",
+            email: "alice@example.com",
+            displayName: null,
+            role: "USER",
+            plan: "FREE",
+            avatar: null,
+            emailVerified: false,
+          },
+        }),
+      )
 
       const result = await useAuthStore.getState().refreshSession()
 
       expect(result).toBe(true)
-      expect(useAuthStore.getState().isAuthenticated).toBe(true)
-      expect(useAuthStore.getState().user).toBeNull()
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+      expect(useAuthStore.getState().user?.emailVerified).toBe(false)
     })
 
     it("falha com 401: retorna false, limpa user e define error legivel", async () => {
@@ -808,7 +1041,21 @@ describe("auth-store", () => {
       const first = useAuthStore.getState().refreshSession()
       const second = useAuthStore.getState().refreshSession()
       expect(global.fetch).toHaveBeenCalledTimes(1)
-      resolveFetch(mockJsonResponse({ accessToken: "access-789" }))
+      resolveFetch(
+        mockJsonResponse({
+          accessToken: "access-789",
+          user: {
+            id: "user-1",
+            name: "Alice",
+            email: "alice@example.com",
+            displayName: null,
+            role: "USER",
+            plan: "FREE",
+            avatar: null,
+            emailVerified: true,
+          },
+        }),
+      )
       const [a, b] = await Promise.all([first, second])
       expect(a).toBe(true)
       expect(b).toBe(true)
@@ -1014,6 +1261,7 @@ describe("auth-store", () => {
       role: "USER" as const,
       plan: "FREE",
       avatar: null,
+      emailVerified: true,
     }
 
     it("sucesso: verifica magic link, autentica usuario e retorna user", async () => {
@@ -1131,6 +1379,233 @@ describe("auth-store", () => {
         code: "NETWORK_ERROR",
         message: "Erro ao verificar magic link",
       })
+    })
+  })
+
+  describe("loginWithGoogle", () => {
+    it("chama signIn do next-auth com google e callbackUrl /dashboard", async () => {
+      vi.mocked(signIn).mockResolvedValue(undefined as never)
+
+      useAuthStore.getState().loginWithGoogle()
+
+      expect(signIn).toHaveBeenCalledWith("google", {
+        callbackUrl: "/dashboard",
+      })
+    })
+
+    it("ignora o NEXT_REDIRECT do signIn (sucesso) sem setar erro", async () => {
+      vi.mocked(signIn).mockRejectedValue(new Error("NEXT_REDIRECT"))
+
+      useAuthStore.getState().loginWithGoogle()
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(useAuthStore.getState().error).toBeNull()
+    })
+
+    it("falha do signIn seta erro de Google", async () => {
+      vi.mocked(signIn).mockRejectedValue(new Error("popup_closed_by_user"))
+
+      useAuthStore.getState().loginWithGoogle()
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(useAuthStore.getState().error).toBe("Erro ao entrar com Google")
+    })
+  })
+
+  describe("logout", () => {
+    it("envia POST /auth/logout com Bearer, encerra sessao Auth.js e limpa o estado", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Sessao encerrada" }))
+
+      await useAuthStore.getState().logout()
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/logout",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            Authorization: "Bearer access-123",
+          }),
+        }),
+      )
+      expect(signOut).toHaveBeenCalledWith({ redirect: false })
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("sem sessao: limpa o estado e encerra sessao Auth.js sem chamar a API", async () => {
+      vi.mocked(getSession).mockResolvedValue(null)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn()
+
+      await useAuthStore.getState().logout()
+
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(signOut).toHaveBeenCalledWith({ redirect: false })
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+    })
+
+    it("falha de rede: limpa o estado local mesmo assim", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      await useAuthStore.getState().logout()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+    it("falha do signOut nao impede a limpeza do estado local", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      vi.mocked(signOut).mockRejectedValue(new Error("signOut falhou"))
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Sessao encerrada" }))
+
+      await useAuthStore.getState().logout()
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+  })
+
+  describe("deleteAccount", () => {
+    it("envia DELETE /auth/account com Bearer e { email }, encerra sessao e limpa o estado", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Conta marcada" }))
+
+      await useAuthStore.getState().deleteAccount("alice@example.com")
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/account",
+        expect.objectContaining({
+          method: "DELETE",
+          headers: expect.objectContaining({
+            Authorization: "Bearer access-123",
+          }),
+          body: JSON.stringify({ email: "alice@example.com" }),
+        }),
+      )
+      expect(signOut).toHaveBeenCalledWith({ redirect: false })
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("normaliza o email (trim + lowercase) antes de enviar", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Conta marcada" }))
+
+      await useAuthStore.getState().deleteAccount("  Alice@Example.com  ")
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/account",
+        expect.objectContaining({
+          body: JSON.stringify({ email: "alice@example.com" }),
+        }),
+      )
+    })
+
+    it("falha do signOut apos excluir nao impede a limpeza do estado", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      vi.mocked(signOut).mockRejectedValue(new Error("signOut falhou"))
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Conta marcada" }))
+
+      await useAuthStore.getState().deleteAccount("alice@example.com")
+
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("resposta HTTP de erro (401): mantem o estado e registra erro", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: { code: "AUTH_TOKEN_INVALID", message: "Sessao expirada" },
+          },
+          false,
+          401,
+        ),
+      )
+
+      await useAuthStore.getState().deleteAccount("alice@example.com")
+
+      const state = useAuthStore.getState()
+      expect(state.user).toEqual(user)
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.error).toBe("Erro ao excluir conta")
+      expect(state.isLoading).toBe(false)
+      expect(signOut).not.toHaveBeenCalled()
+    })
+
+    it("sem sessao: registra erro sem chamar a API", async () => {
+      vi.mocked(getSession).mockResolvedValue(null)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn()
+
+      await useAuthStore.getState().deleteAccount("alice@example.com")
+
+      expect(global.fetch).not.toHaveBeenCalled()
+      const state = useAuthStore.getState()
+      expect(state.user).toEqual(user)
+      expect(state.error).toBe("Sessao expirada, faca login novamente")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("falha de rede: mantem o estado e registra erro", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      await useAuthStore.getState().deleteAccount("alice@example.com")
+
+      const state = useAuthStore.getState()
+      expect(state.user).toEqual(user)
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.error).toBe("Erro ao excluir conta")
+      expect(state.isLoading).toBe(false)
     })
   })
 })

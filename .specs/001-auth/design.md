@@ -62,6 +62,7 @@
 ### 1.7 AuthGuard
 - Componente de rota protegida (wrapper)
 - Verifica existencia e validade do access token
+- Na montagem, **sempre** valida a sessao via `refreshSession()` (fail-closed) apos o primeiro render; inicia com `checked=false` para nao divergir da hidratacao SSR (servidor nao tem localStorage)
 - Se nao autenticado: redireciona para /login
 - Se access token expirou: tenta renovar com refresh token
 - Se refresh token tambem expirou: redireciona para /login
@@ -228,7 +229,7 @@ redirect final para `/dashboard` **sem tokens na URL**.
 **Response 422**: `{ error: "VALIDATION_ERROR" }` — token ausente, acima de 256 chars, campo extra (schema `.strict()`) ou corpo nao-JSON
 **Response 500**: `{ error: "INTERNAL_ERROR", meta: { requestId } }` (C13)
 
-**Decisoes**: reusar o tipo literal `"EMAIL"` existente no schema (prisma `VerificationToken.type String` — nao criar tipo novo); janela de 24h identica ao envio da task 6; valida LGPD antes de marcar verificado (usuario inativo/deletado nao reativa conta via token vigente). O frontend redireciona ao login apos confirmacao; ver `isAuthenticated` (design §5) que e definido no sucesso do `login()`.
+**Decisoes**: reusar o tipo literal `"EMAIL"` existente no schema (prisma `VerificationToken.type String` — nao criar tipo novo); janela de 24h identica ao envio da task 6; valida LGPD antes de marcar verificado (usuario inativo/deletado nao reativa conta via token vigente). O frontend redireciona ao login apos confirmacao; ver `isAuthenticated` (design §5) que e derivado de `user != null && user.emailVerified` (setado no sucesso de `login()`/`verifyMagicLink()`).
 
 ### POST /api/v1/auth/verify-email/resend
 **Descricao**: Reenvia o email de verificacao (RF-AUTH-005). Regenera um novo token `EMAIL` de 24h substituindo quaisquer tokens anteriores do mesmo endereco e envia por email; se o envio falhar, o token permanece persistido (precedente task 6) e a resposta e identica.
@@ -389,16 +390,10 @@ model VerificationToken {
 ```typescript
 interface AuthState {
   // Estado
-  user: {
-    id: string;
-    name: string;
-    displayName: string;
-    email: string;
-    role: 'USER' | 'PROFESSIONAL' | 'ADMIN';
-    plan: 'FREE' | 'PLUS';
-    avatar: string | null;
-  } | null; // alinhado ao payload de POST /api/v1/auth/login (sem emailVerified)
-  isAuthenticated: boolean;
+  user: StoredUser | null; // StoredUser = User | PartialUser (T25/C9)
+  //   User = { id, name, displayName, email, role, plan, avatar, emailVerified: boolean }
+  //   PartialUser = { email, emailVerified: false } — login 401 AUTH_EMAIL_NOT_VERIFIED (C9)
+  isAuthenticated: boolean; // derivado: user != null && user.emailVerified
   isLoading: boolean;
   error: string | null;
 
@@ -418,11 +413,13 @@ interface AuthState {
 
 **Comportamento**:
 - `isLoading` e `true` durante qualquer operacao assincrona de auth
-- `error` e automaticamente limpo apos 5 segundos (useEffect)
-- `user` e persistido no localStorage (para evitar re-login em reload)
-- `isAuthenticated` e definido como `true` apenas no sucesso do `login()` (implementado: `user` so e armazenado em resposta 200 com `accessToken`; `AUTH_EMAIL_NOT_VERIFIED` lanca erro sem armazenar `user`)
+- `error` e automaticamente limpo apos 5 segundos (T25: timer no store — `set` embrulhado agenda `setTimeout(5000)` quando `error` muda para um valor nao-null; **nao** reinicia o timer enquanto o erro permanece inalterado; sem useEffect)
+- `user` e persistido no localStorage via middleware `persist` do Zustand (T25: chave `arkana-auth`, `partialize` persiste apenas `user`; `merge` reidrata `user` e deriva `isAuthenticated` de `user != null && user.emailVerified` — PartialUser reidratado nao autentica; `isStoredUser` valida a forma completa do `User` (`id`/`name`/`displayName`/`role ∈ {USER,PROFESSIONAL,ADMIN}`/`plan`/`avatar`), descartando dado malformado/adulterado — fail closed)
+- `isAuthenticated` e **derivado** de `user != null && user.emailVerified` (T25): `login()` e `verifyMagicLink()` em sucesso armazenam `user` via `toStoredUser` (payload da API omite `emailVerified` — S12: **ausente → `true`**; presente → usa o boolean real, `null → false`) e autenticam; `AUTH_EMAIL_NOT_VERIFIED` (401) **armazena user parcial** `{ email: email.trim(), emailVerified: false }` com `isAuthenticated=false` (C9 — permite reenvio na VerifyEmailPage); `refreshSession()` em sucesso deriva do `user` atual (user null → false)
+- `loginWithGoogle` chama `signIn("google", { callbackUrl: "/dashboard" })` (next-auth/react; seta `isLoading` e limpa em falha; rejeicao `NEXT_REDIRECT` — sucesso — e ignorada); `logout` le `session.accessToken` via `getSession()` e chama `POST /api/v1/auth/logout` com Bearer (best-effort — falha de rede ainda limpa o estado local); `signOut({ redirect: false })` e chamado em `logout` e no sucesso de `deleteAccount` para encerrar tambem a sessao Auth.js (cookie de sessao), em bloco best-effort proprio — uma rejeicao do `signOut` **nao** impede a limpeza do estado local; `deleteAccount(email)` le o Bearer via `getSession()` e chama `DELETE /api/v1/auth/account` com `{ email }` normalizado (`trim().toLowerCase()`, alinhado ao e-mail lowercase persistido no cadastro), limpando o estado **apenas se `res.ok`** e setando `error: "Erro ao excluir conta"` em qualquer falha (resposta HTTP nao-ok ou erro de rede) e `Sessao expirada, faca login novamente` sem Bearer (T25)
+- `refreshSession()` (T24/T25/F1): `POST /api/v1/auth/refresh` cookie-based; sucesso retornado `res.ok && typeof data.accessToken === "string"` **e** `data.user` (objeto com `id/name/email/displayName/avatar/role/plan/emailVerified`); o user do servidor e armazenado via `toStoredUser`, substituindo o client-side stale; `isAuthenticated` e derivado do `user` retornado (`user.emailVerified`); falha (HTTP nao-ok, 200 sem accessToken, nao-JSON, TypeError) limpa `user` e retorna `false`
 - `sendMagicLink` nao autentica — apenas envia o link; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `MagicLinkResult` (uniao discriminada `{ success: true, message? } | { success: false, code: MagicLinkErrorCode, message?, retryAfter? }` — implementado em `src/stores/auth-store.ts`); sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`, usado pelas 5 acoes — login/register/sendMagicLink/forgotPassword/resetPassword); trata erros `AUTH_MAGIC_LINK_RATE_LIMIT` (429 com `retryAfter` repassado no resultado) e falha de rede
-- `forgotPassword` nao autentica — apenas envia o link de recuperacao; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `ForgotPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ForgotPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ForgotPasswordErrorCode` = `"AUTH_FORGOT_RATE_LIMIT" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; e-mail vazio → `VALIDATION_ERROR` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao "Se o e-mail estiver cadastrado..."); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`); 429 `AUTH_FORGOT_RATE_LIMIT` (sem `retryAfter`); codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeAuthErrorCode` (helper simplificado, sem genérico, recebe `readonly string[]`, retorna `string`, compartilhado com `normalizeMagicLinkCode`/`normalizeForgotPasswordCode`); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao enviar link de recuperacao"
+- `forgotPassword` nao autentica — apenas envia o link de recuperacao; `isAuthenticated` permanece `false`, `user` permanece `null`; retorna `ForgotPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ForgotPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ForgotPasswordErrorCode` = `"AUTH_FORGOT_RATE_LIMIT" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; e-mail vazio → `VALIDATION_ERROR` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"` — sem depender do texto anti-enumeracao "Se o e-mail estiver cadastrado..."); erros parseados via helper compartilhado `parseErrorResponse` (valida `{ error: { code, message, retryAfter? } }`); 429 `AUTH_FORGOT_RATE_LIMIT` (sem `retryAfter`); codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeErrorCode` (helper simplificado, sem genérico, recebe `readonly string[]`, retorna `string`, compartilhado pelas 5 acoes); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao enviar link de recuperacao"
 - `resetPassword` redime o token `PASSWORD_RESET` (single-use) chamando `POST /api/v1/auth/reset-password` com `{ token, password, passwordConfirmation }`; retorna `ResetPasswordResult` (uniao discriminada `{ success: true, message? } | { success: false, code: ResetPasswordErrorCode, message? }` — implementado em `src/stores/auth-store.ts`); `ResetPasswordErrorCode` = `"AUTH_RESET_TOKEN_INVALID" | "AUTH_RESET_TOKEN_EXPIRED" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNEXPECTED_RESPONSE" | "UNKNOWN_ERROR"`; token vazio → `AUTH_RESET_TOKEN_INVALID` sem fetch; sucesso detectado estruturalmente (`res.ok && typeof data.message === "string"`); erros parseados via `parseErrorResponse`; codigo desconhecido normalizado para `UNKNOWN_ERROR` via `normalizeAuthErrorCode` (compartilhado com `normalizeResetPasswordCode`); resposta nao-JSON → `UNEXPECTED_RESPONSE`; `TypeError` → `NETWORK_ERROR` "Erro ao redefinir a senha"
 
 ---
@@ -448,7 +445,7 @@ interface AuthState {
 
 ### 7.1 Protecao CSRF
 - CSRF aplica-se **apenas aos endpoints que usam cookies** (`/api/v1/auth/login|refresh|logout|register`, callbacks OAuth/magic-link); endpoints apenas-Bearer não exigem
-- Double-submit token: cookie `__Host-csrf-token` + header `X-Requested-With: XMLHttpRequest` (validação: valor do cookie == valor do header)
+- Double-submit token: cookie `__Host-csrf-token` + header `X-CSRF-Token` (validação: valor do cookie == valor do header)
 - `/api/auth/*` mantém o CSRF nativo do NextAuth.js
 - Em dev (http, localhost), usar variante sem `__Host-` prefix para não derrubar o cookie
 

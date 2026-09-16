@@ -1,15 +1,23 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAuthStore, type User, type UserRole } from "@/stores/auth-store"
+import {
+  useAuthStore,
+  type PartialUser,
+  type User,
+  type UserRole,
+} from "@/stores/auth-store"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 function passesRole(
-  user: User | null | undefined,
+  user: User | PartialUser | null | undefined,
   requiredRole?: UserRole,
 ): boolean {
-  return !requiredRole || user?.role === requiredRole
+  return (
+    !requiredRole ||
+    (user != null && "role" in user && user.role === requiredRole)
+  )
 }
 
 interface AuthGuardProps {
@@ -23,19 +31,18 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const refreshSession = useAuthStore((s) => s.refreshSession)
 
-  const [checked, setChecked] = useState(() => isAuthenticated)
+  // Inicia sempre como "nao verificado": servidor (sem localStorage) e cliente
+  // hidratam o mesmo skeleton; a sessao e validada no efeito pos-montagem,
+  // evitando mismatch de hidratacao e confiando apenas apos validacao.
+  const [checked, setChecked] = useState(false)
 
   useEffect(() => {
     if (checked) return
 
     let cancelled = false
-    refreshSession()
-      .then(() => {
-        if (!cancelled) setChecked(true)
-      })
-      .catch(() => {
-        if (!cancelled) setChecked(true)
-      })
+    refreshSession().finally(() => {
+      if (!cancelled) setChecked(true)
+    })
 
     return () => {
       cancelled = true

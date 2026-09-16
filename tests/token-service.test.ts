@@ -311,13 +311,18 @@ describe("token service T7a - rotateRefresh", () => {
     ...over,
   })
 
-  it("rotaciona refresh: novo token mesmo familyId, revoga anterior condicionalmente, retorna access", async () => {
+  it("rotaciona refresh: novo token mesmo familyId, revoga anterior condicionalmente, retorna access + user", async () => {
     prismaMock.session.findUnique.mockResolvedValue(sessionRow())
     prismaMock.session.updateMany.mockResolvedValue({ count: 1 })
     prismaMock.user.findUnique.mockResolvedValue({
       id: "usr_1",
+      name: "Alice",
+      email: "alice@example.com",
+      displayName: null,
+      avatar: null,
       role: "USER",
       plan: "FREE",
+      emailVerified: new Date("2026-01-01T00:00:00Z"),
       tokenVersion: 0,
       isActive: true,
       deletedAt: null,
@@ -330,6 +335,16 @@ describe("token service T7a - rotateRefresh", () => {
 
     expect(result.accessToken).toBeTruthy()
     expect(result.refreshToken).toBeTruthy()
+    expect(result.user).toEqual({
+      id: "usr_1",
+      name: "Alice",
+      email: "alice@example.com",
+      displayName: null,
+      avatar: null,
+      role: "USER",
+      plan: "FREE",
+      emailVerified: true,
+    })
     expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "sess_1", replacedByTokenId: null },

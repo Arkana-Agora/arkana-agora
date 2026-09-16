@@ -67,7 +67,7 @@ async function callPost(
       headers: {
         "content-type": "application/json",
         "x-csrf-token": "test-csrf-token",
-        cookie: "__Host-csrf-token=test-csrf-token",
+        cookie: "csrf-token=test-csrf-token",
         ...headers,
       },
       body: JSON.stringify(body),
