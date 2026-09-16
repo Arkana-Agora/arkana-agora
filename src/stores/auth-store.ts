@@ -5,8 +5,6 @@ import { create } from "zustand"
 
 export type UserRole = "USER" | "PROFESSIONAL" | "ADMIN"
 
-let refreshInFlight: Promise<boolean> | null = null
-
 interface User {
   id: string
   name: string
@@ -64,32 +62,82 @@ export type ResetPasswordResult =
       message?: string
     }
 
+export type VerifyEmailErrorCode =
+  | "AUTH_EMAIL_VERIFY_INVALID"
+  | "AUTH_EMAIL_VERIFY_EXPIRED"
+  | "VALIDATION_ERROR"
+  | "NETWORK_ERROR"
+  | "UNEXPECTED_RESPONSE"
+  | "UNKNOWN_ERROR"
+
+export type VerifyEmailResult =
+  | { success: true; message?: string }
+  | {
+      success: false
+      code: VerifyEmailErrorCode
+      message?: string
+    }
+
+export type VerifyMagicLinkErrorCode =
+  | "AUTH_MAGIC_TOKEN_INVALID"
+  | "AUTH_MAGIC_TOKEN_EXPIRED"
+  | "VALIDATION_ERROR"
+  | "NETWORK_ERROR"
+  | "UNEXPECTED_RESPONSE"
+  | "UNKNOWN_ERROR"
+
+export type VerifyMagicLinkResult =
+  | { success: true; user: User }
+  | {
+      success: false
+      code: VerifyMagicLinkErrorCode
+      message?: string
+    }
+
 export type { User }
 
-const KNOWN_MAGIC_LINK_CODES = [
-  "AUTH_MAGIC_LINK_RATE_LIMIT",
-  "VALIDATION_ERROR",
-  "NETWORK_ERROR",
-  "UNEXPECTED_RESPONSE",
-  "UNKNOWN_ERROR",
-] as const
+const KNOWN_ERROR_CODES = {
+  magicLink: [
+    "AUTH_MAGIC_LINK_RATE_LIMIT",
+    "VALIDATION_ERROR",
+    "NETWORK_ERROR",
+    "UNEXPECTED_RESPONSE",
+    "UNKNOWN_ERROR",
+  ] as const,
+  forgotPassword: [
+    "AUTH_FORGOT_RATE_LIMIT",
+    "VALIDATION_ERROR",
+    "NETWORK_ERROR",
+    "UNEXPECTED_RESPONSE",
+    "UNKNOWN_ERROR",
+  ] as const,
+  resetPassword: [
+    "AUTH_RESET_TOKEN_INVALID",
+    "AUTH_RESET_TOKEN_EXPIRED",
+    "VALIDATION_ERROR",
+    "NETWORK_ERROR",
+    "UNEXPECTED_RESPONSE",
+    "UNKNOWN_ERROR",
+  ] as const,
+  verifyEmail: [
+    "AUTH_EMAIL_VERIFY_INVALID",
+    "AUTH_EMAIL_VERIFY_EXPIRED",
+    "VALIDATION_ERROR",
+    "NETWORK_ERROR",
+    "UNEXPECTED_RESPONSE",
+    "UNKNOWN_ERROR",
+  ] as const,
+  verifyMagicLink: [
+    "AUTH_MAGIC_TOKEN_INVALID",
+    "AUTH_MAGIC_TOKEN_EXPIRED",
+    "VALIDATION_ERROR",
+    "NETWORK_ERROR",
+    "UNEXPECTED_RESPONSE",
+    "UNKNOWN_ERROR",
+  ] as const,
+} as const
 
-const KNOWN_FORGOT_PASSWORD_CODES = [
-  "AUTH_FORGOT_RATE_LIMIT",
-  "VALIDATION_ERROR",
-  "NETWORK_ERROR",
-  "UNEXPECTED_RESPONSE",
-  "UNKNOWN_ERROR",
-] as const
-
-const KNOWN_RESET_PASSWORD_CODES = [
-  "AUTH_RESET_TOKEN_INVALID",
-  "AUTH_RESET_TOKEN_EXPIRED",
-  "VALIDATION_ERROR",
-  "NETWORK_ERROR",
-  "UNEXPECTED_RESPONSE",
-  "UNKNOWN_ERROR",
-] as const
+type KnownErrorCodeCategory = keyof typeof KNOWN_ERROR_CODES
 
 function parseErrorResponse(
   data: unknown,
@@ -116,32 +164,82 @@ function parseErrorResponse(
   }
 }
 
-function normalizeAuthErrorCode(
+function normalizeErrorCode<T extends string>(
   code: string,
-  knownCodes: readonly string[],
-): string {
-  return knownCodes.includes(code) ? code : "UNKNOWN_ERROR"
+  knownCodes: readonly T[],
+): T {
+  return knownCodes.includes(code as T) ? (code as T) : ("UNKNOWN_ERROR" as T)
 }
 
-function normalizeMagicLinkCode(code: string): MagicLinkErrorCode {
-  return normalizeAuthErrorCode(
-    code,
-    KNOWN_MAGIC_LINK_CODES,
-  ) as MagicLinkErrorCode
-}
+async function authFetch<TErrorCode extends string>(
+  endpoint: string,
+  body: Record<string, unknown>,
+  category: KnownErrorCodeCategory,
+  successCheck: (data: unknown) => boolean,
+  networkErrorMessage: string = "Erro de conexão",
+): Promise<
+  | { success: true; message: string }
+  | { success: false; code: TErrorCode; message: string; retryAfter?: number }
+> {
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    let data: unknown
+    try {
+      data = await res.json()
+    } catch {
+      return {
+        success: false,
+        code: "UNEXPECTED_RESPONSE" as TErrorCode,
+        message: "Resposta inesperada do servidor",
+      }
+    }
 
-function normalizeForgotPasswordCode(code: string): ForgotPasswordErrorCode {
-  return normalizeAuthErrorCode(
-    code,
-    KNOWN_FORGOT_PASSWORD_CODES,
-  ) as ForgotPasswordErrorCode
-}
+    if (res.ok && successCheck(data)) {
+      const message = (data as { message?: string }).message
+      return {
+        success: true,
+        message: message ?? "Operação realizada com sucesso",
+      }
+    }
 
-function normalizeResetPasswordCode(code: string): ResetPasswordErrorCode {
-  return normalizeAuthErrorCode(
-    code,
-    KNOWN_RESET_PASSWORD_CODES,
-  ) as ResetPasswordErrorCode
+    const errorData = parseErrorResponse(data)
+    if (errorData) {
+      return {
+        success: false,
+        code: normalizeErrorCode<TErrorCode>(
+          errorData.code,
+          KNOWN_ERROR_CODES[category] as unknown as readonly TErrorCode[],
+        ),
+        message: errorData.message,
+        ...(errorData.retryAfter !== undefined
+          ? { retryAfter: errorData.retryAfter }
+          : {}),
+      }
+    }
+
+    return {
+      success: false,
+      code: "UNEXPECTED_RESPONSE" as TErrorCode,
+      message: "Resposta inesperada do servidor",
+    }
+  } catch (err) {
+    if (err instanceof TypeError) {
+      return {
+        success: false,
+        code: "NETWORK_ERROR" as TErrorCode,
+        message: networkErrorMessage,
+      }
+    }
+    return {
+      success: false,
+      code: "UNKNOWN_ERROR" as TErrorCode,
+      message: networkErrorMessage,
+    }
+  }
 }
 
 interface AuthState {
@@ -149,30 +247,35 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  refreshInFlight: Promise<boolean> | null
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterInput) => Promise<void>
   sendMagicLink: (email: string) => Promise<MagicLinkResult>
   forgotPassword: (email: string) => Promise<ForgotPasswordResult>
   resetPassword: (data: ResetPasswordInput) => Promise<ResetPasswordResult>
+  verifyEmail: (token: string) => Promise<VerifyEmailResult>
+  resendVerifyEmail: (email: string) => Promise<VerifyEmailResult>
+  verifyMagicLink: (token: string) => Promise<VerifyMagicLinkResult>
   refreshSession: () => Promise<boolean>
   clearError: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  refreshInFlight: null,
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const res: Response = await fetch("/api/v1/auth/login", {
+      const res = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       })
-      const data: unknown = await res.json()
+      const data = await res.json()
 
       if (
         res.ok &&
@@ -185,8 +288,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         data.user !== null
       ) {
         const userData = data as { accessToken: string; user: User }
-        set({ user: userData.user, isAuthenticated: true })
-        return
+        if (userData.user && typeof userData.user === "object") {
+          set({ user: userData.user, isAuthenticated: true })
+          return
+        }
       }
 
       const errorData = parseErrorResponse(data)
@@ -214,7 +319,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         .find((row) => row.startsWith("__Host-csrf-token="))
         ?.split("=")[1]
 
-      const res: Response = await fetch("/api/v1/auth/register", {
+      const res = await fetch("/api/v1/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -222,7 +327,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         },
         body: JSON.stringify(registerData),
       })
-      const responseData: unknown = await res.json()
+      const responseData = await res.json()
 
       if (
         res.ok &&
@@ -264,58 +369,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     set({ isLoading: true, error: null })
     try {
-      const res = await fetch("/api/v1/auth/magic-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      })
-      let data: unknown
-      try {
-        data = await res.json()
-      } catch {
-        set({ error: "Resposta inesperada do servidor" })
-        return {
-          success: false,
-          code: "UNEXPECTED_RESPONSE",
-          message: "Resposta inesperada do servidor",
-        }
+      const result = await authFetch<MagicLinkErrorCode>(
+        "/api/v1/auth/magic-link",
+        { email: trimmed },
+        "magicLink",
+        (data): boolean =>
+          data !== null &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as Record<string, unknown>).message === "string",
+        "Erro ao enviar magic link",
+      )
+      if (!result.success) {
+        set({ error: result.message })
       }
-
-      if (
-        res.ok &&
-        data &&
-        typeof data === "object" &&
-        "message" in data &&
-        typeof data.message === "string"
-      ) {
-        return { success: true, message: data.message }
-      }
-
-      const errorData = parseErrorResponse(data)
-      if (errorData) {
-        set({ error: errorData.message })
-        return {
-          success: false,
-          code: normalizeMagicLinkCode(errorData.code),
-          message: errorData.message,
-          ...(errorData.retryAfter !== undefined
-            ? { retryAfter: errorData.retryAfter }
-            : {}),
-        }
-      }
-
-      return {
-        success: false,
-        code: "UNEXPECTED_RESPONSE",
-        message: "Resposta inesperada do servidor",
-      }
-    } catch (err) {
-      const message = "Erro ao enviar magic link"
-      set({ error: message })
-      if (err instanceof TypeError) {
-        return { success: false, code: "NETWORK_ERROR", message }
-      }
-      return { success: false, code: "UNKNOWN_ERROR", message }
+      return result
     } finally {
       set({ isLoading: false })
     }
@@ -334,16 +402,140 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     set({ isLoading: true, error: null })
     try {
-      const res = await fetch("/api/v1/auth/forgot-password", {
+      const result = await authFetch<ForgotPasswordErrorCode>(
+        "/api/v1/auth/forgot-password",
+        { email: trimmed },
+        "forgotPassword",
+        (data): boolean =>
+          data !== null &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as Record<string, unknown>).message === "string",
+        "Erro ao enviar link de recuperacao",
+      )
+      if (!result.success) {
+        set({ error: result.message })
+      }
+      return result
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  resetPassword: async (data: ResetPasswordInput) => {
+    const token = data.token.trim()
+    if (!token) {
+      set({ error: "Link de redefinicao de senha invalido" })
+      return {
+        success: false,
+        code: "AUTH_RESET_TOKEN_INVALID",
+        message: "Link de redefinicao de senha invalido",
+      }
+    }
+
+    set({ isLoading: true, error: null })
+    try {
+      const result = await authFetch<ResetPasswordErrorCode>(
+        "/api/v1/auth/reset-password",
+        {
+          token,
+          password: data.password,
+          passwordConfirmation: data.passwordConfirmation,
+        },
+        "resetPassword",
+        (data): boolean =>
+          data !== null &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as Record<string, unknown>).message === "string",
+        "Erro ao redefinir a senha",
+      )
+      if (!result.success) {
+        set({ error: result.message })
+      }
+      return result
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  verifyEmail: async (token: string) => {
+    const trimmed = token.trim()
+    if (!trimmed) {
+      return {
+        success: false,
+        code: "AUTH_EMAIL_VERIFY_INVALID",
+        message: "Token de verificação de email inválido",
+      }
+    }
+
+    try {
+      const result = await authFetch<VerifyEmailErrorCode>(
+        "/api/v1/auth/verify-email",
+        { token: trimmed },
+        "verifyEmail",
+        (data): boolean =>
+          data !== null &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as Record<string, unknown>).message === "string",
+        "Erro ao verificar email",
+      )
+      return result
+    } finally {
+      // Don't set global isLoading for this action
+    }
+  },
+
+  resendVerifyEmail: async (email: string) => {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      return {
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "E-mail obrigatório",
+      }
+    }
+
+    try {
+      const result = await authFetch<VerifyEmailErrorCode>(
+        "/api/v1/auth/verify-email/resend",
+        { email: trimmed },
+        "verifyEmail",
+        (data): boolean =>
+          data !== null &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as Record<string, unknown>).message === "string",
+        "Erro ao reenviar email de verificação",
+      )
+      return result
+    } finally {
+      // Don't set global isLoading for this action
+    }
+  },
+
+  verifyMagicLink: async (token: string) => {
+    const trimmed = token.trim()
+    if (!trimmed) {
+      return {
+        success: false,
+        code: "AUTH_MAGIC_TOKEN_INVALID",
+        message: "Token de magic link inválido",
+      }
+    }
+
+    try {
+      const res = await fetch("/api/v1/auth/magic-link/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        credentials: "include",
+        body: JSON.stringify({ token: trimmed }),
       })
       let data: unknown
       try {
         data = await res.json()
       } catch {
-        set({ error: "Resposta inesperada do servidor" })
         return {
           success: false,
           code: "UNEXPECTED_RESPONSE",
@@ -355,18 +547,27 @@ export const useAuthStore = create<AuthState>((set) => ({
         res.ok &&
         data &&
         typeof data === "object" &&
-        "message" in data &&
-        typeof data.message === "string"
+        "accessToken" in data &&
+        typeof data.accessToken === "string" &&
+        "user" in data &&
+        typeof data.user === "object" &&
+        data.user !== null
       ) {
-        return { success: true, message: data.message }
+        const userData = data as { accessToken: string; user: User }
+        if (userData.user && typeof userData.user === "object") {
+          set({ user: userData.user, isAuthenticated: true })
+          return { success: true, user: userData.user }
+        }
       }
 
       const errorData = parseErrorResponse(data)
       if (errorData) {
-        set({ error: errorData.message })
         return {
           success: false,
-          code: normalizeForgotPasswordCode(errorData.code),
+          code: normalizeErrorCode<VerifyMagicLinkErrorCode>(
+            errorData.code,
+            KNOWN_ERROR_CODES.verifyMagicLink as readonly VerifyMagicLinkErrorCode[],
+          ),
           message: errorData.message,
         }
       }
@@ -377,99 +578,43 @@ export const useAuthStore = create<AuthState>((set) => ({
         message: "Resposta inesperada do servidor",
       }
     } catch (err) {
-      const message = "Erro ao enviar link de recuperacao"
-      set({ error: message })
       if (err instanceof TypeError) {
-        return { success: false, code: "NETWORK_ERROR", message }
-      }
-      return { success: false, code: "UNKNOWN_ERROR", message }
-    } finally {
-      set({ isLoading: false })
-    }
-  },
-
-  resetPassword: async (data: ResetPasswordInput) => {
-    const token = data.token.trim()
-    if (!token) {
-      set({
-        error: "Link de redefinicao de senha invalido",
-      })
-      return {
-        success: false,
-        code: "AUTH_RESET_TOKEN_INVALID",
-        message: "Link de redefinicao de senha invalido",
-      }
-    }
-
-    set({ isLoading: true, error: null })
-    try {
-      const res = await fetch("/api/v1/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          password: data.password,
-          passwordConfirmation: data.passwordConfirmation,
-        }),
-      })
-      let responseData: unknown
-      try {
-        responseData = await res.json()
-      } catch {
-        set({ error: "Resposta inesperada do servidor" })
         return {
           success: false,
-          code: "UNEXPECTED_RESPONSE",
-          message: "Resposta inesperada do servidor",
+          code: "NETWORK_ERROR",
+          message: "Erro ao verificar magic link",
         }
       }
-
-      if (
-        res.ok &&
-        responseData &&
-        typeof responseData === "object" &&
-        "message" in responseData &&
-        typeof responseData.message === "string"
-      ) {
-        return { success: true, message: responseData.message }
-      }
-
-      const errorData = parseErrorResponse(responseData)
-      if (errorData) {
-        set({ error: errorData.message })
-        return {
-          success: false,
-          code: normalizeResetPasswordCode(errorData.code),
-          message: errorData.message,
-        }
-      }
-
       return {
         success: false,
-        code: "UNEXPECTED_RESPONSE",
-        message: "Resposta inesperada do servidor",
+        code: "UNKNOWN_ERROR",
+        message: "Erro ao verificar magic link",
       }
-    } catch (err) {
-      const message = "Erro ao redefinir a senha"
-      set({ error: message })
-      if (err instanceof TypeError) {
-        return { success: false, code: "NETWORK_ERROR", message }
-      }
-      return { success: false, code: "UNKNOWN_ERROR", message }
-    } finally {
-      set({ isLoading: false })
     }
   },
 
   refreshSession: () => {
+    const { refreshInFlight } = get()
     if (refreshInFlight) return refreshInFlight
 
-    const promise = (async () => {
+    let resolveOuter: (value: boolean) => void
+    const promise = new Promise<boolean>((resolve) => {
+      resolveOuter = resolve
+    })
+
+    const executeRefresh = async () => {
       set({ isLoading: true, error: null })
       try {
-        const res: Response = await fetch("/api/v1/auth/refresh", {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+        const res = await fetch("/api/v1/auth/refresh", {
           method: "POST",
+          credentials: "include",
+          signal: controller.signal,
         })
+        clearTimeout(timeoutId)
+
         let data: unknown
         try {
           data = await res.json()
@@ -510,12 +655,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       } finally {
         set({ isLoading: false })
       }
-    })()
+    }
 
-    refreshInFlight = promise
-    promise.finally(() => {
-      if (refreshInFlight === promise) refreshInFlight = null
+    executeRefresh().then((result) => {
+      set({ refreshInFlight: null })
+      resolveOuter!(result)
     })
+
+    set({ refreshInFlight: promise })
     return promise
   },
 
