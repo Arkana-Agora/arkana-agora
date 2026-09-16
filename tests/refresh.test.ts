@@ -7,6 +7,10 @@ const tokenServiceMock = vi.hoisted(() => ({
 
 vi.mock("@/services/token-service", () => tokenServiceMock)
 
+vi.mock("next-auth/jwt", () => ({
+  encode: vi.fn().mockResolvedValue("mocked-session-token"),
+}))
+
 function refreshTokenError(code: string): Error {
   const err = new Error(`${code}: teste`)
   err.name = "AuthTokenError"
@@ -27,19 +31,31 @@ async function callPost(cookie: string | null): Promise<Response> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  process.env.AUTH_SECRET = "test-secret"
   tokenServiceMock.rotateRefresh.mockResolvedValue({
     accessToken: "access.jwt.token",
     refreshToken: "new-refresh-token",
     expiresIn: 900,
+    user: {
+      id: "usr_1",
+      name: "Alice",
+      email: "alice@example.com",
+      displayName: null,
+      avatar: null,
+      role: "USER",
+      plan: "FREE",
+      emailVerified: true,
+    },
   })
 })
 
 afterEach(() => {
+  delete process.env.AUTH_SECRET
   vi.resetModules()
 })
 
 describe("POST /api/v1/auth/refresh (T13)", () => {
-  it("retorna 200 com accessToken e expiresIn, e seta cookie refreshToken rotacionado", async () => {
+  it("retorna 200 com accessToken, expiresIn e user, e seta cookie refreshToken rotacionado", async () => {
     const res = await callPost("old-refresh-token")
     const json = await res.json()
 
@@ -47,6 +63,16 @@ describe("POST /api/v1/auth/refresh (T13)", () => {
     expect(json.accessToken).toBe("access.jwt.token")
     expect(json.expiresIn).toBe(900)
     expect(json.refreshToken).toBeUndefined()
+    expect(json.user).toEqual({
+      id: "usr_1",
+      name: "Alice",
+      email: "alice@example.com",
+      displayName: null,
+      avatar: null,
+      role: "USER",
+      plan: "FREE",
+      emailVerified: true,
+    })
 
     const setCookie = res.headers.get("set-cookie") ?? ""
     expect(setCookie).toContain("refreshToken=new-refresh-token")

@@ -107,21 +107,60 @@ export type VerifyMagicLinkResult =
 
 export type { User }
 
-// S12/decision: API auth success (login/verifyMagicLink) does not include emailVerified
-// in the user payload -> the boolean derives as true when absent; if it is ever present,
-// derive from `user.emailVerified !== null`.
-function toStoredUser(userData: User): User {
-  return { ...userData, emailVerified: userData.emailVerified ?? true }
+const VALID_ROLES: readonly UserRole[] = ["USER", "PROFESSIONAL", "ADMIN"]
+
+// S12/decision: API auth success (login/verifyMagicLink) omits emailVerified.
+// Ausente -> true (S12); presente -> usa o boolean real (null conta como false).
+type AuthUserPayload = Omit<User, "emailVerified"> & {
+  emailVerified?: boolean | null
 }
 
-// Rehydration guard: persisted localStorage is untrusted input (old/corrupted/tampered).
+function toStoredUser(userData: AuthUserPayload): User {
+  return {
+    ...userData,
+    emailVerified:
+      userData.emailVerified === undefined
+        ? true
+        : userData.emailVerified === true,
+  }
+}
+
+// Guard de reidratacao: localStorage e input nao confiavel (antigo/corrompido/adulterado).
 function isStoredUser(value: unknown): value is StoredUser {
   if (typeof value !== "object" || value === null) return false
-  const v = value as { email?: unknown; emailVerified?: unknown }
+  const v = value as Record<string, unknown>
   if (typeof v.email !== "string" || typeof v.emailVerified !== "boolean") {
     return false
   }
-  return v.emailVerified === false || "role" in v
+  if (v.emailVerified === false) {
+    // PartialUser (C9): apenas email + emailVerified
+    return true
+  }
+  return (
+    typeof v.id === "string" &&
+    typeof v.name === "string" &&
+    (typeof v.displayName === "string" || v.displayName === null) &&
+    typeof v.role === "string" &&
+    VALID_ROLES.includes(v.role as UserRole) &&
+    typeof v.plan === "string" &&
+    (typeof v.avatar === "string" || v.avatar === null)
+  )
+}
+
+// Extrai o payload de sucesso comum a login/verifyMagicLink (accessToken + user).
+function parseAuthSuccessPayload(data: unknown): AuthUserPayload | null {
+  if (
+    data &&
+    typeof data === "object" &&
+    "accessToken" in data &&
+    typeof data.accessToken === "string" &&
+    "user" in data &&
+    typeof data.user === "object" &&
+    data.user !== null
+  ) {
+    return (data as { accessToken: string; user: AuthUserPayload }).user
+  }
+  return null
 }
 
 const KNOWN_ERROR_CODES = {
@@ -192,11 +231,18 @@ function parseErrorResponse(
   }
 }
 
-function normalizeErrorCode<T extends string>(
+function normalizeErrorCode(
   code: string,
-  knownCodes: readonly T[],
-): T {
-  return knownCodes.includes(code as T) ? (code as T) : ("UNKNOWN_ERROR" as T)
+  knownCodes: readonly string[],
+): string {
+  return knownCodes.includes(code) ? code : "UNKNOWN_ERROR"
+}
+
+// Bearer para endpoints autenticados: sessao Auth.js -> access token validado.
+async function getAccessToken(): Promise<string | null> {
+  const session = await getSession()
+  const accessToken = (session as { accessToken?: string } | null)?.accessToken
+  return typeof accessToken === "string" ? accessToken : null
 }
 
 async function authFetch<TErrorCode extends string>(
@@ -238,10 +284,10 @@ async function authFetch<TErrorCode extends string>(
     if (errorData) {
       return {
         success: false,
-        code: normalizeErrorCode<TErrorCode>(
+        code: normalizeErrorCode(
           errorData.code,
-          KNOWN_ERROR_CODES[category] as unknown as readonly TErrorCode[],
-        ),
+          KNOWN_ERROR_CODES[category],
+        ) as TErrorCode,
         message: errorData.message,
         ...(errorData.retryAfter !== undefined
           ? { retryAfter: errorData.retryAfter }
@@ -302,14 +348,19 @@ export const useAuthStore = create<AuthState>()(
           | Partial<AuthState>
           | ((state: AuthState) => AuthState | Partial<AuthState>),
       ) => void = (partial) => {
+        const prevError = get().error
         rawSet(partial)
 
         const nextError = get().error
-        if (errorTimer) clearTimeout(errorTimer)
-        errorTimer =
-          nextError == null
-            ? null
-            : setTimeout(() => rawSet({ error: null }), 5000)
+        if (nextError == null) {
+          if (errorTimer) clearTimeout(errorTimer)
+          errorTimer = null
+          return
+        }
+        if (prevError !== nextError) {
+          if (errorTimer) clearTimeout(errorTimer)
+          errorTimer = setTimeout(() => rawSet({ error: null }), 5000)
+        }
       }
 
       return {
@@ -327,25 +378,21 @@ export const useAuthStore = create<AuthState>()(
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email, password }),
             })
-            const data = await res.json()
+            let data: unknown
+            try {
+              data = await res.json()
+            } catch {
+              set({ error: "Erro ao fazer login" })
+              throw new Error("NETWORK_ERROR")
+            }
 
-            if (
-              res.ok &&
-              data &&
-              typeof data === "object" &&
-              "accessToken" in data &&
-              typeof data.accessToken === "string" &&
-              "user" in data &&
-              typeof data.user === "object" &&
-              data.user !== null
-            ) {
-              const userData = data as { accessToken: string; user: User }
-              if (userData.user && typeof userData.user === "object") {
-                const storedUser = toStoredUser(userData.user)
+            if (res.ok) {
+              const payload = parseAuthSuccessPayload(data)
+              if (payload) {
+                const storedUser = toStoredUser(payload)
                 set({
                   user: storedUser,
-                  isAuthenticated:
-                    storedUser != null && storedUser.emailVerified,
+                  isAuthenticated: storedUser.emailVerified,
                 })
                 return
               }
@@ -380,9 +427,11 @@ export const useAuthStore = create<AuthState>()(
         register: async (registerData: RegisterInput) => {
           set({ isLoading: true, error: null })
           try {
+            const isSecure = window.location.protocol === "https:"
+            const csrfCookieName = isSecure ? "__Host-csrf-token" : "csrf-token"
             const csrfToken = document.cookie
               .split("; ")
-              .find((row) => row.startsWith("__Host-csrf-token="))
+              .find((row) => row.startsWith(`${csrfCookieName}=`))
               ?.split("=")[1]
 
             const res = await fetch("/api/v1/auth/register", {
@@ -393,7 +442,13 @@ export const useAuthStore = create<AuthState>()(
               },
               body: JSON.stringify(registerData),
             })
-            const responseData = await res.json()
+            let responseData: unknown
+            try {
+              responseData = await res.json()
+            } catch {
+              set({ error: "Erro ao criar conta" })
+              throw new Error("NETWORK_ERROR")
+            }
 
             if (
               res.ok &&
@@ -538,22 +593,18 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          try {
-            const result = await authFetch<VerifyEmailErrorCode>(
-              "/api/v1/auth/verify-email",
-              { token: trimmed },
-              "verifyEmail",
-              (data): boolean =>
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string",
-              "Erro ao verificar email",
-            )
-            return result
-          } finally {
-            // Don't set global isLoading for this action
-          }
+          // Nao usa isLoading global: nao bloqueia a tela durante a verificacao
+          return authFetch<VerifyEmailErrorCode>(
+            "/api/v1/auth/verify-email",
+            { token: trimmed },
+            "verifyEmail",
+            (data): boolean =>
+              data !== null &&
+              typeof data === "object" &&
+              "message" in data &&
+              typeof (data as Record<string, unknown>).message === "string",
+            "Erro ao verificar email",
+          )
         },
 
         resendVerifyEmail: async (email: string) => {
@@ -566,22 +617,18 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          try {
-            const result = await authFetch<VerifyEmailErrorCode>(
-              "/api/v1/auth/verify-email/resend",
-              { email: trimmed },
-              "verifyEmail",
-              (data): boolean =>
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string",
-              "Erro ao reenviar email de verificação",
-            )
-            return result
-          } finally {
-            // Don't set global isLoading for this action
-          }
+          // Nao usa isLoading global: nao bloqueia a tela durante o reenvio
+          return authFetch<VerifyEmailErrorCode>(
+            "/api/v1/auth/verify-email/resend",
+            { email: trimmed },
+            "verifyEmail",
+            (data): boolean =>
+              data !== null &&
+              typeof data === "object" &&
+              "message" in data &&
+              typeof (data as Record<string, unknown>).message === "string",
+            "Erro ao reenviar email de verificação",
+          )
         },
 
         verifyMagicLink: async (token: string) => {
@@ -612,23 +659,13 @@ export const useAuthStore = create<AuthState>()(
               }
             }
 
-            if (
-              res.ok &&
-              data &&
-              typeof data === "object" &&
-              "accessToken" in data &&
-              typeof data.accessToken === "string" &&
-              "user" in data &&
-              typeof data.user === "object" &&
-              data.user !== null
-            ) {
-              const userData = data as { accessToken: string; user: User }
-              if (userData.user && typeof userData.user === "object") {
-                const storedUser = toStoredUser(userData.user)
+            if (res.ok) {
+              const payload = parseAuthSuccessPayload(data)
+              if (payload) {
+                const storedUser = toStoredUser(payload)
                 set({
                   user: storedUser,
-                  isAuthenticated:
-                    storedUser != null && storedUser.emailVerified,
+                  isAuthenticated: storedUser.emailVerified,
                 })
                 return { success: true, user: storedUser }
               }
@@ -638,10 +675,10 @@ export const useAuthStore = create<AuthState>()(
             if (errorData) {
               return {
                 success: false,
-                code: normalizeErrorCode<VerifyMagicLinkErrorCode>(
+                code: normalizeErrorCode(
                   errorData.code,
-                  KNOWN_ERROR_CODES.verifyMagicLink as readonly VerifyMagicLinkErrorCode[],
-                ),
+                  KNOWN_ERROR_CODES.verifyMagicLink,
+                ) as VerifyMagicLinkErrorCode,
                 message: errorData.message,
               }
             }
@@ -708,11 +745,26 @@ export const useAuthStore = create<AuthState>()(
                 "accessToken" in data &&
                 typeof data.accessToken === "string"
               ) {
-                const currentUser = get().user
-                set({
-                  isAuthenticated:
-                    currentUser != null && currentUser.emailVerified === true,
-                })
+                const serverUser =
+                  "user" in data &&
+                  typeof data.user === "object" &&
+                  data.user !== null
+                    ? (data.user as AuthUserPayload)
+                    : null
+                if (serverUser) {
+                  const storedUser = toStoredUser(serverUser)
+                  set({
+                    user: storedUser,
+                    isAuthenticated: storedUser.emailVerified,
+                  })
+                } else {
+                  // Fallback: servidor retornou accessToken mas sem user
+                  // (nao deveria happen apos F1; limpa por seguranca)
+                  set({
+                    user: null,
+                    isAuthenticated: false,
+                  })
+                }
                 return true
               }
 
@@ -749,9 +801,10 @@ export const useAuthStore = create<AuthState>()(
         },
 
         loginWithGoogle: () => {
+          set({ isLoading: true, error: null })
           void signIn("google", { callbackUrl: "/dashboard" }).catch((err) => {
             if (!(err instanceof Error && err.message === "NEXT_REDIRECT")) {
-              set({ error: "Erro ao entrar com Google" })
+              set({ error: "Erro ao entrar com Google", isLoading: false })
             }
           })
         },
@@ -759,9 +812,7 @@ export const useAuthStore = create<AuthState>()(
         logout: async () => {
           set({ isLoading: true, error: null })
           try {
-            const session = await getSession()
-            const accessToken = (session as { accessToken?: string } | null)
-              ?.accessToken
+            const accessToken = await getAccessToken()
             if (accessToken) {
               await fetch("/api/v1/auth/logout", {
                 method: "POST",
@@ -771,7 +822,11 @@ export const useAuthStore = create<AuthState>()(
           } catch {
             // melhor esforco: mesmo sem revogar no servidor, encerra a sessao local
           } finally {
-            await signOut({ redirect: false })
+            try {
+              await signOut({ redirect: false })
+            } catch {
+              // melhor esforco: Auth.js pode falhar; encerra o estado local abaixo
+            }
             set({ user: null, isAuthenticated: false, isLoading: false })
           }
         },
@@ -779,9 +834,7 @@ export const useAuthStore = create<AuthState>()(
         deleteAccount: async (email: string) => {
           set({ isLoading: true, error: null })
           try {
-            const session = await getSession()
-            const accessToken = (session as { accessToken?: string } | null)
-              ?.accessToken
+            const accessToken = await getAccessToken()
             if (!accessToken) {
               set({
                 error: "Sessao expirada, faca login novamente",
@@ -795,13 +848,17 @@ export const useAuthStore = create<AuthState>()(
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ email: email.trim() }),
+              body: JSON.stringify({ email: email.trim().toLowerCase() }),
             })
             if (!res.ok) {
               set({ error: "Erro ao excluir conta", isLoading: false })
               return
             }
-            await signOut({ redirect: false })
+            try {
+              await signOut({ redirect: false })
+            } catch {
+              // conta ja excluida; encerra o estado local abaixo mesmo assim
+            }
             set({ user: null, isAuthenticated: false, isLoading: false })
           } catch {
             set({ error: "Erro ao excluir conta", isLoading: false })

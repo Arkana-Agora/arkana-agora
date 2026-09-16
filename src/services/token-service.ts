@@ -160,8 +160,13 @@ async function getUserWithActiveState(userId: string) {
     where: { id: userId },
     select: {
       id: true,
+      name: true,
+      email: true,
+      displayName: true,
+      avatar: true,
       role: true,
       plan: true,
+      emailVerified: true,
       tokenVersion: true,
       isActive: true,
       deletedAt: true,
@@ -249,6 +254,16 @@ export interface RotationResult {
   accessToken: string
   refreshToken: string
   expiresIn: number
+  user: {
+    id: string
+    name: string
+    email: string
+    displayName: string | null
+    avatar: string | null
+    role: string
+    plan: string
+    emailVerified: boolean
+  }
 }
 
 export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
@@ -290,14 +305,6 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
   }
 
   const user = await getUserWithActiveState(session.userId)
-
-  if (!user) {
-    logger.warn("[auth:refresh] conta removida ao tentar refresh token")
-    throw new AuthTokenError(
-      "AUTH_ACCOUNT_SUSPENDED",
-      "Conta inativa ou deletada",
-    )
-  }
 
   const newRaw = randomBytes(32).toString("base64url")
   const newTokenHash = sha256(newRaw)
@@ -346,6 +353,16 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
     accessToken,
     refreshToken: newRaw,
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      role: user.role,
+      plan: user.plan,
+      emailVerified: user.emailVerified !== null,
+    },
   }
 }
 

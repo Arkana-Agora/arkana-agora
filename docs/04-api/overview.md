@@ -87,7 +87,7 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > `POST /api/v1/auth/restore-account`)
 > retornam o
 > body **plano (flat)** — `{ user, message }`, `{ accessToken, user }`, `{ message }`,
-> `{ accessToken, user }`, `{ message }`, `{ message }`, `{ accessToken, expiresIn }`,
+> `{ accessToken, user }`, `{ message }`, `{ message }`, `{ accessToken, expiresIn, user }`,
 > `{ message }`, `{ message }`, `{ message }`, `{ message }` e `{ message }`
 > respectivamente — **sem**
 > wrapper `data`. Este é o contrato canônico dos endpoints de auth (ver

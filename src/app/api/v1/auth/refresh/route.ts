@@ -104,11 +104,48 @@ export async function POST(request: Request): Promise<Response> {
     {
       accessToken: result.accessToken,
       expiresIn: result.expiresIn,
+      user: result.user,
     },
     { status: 200 },
   )
   response.headers.set("cache-control", "no-store")
   response.headers.set("set-cookie", buildAuthCookie(result.refreshToken))
+
+  // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize credentials refresh
+  const authSecret = process.env.AUTH_SECRET
+  if (!authSecret) {
+    logger.error(
+      { reqId },
+      "[auth:refresh] AUTH_SECRET ausente — impossivel cunhar sessao Auth.js",
+    )
+    throw new Error(
+      "AUTH_SECRET environment variable is required for session token issuance",
+    )
+  }
+  const { encode } = await import("next-auth/jwt")
+  const isSecure = new URL(request.url).protocol === "https:"
+  const sessionJwtMaxAge = REFRESH_COOKIE_MAX_AGE
+  const sessionCookieName = isSecure
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token"
+  const sessionToken = await encode({
+    token: {
+      sub: result.user.id,
+      userId: result.user.id,
+      customAuth: {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        emittedAt: Date.now(),
+      },
+    },
+    secret: authSecret,
+    salt: sessionCookieName,
+    maxAge: sessionJwtMaxAge,
+  })
+  response.headers.append(
+    "set-cookie",
+    `${sessionCookieName}=${sessionToken}; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}; Max-Age=${sessionJwtMaxAge}`,
+  )
 
   return response
 }

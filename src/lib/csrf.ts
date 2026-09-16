@@ -1,4 +1,5 @@
-const CSRF_COOKIE_NAME = "__Host-csrf-token"
+const IS_PRODUCTION = process.env.NODE_ENV === "production"
+const CSRF_COOKIE_NAME = IS_PRODUCTION ? "__Host-csrf-token" : "csrf-token"
 
 export function generateCsrfToken(): string {
   const array = new Uint8Array(32)
@@ -7,7 +8,14 @@ export function generateCsrfToken(): string {
 }
 
 export function setCsrfCookie(token: string): string {
-  return `${CSRF_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 24}`
+  const parts = [
+    `${CSRF_COOKIE_NAME}=${token}`,
+    "SameSite=Strict",
+    "Path=/",
+    `Max-Age=${60 * 60 * 24}`,
+  ]
+  if (IS_PRODUCTION) parts.splice(1, 0, "Secure")
+  return parts.join("; ")
 }
 
 export function getCsrfTokenFromCookie(request: Request): string | undefined {

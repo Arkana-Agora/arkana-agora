@@ -37,7 +37,8 @@ describe("AuthGuard", () => {
   })
 
   describe("authenticated at mount", () => {
-    it("renders children without calling refreshSession", () => {
+    it("validates the persisted session before rendering children", async () => {
+      mockRefreshSession.mockResolvedValue(true)
       authState.isAuthenticated = true
       authState.user = { role: "USER" }
       render(
@@ -46,8 +47,9 @@ describe("AuthGuard", () => {
         </AuthGuard>,
       )
 
-      expect(screen.getByTestId("protected")).toBeInTheDocument()
-      expect(mockRefreshSession).not.toHaveBeenCalled()
+      expect(await screen.findByTestId("protected")).toBeInTheDocument()
+      expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      expect(mockRouter.replace).not.toHaveBeenCalled()
     })
 
     it("blocks when role mismatch and redirects to login", async () => {
@@ -66,7 +68,8 @@ describe("AuthGuard", () => {
       expect(screen.queryByTestId("protected")).not.toBeInTheDocument()
     })
 
-    it("renders children when role matches", () => {
+    it("renders children when role matches", async () => {
+      mockRefreshSession.mockResolvedValue(true)
       authState.isAuthenticated = true
       authState.user = { role: "ADMIN" }
       render(
@@ -75,7 +78,7 @@ describe("AuthGuard", () => {
         </AuthGuard>,
       )
 
-      expect(screen.getByTestId("protected")).toBeInTheDocument()
+      expect(await screen.findByTestId("protected")).toBeInTheDocument()
       expect(mockRouter.replace).not.toHaveBeenCalled()
     })
   })

@@ -464,11 +464,21 @@ Cookie: refreshToken=<rt_token>
 ```json
 {
   "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresIn": 900
+  "expiresIn": 900,
+  "user": {
+    "id": "usr_1",
+    "name": "Alice",
+    "email": "alice@example.com",
+    "displayName": null,
+    "avatar": null,
+    "role": "USER",
+    "plan": "FREE",
+    "emailVerified": true
+  }
 }
 ```
 
-> O novo refresh token rotacionado é entregue via `Set-Cookie` (mesmo `familyId`). Se um token já rotacionado for reenviado, toda a família é revogada.
+> O `user` reflete o estado atual da conta no banco (F1: corrige Google OAuth e qualquer login que não popula o client store). `emailVerified` é `boolean` (DB `DateTime?` → `true`/`false`). O novo refresh token rotacionado é entregue via `Set-Cookie` (mesmo `familyId`). Se um token já rotacionado for reenviado, toda a família é revogada.
 
 ### Erros
 

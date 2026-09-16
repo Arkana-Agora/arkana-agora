@@ -18,9 +18,11 @@ export const metadata: Metadata = {
 export default async function RegisterPage() {
   const token = generateCsrfToken()
   const cookieStore = await cookies()
-  cookieStore.set("__Host-csrf-token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+  const IS_PRODUCTION = process.env.NODE_ENV === "production"
+  const cookieName = IS_PRODUCTION ? "__Host-csrf-token" : "csrf-token"
+  cookieStore.set(cookieName, token, {
+    httpOnly: false,
+    secure: IS_PRODUCTION,
     sameSite: "strict",
     path: "/",
     maxAge: 60 * 60 * 24,
