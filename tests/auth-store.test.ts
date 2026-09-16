@@ -814,4 +814,323 @@ describe("auth-store", () => {
       expect(b).toBe(true)
     })
   })
+
+  describe("verifyEmail", () => {
+    it("sucesso: verifica email e retorna message", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ message: "Email verificado com sucesso" }),
+        )
+
+      const result = await useAuthStore
+        .getState()
+        .verifyEmail("valid-token-123")
+
+      expect(result).toEqual({
+        success: true,
+        message: "Email verificado com sucesso",
+      })
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/verify-email",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ token: "valid-token-123" }),
+        }),
+      )
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("falha com 401 AUTH_EMAIL_VERIFY_INVALID: retorna false e error legivel", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_EMAIL_VERIFY_INVALID",
+              message: "Token de verificacao de email invalido",
+            },
+          },
+          false,
+          401,
+        ),
+      )
+
+      const result = await useAuthStore.getState().verifyEmail("invalid-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_EMAIL_VERIFY_INVALID",
+        message: "Token de verificacao de email invalido",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("falha com 410 AUTH_EMAIL_VERIFY_EXPIRED: retorna false e error legivel", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_EMAIL_VERIFY_EXPIRED",
+              message:
+                "Token de verificacao de email expirado, solicite um novo email de verificacao",
+            },
+          },
+          false,
+          410,
+        ),
+      )
+
+      const result = await useAuthStore.getState().verifyEmail("expired-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_EMAIL_VERIFY_EXPIRED",
+        message:
+          "Token de verificacao de email expirado, solicite um novo email de verificacao",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("token vazio: retorna false sem chamar fetch", async () => {
+      const result = await useAuthStore.getState().verifyEmail("")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_EMAIL_VERIFY_INVALID",
+        message: "Token de verificação de email inválido",
+      })
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it("resposta nao-JSON: retorna false, error legivel e reseta isLoading", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore.getState().verifyEmail("some-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "UNEXPECTED_RESPONSE",
+        message: "Resposta inesperada do servidor",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("falha de rede (TypeError): retorna false com error legivel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore.getState().verifyEmail("some-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "NETWORK_ERROR",
+        message: "Erro ao verificar email",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+  })
+
+  describe("resendVerifyEmail", () => {
+    it("sucesso: reenvia email e retorna message", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ message: "Email de verificacao enviado" }),
+        )
+
+      const result = await useAuthStore
+        .getState()
+        .resendVerifyEmail("alice@example.com")
+
+      expect(result).toEqual({
+        success: true,
+        message: "Email de verificacao enviado",
+      })
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/verify-email/resend",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ email: "alice@example.com" }),
+        }),
+      )
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("email vazio: retorna false sem chamar fetch", async () => {
+      const result = await useAuthStore.getState().resendVerifyEmail("")
+
+      expect(result).toEqual({
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "E-mail obrigatório",
+      })
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it("resposta nao-JSON: retorna false, error legivel e reseta isLoading", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore
+        .getState()
+        .resendVerifyEmail("alice@example.com")
+
+      expect(result).toEqual({
+        success: false,
+        code: "UNEXPECTED_RESPONSE",
+        message: "Resposta inesperada do servidor",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+
+    it("falha de rede (TypeError): retorna false com error legivel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore
+        .getState()
+        .resendVerifyEmail("alice@example.com")
+
+      expect(result).toEqual({
+        success: false,
+        code: "NETWORK_ERROR",
+        message: "Erro ao reenviar email de verificação",
+      })
+      expect(useAuthStore.getState().isLoading).toBe(false)
+    })
+  })
+
+  describe("verifyMagicLink", () => {
+    const magicUser = {
+      id: "user-1",
+      name: "Alice",
+      email: "alice@example.com",
+      displayName: null,
+      role: "USER" as const,
+      plan: "FREE",
+      avatar: null,
+    }
+
+    it("sucesso: verifica magic link, autentica usuario e retorna user", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse({
+          accessToken: "access-789",
+          user: magicUser,
+        }),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .verifyMagicLink("valid-magic-token")
+
+      expect(result).toEqual({ success: true, user: magicUser })
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/magic-link/verify",
+        expect.objectContaining({
+          method: "POST",
+          credentials: "include",
+          body: JSON.stringify({ token: "valid-magic-token" }),
+        }),
+      )
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.user).toEqual(magicUser)
+    })
+
+    it("falha com 401 AUTH_MAGIC_TOKEN_INVALID: retorna false e error legivel", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_MAGIC_TOKEN_INVALID",
+              message: "Token de magic link invalido",
+            },
+          },
+          false,
+          401,
+        ),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .verifyMagicLink("invalid-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_MAGIC_TOKEN_INVALID",
+        message: "Token de magic link invalido",
+      })
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    })
+
+    it("falha com 410 AUTH_MAGIC_TOKEN_EXPIRED: retorna false e error legivel", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        mockJsonResponse(
+          {
+            error: {
+              code: "AUTH_MAGIC_TOKEN_EXPIRED",
+              message: "Token de magic link expirado",
+            },
+          },
+          false,
+          410,
+        ),
+      )
+
+      const result = await useAuthStore
+        .getState()
+        .verifyMagicLink("expired-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_MAGIC_TOKEN_EXPIRED",
+        message: "Token de magic link expirado",
+      })
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    })
+
+    it("token vazio: retorna false sem chamar fetch", async () => {
+      const result = await useAuthStore.getState().verifyMagicLink("")
+
+      expect(result).toEqual({
+        success: false,
+        code: "AUTH_MAGIC_TOKEN_INVALID",
+        message: "Token de magic link inválido",
+      })
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it("resposta nao-JSON: retorna false com error legivel", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      const result = await useAuthStore.getState().verifyMagicLink("some-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "UNEXPECTED_RESPONSE",
+        message: "Resposta inesperada do servidor",
+      })
+    })
+
+    it("falha de rede (TypeError): retorna false com error legivel", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+
+      const result = await useAuthStore.getState().verifyMagicLink("some-token")
+
+      expect(result).toEqual({
+        success: false,
+        code: "NETWORK_ERROR",
+        message: "Erro ao verificar magic link",
+      })
+    })
+  })
 })
