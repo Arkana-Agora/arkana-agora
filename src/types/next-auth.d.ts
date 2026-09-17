@@ -9,5 +9,6 @@ declare module "@auth/core/jwt" {
 declare module "@auth/core/types" {
   interface Session {
     user: { id?: string } & DefaultSession["user"]
+    accessToken?: string
   }
 }
