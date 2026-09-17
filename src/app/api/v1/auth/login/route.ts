@@ -41,9 +41,17 @@ function buildAuthCookie(rawToken: string): string {
 }
 
 function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  )
+  const forwarded = request.headers.get("x-forwarded-for")
+  if (forwarded) {
+    const parts = forwarded.split(",")
+    for (const part of parts) {
+      const trimmed = part.trim()
+      if (trimmed && trimmed !== "unknown") {
+        return trimmed
+      }
+    }
+  }
+  return "unknown"
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -96,18 +104,6 @@ export async function POST(request: Request): Promise<Response> {
     })
   }
 
-  const ipLimit = isIpLimited(ip)
-  if (!ipLimit.allowed) {
-    logger.warn({ reqId, ip }, "[auth:login] limite de tentativas por IP")
-    return errorResponse(reqId, 429, {
-      error: {
-        code: "AUTH_RATE_LIMITED",
-        message: "Muitas tentativas de login tente novamente em instantes",
-        retryAfter: ipLimit.retryAfter,
-      },
-    })
-  }
-
   const user = await prisma.user.findFirst({
     where: { email: normalizedEmail },
     select: {
@@ -127,6 +123,19 @@ export async function POST(request: Request): Promise<Response> {
   })
 
   if (user === null) {
+    const ipLimit = isIpLimited(ip)
+    if (!ipLimit.allowed) {
+      logger.warn({ reqId, ip }, "[auth:login] limite de tentativas por IP")
+      const res = errorResponse(reqId, 429, {
+        error: {
+          code: "AUTH_RATE_LIMITED",
+          message: "Muitas tentativas de login tente novamente em instantes",
+          retryAfter: ipLimit.retryAfter,
+        },
+      })
+      res.headers.set("Retry-After", String(ipLimit.retryAfter))
+      return res
+    }
     recordLoginFailure(normalizedEmail)
     recordIpAttempt(ip)
     logger.info({ reqId }, "[auth:login] credenciais invalidas")
@@ -136,6 +145,20 @@ export async function POST(request: Request): Promise<Response> {
         message: "E-mail ou senha invalidos",
       },
     })
+  }
+
+  const ipLimit = isIpLimited(ip, user.role)
+  if (!ipLimit.allowed) {
+    logger.warn({ reqId, ip }, "[auth:login] limite de tentativas por IP")
+    const res = errorResponse(reqId, 429, {
+      error: {
+        code: "AUTH_RATE_LIMITED",
+        message: "Muitas tentativas de login tente novamente em instantes",
+        retryAfter: ipLimit.retryAfter,
+      },
+    })
+    res.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return res
   }
 
   if (user.isActive === false || user.deletedAt !== null) {

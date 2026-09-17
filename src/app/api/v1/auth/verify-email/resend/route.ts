@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { verifyEmailResendSchema } from "@/lib/validators/auth"
 import { sendVerificationEmail } from "@/lib/email/email"
+import {
+  isVerifyEmailResendLimited,
+  recordVerifyEmailResend,
+} from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -73,6 +77,23 @@ export async function POST(request: Request): Promise<Response> {
 
   const normalizedEmail = parsed.data.email.toLowerCase()
 
+  const resendLimit = isVerifyEmailResendLimited(normalizedEmail)
+  if (!resendLimit.allowed) {
+    logger.info(
+      { reqId },
+      "[auth:verify-email:resend] limite de reenvio por email atingido",
+    )
+    const res = errorResponse(reqId, 429, {
+      error: {
+        code: "AUTH_RATE_LIMITED",
+        message: "Muitas tentativas de reenvio, tente novamente em instantes",
+        retryAfter: resendLimit.retryAfter,
+      },
+    })
+    res.headers.set("Retry-After", String(resendLimit.retryAfter))
+    return res
+  }
+
   try {
     const user = await prisma.user.findFirst({
       where: { email: { equals: normalizedEmail, mode: "insensitive" } },
@@ -119,6 +140,8 @@ export async function POST(request: Request): Promise<Response> {
         },
       }),
     ])
+
+    recordVerifyEmailResend(normalizedEmail)
 
     const baseUrl = getBaseUrl()
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
