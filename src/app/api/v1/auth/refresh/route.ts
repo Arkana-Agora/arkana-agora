@@ -5,38 +5,13 @@ import {
   rotateRefresh,
   type RotationResult,
 } from "@/services/token-service"
+import {
+  errorResponse,
+  buildAuthCookie,
+  getRefreshToken,
+  REFRESH_COOKIE_MAX_AGE,
+} from "../_helpers"
 export const dynamic = "force-dynamic"
-
-const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 dias
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function buildAuthCookie(rawToken: string): string {
-  return [
-    `refreshToken=${rawToken}`,
-    "Path=/api/v1/auth",
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${REFRESH_COOKIE_MAX_AGE}`,
-  ].join("; ")
-}
-
-function getRefreshToken(request: Request): string {
-  const cookie = request.headers.get("cookie") ?? ""
-  const match = /(?:^|;\s*)refreshToken=([^;\s]+)/.exec(cookie)
-  return match?.[1] ?? ""
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()

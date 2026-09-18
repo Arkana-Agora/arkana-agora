@@ -8,6 +8,7 @@ import {
   isPasswordResetLimited,
   recordPasswordResetRequest,
 } from "@/lib/rate-limit"
+import { errorResponse, getIp, getBaseUrl } from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -20,35 +21,6 @@ const NOOP_EQUALIZE_MS = 250
 
 async function equalizeNoopTiming(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, NOOP_EQUALIZE_MS))
-}
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getBaseUrl(): string {
-  return (
-    process.env.AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  )
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  )
 }
 
 export async function POST(request: Request): Promise<Response> {

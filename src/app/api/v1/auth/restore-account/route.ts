@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server"
 import { logger, newReqId } from "@/lib/logger"
 import { restoreAccountSchema } from "@/lib/validators/auth"
 import { isPasswordResetLimited } from "@/lib/rate-limit"
@@ -6,29 +5,17 @@ import {
   restoreAccount,
   RestoreAccountResult,
 } from "@/services/account-service"
+import { errorResponse } from "../_helpers"
+import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      details?: { field: string; message: string }[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
+const RESTORE_SUCCESS_MESSAGE =
+  "Se a conta estava na janela de restauracao, o acesso foi restabelecido"
 
-function successResponse(): Response {
+function restoreSuccessResponse(): Response {
   const response = NextResponse.json(
-    {
-      message:
-        "Se a conta estava na janela de restauracao, o acesso foi restabelecido",
-    },
+    { message: RESTORE_SUCCESS_MESSAGE },
     { status: 200 },
   )
   response.headers.set("cache-control", "no-store")
@@ -97,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
       { err: error, reqId, email },
       "[auth:restore-account] erro interno - retorna 200 sem expor",
     )
-    return successResponse()
+    return restoreSuccessResponse()
   }
 
   // Anti-enumeration returns 200 for all no-op cases
@@ -108,5 +95,5 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // All other cases (success, anti-enumeration, no-op) return 200 with timing floor
-  return successResponse()
+  return restoreSuccessResponse()
 }

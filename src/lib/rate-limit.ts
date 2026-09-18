@@ -1,5 +1,3 @@
-import { logger } from "@/lib/logger"
-
 /**
  * In-memory rate limiter using Map.
  * WARNING: This implementation is NOT suitable for production deployments
@@ -281,8 +279,4 @@ export function recordPasswordResetRequest(email: string): void {
     Date.now(),
     PASSWORD_RESET_WINDOW_MS,
   )
-}
-
-export function logSecurityEvent(message: string): void {
-  logger.warn(`[auth:login] ${message}`)
 }

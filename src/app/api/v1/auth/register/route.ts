@@ -12,6 +12,7 @@ import { registerSchema } from "@/lib/validators/auth"
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 import { randomBytes } from "node:crypto"
+import { errorResponse, getIp, getBaseUrl } from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -24,35 +25,6 @@ function isUniqueViolation(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "P2002"
-  )
-}
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      details?: unknown[]
-      retryAfter?: number
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getBaseUrl(): string {
-  return (
-    process.env.AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  )
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
   )
 }
 

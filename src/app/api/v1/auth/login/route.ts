@@ -11,48 +11,13 @@ import {
   resetLoginFailures,
   recordIpAttempt,
 } from "@/lib/rate-limit"
+import {
+  errorResponse,
+  buildAuthCookie,
+  getIp,
+  REFRESH_COOKIE_MAX_AGE,
+} from "../_helpers"
 export const dynamic = "force-dynamic"
-
-const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 dias
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function buildAuthCookie(rawToken: string): string {
-  return [
-    `refreshToken=${rawToken}`,
-    "Path=/api/v1/auth",
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${REFRESH_COOKIE_MAX_AGE}`,
-  ].join("; ")
-}
-
-function getIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) {
-    const parts = forwarded.split(",")
-    for (const part of parts) {
-      const trimmed = part.trim()
-      if (trimmed && trimmed !== "unknown") {
-        return trimmed
-      }
-    }
-  }
-  return "unknown"
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
