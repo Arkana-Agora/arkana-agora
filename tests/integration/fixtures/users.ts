@@ -1,18 +1,16 @@
-import type { Prisma } from "@prisma/client"
-
 export const VERIFIED_EMAIL = "maria@email.com"
 
+export interface ActiveUserRow {
+  id: string
+  email: string
+  isActive: boolean
+  deletedAt: Date | null
+  emailVerified: Date | null
+}
+
 export function activeUserRow(
-  overrides: Record<string, unknown> = {},
-): Prisma.UserGetPayload<{
-  select: {
-    id: true
-    email: true
-    isActive: true
-    deletedAt: true
-    emailVerified: true
-  }
-}> {
+  overrides: Partial<ActiveUserRow> = {},
+): ActiveUserRow {
   return {
     id: "usr_1",
     email: VERIFIED_EMAIL,
@@ -20,7 +18,7 @@ export function activeUserRow(
     deletedAt: null,
     emailVerified: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
-  } as never
+  }
 }
 
 export function verifiedJwtPayload() {
