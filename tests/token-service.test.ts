@@ -297,6 +297,16 @@ describe("token service T7a - createRefreshSession", () => {
 })
 
 describe("token service T7a - rotateRefresh", () => {
+  beforeEach(() => {
+    prismaMock.$transaction.mockImplementation(
+      async (cb: (tx: unknown) => unknown) =>
+        cb({
+          session: prismaMock.session,
+          user: prismaMock.user,
+        }),
+    )
+  })
+
   const sessionRow = (over = {}) => ({
     id: "sess_1",
     userId: "usr_1",
@@ -347,7 +357,12 @@ describe("token service T7a - rotateRefresh", () => {
     })
     expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "sess_1", replacedByTokenId: null },
+        where: {
+          id: "sess_1",
+          replacedByTokenId: null,
+          revokedAt: null,
+          expiresAt: { gt: expect.any(Date) },
+        },
       }),
     )
     expect(prismaMock.session.create).toHaveBeenCalledTimes(1)

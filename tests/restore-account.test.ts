@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import bcrypt from "bcryptjs"
-import { mirrorTokenVersion } from "@/services/token-service"
 import { restoreAccount } from "@/services/account-service"
 
 const prismaMock = vi.hoisted(() => ({
@@ -14,8 +13,7 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 
 const tokenServiceMock = vi.hoisted(() => ({
-  mirrorTokenVersion: vi.fn<typeof mirrorTokenVersion>(),
-  mirrorTokenVersionWithRetry: vi.fn(),
+  mirrorTokenVersion: vi.fn(),
 }))
 
 vi.mock("@/services/token-service", () => tokenServiceMock)

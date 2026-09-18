@@ -10,6 +10,7 @@ import {
 import {
   errorResponse,
   buildExpireCookie,
+  buildSessionExpireCookie,
   getBearerToken,
   getRefreshToken,
 } from "../_helpers"
@@ -45,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
           },
         })
       }
-      if (typeof code !== "string" || code.startsWith("AUTH_TOKEN_")) {
+      if (code.startsWith("AUTH_TOKEN_")) {
         return errorResponse(reqId, 401, {
           error: {
             code,
@@ -113,7 +114,9 @@ export async function POST(request: Request): Promise<Response> {
     { status: 200 },
   )
   response.headers.set("cache-control", "no-store")
-  response.headers.set("set-cookie", buildExpireCookie())
+  response.headers.set("set-cookie", buildExpireCookie(request))
+  // ADR-011: expira tambem o cookie de sessao Auth.js (dashboard guard)
+  response.headers.append("set-cookie", buildSessionExpireCookie(request))
 
   return response
 }

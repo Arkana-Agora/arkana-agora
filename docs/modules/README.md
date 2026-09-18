@@ -10,7 +10,7 @@ Each backend module gets a doc file here, e.g. `docs/modules/<module-name>.md`, 
 
 | Module | Doc | Status |
 |---|---|---|
-| | | |
+| Auth | [auth.md](./auth.md) | ✅ Implemented (Módulo 1 — Sprint 1) |
 
 ## Conventions
 

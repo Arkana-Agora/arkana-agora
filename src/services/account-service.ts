@@ -2,12 +2,11 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { LGPD_WINDOW_DAYS } from "@/lib/lgpd"
-import { mirrorTokenVersionWithRetry } from "@/services/token-service"
+import { mirrorTokenVersion } from "@/services/token-service"
+import { equalizeNoopTiming } from "@/app/api/v1/auth/_helpers"
 
 const DAY_IN_MS = 86_400_000
 const WINDOW_MS = LGPD_WINDOW_DAYS * DAY_IN_MS
-const NOOP_MIN_MS = 240
-const NOOP_MAX_MS = 400
 
 export interface RestoreAccountResult {
   success: boolean
@@ -138,7 +137,7 @@ export async function restoreAccount(
   }
 
   // 6. Mirror token version to Redis with retry
-  await mirrorTokenVersionWithRetry(user.id)
+  await mirrorTokenVersion(user.id)
 
   logger.info(
     {
@@ -156,11 +155,4 @@ export async function restoreAccount(
     message:
       "Se a conta estava na janela de restauracao, o acesso foi restabelecido",
   }
-}
-
-async function equalizeNoopTiming(): Promise<void> {
-  const jitter = Math.floor(
-    Math.random() * (NOOP_MAX_MS - NOOP_MIN_MS) + NOOP_MIN_MS,
-  )
-  await new Promise((resolve) => setTimeout(resolve, jitter))
 }

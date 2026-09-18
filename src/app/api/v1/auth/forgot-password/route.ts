@@ -8,7 +8,12 @@ import {
   isPasswordResetLimited,
   recordPasswordResetRequest,
 } from "@/lib/rate-limit"
-import { errorResponse, getIp, getBaseUrl } from "../_helpers"
+import {
+  errorResponse,
+  getIp,
+  getBaseUrl,
+  equalizeNoopTiming,
+} from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -16,12 +21,6 @@ const PASSWORD_RESET_LIFETIME_MS = 60 * 60 * 1000
 
 const NOOP_MESSAGE =
   "Se o e-mail estiver cadastrado, voce recebera instrucoes para redefinir sua senha"
-
-const NOOP_EQUALIZE_MS = 250
-
-async function equalizeNoopTiming(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, NOOP_EQUALIZE_MS))
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -71,7 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       { reqId, ip, userAgent },
       "[auth:forgot-password] limite de pedidos de reset por email atingido",
     )
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_FORGOT_RATE_LIMIT",
         message:
@@ -79,6 +78,8 @@ export async function POST(request: Request): Promise<Response> {
         retryAfter: limit.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(limit.retryAfter))
+    return res
   }
   recordPasswordResetRequest(normalizedEmail)
 
@@ -94,12 +95,14 @@ export async function POST(request: Request): Promise<Response> {
     const canIssue =
       user !== null && user.isActive === true && user.deletedAt === null
 
+    // Anti-enumeracao: piso de timing aplicado incondicionalmente
+    await equalizeNoopTiming()
+
     if (!canIssue) {
       logger.info(
         { reqId, ip, userAgent },
         "[auth:forgot-password] no-op anti-enumeracao (email inexistente/inativo/deletado)",
       )
-      await equalizeNoopTiming()
       return NextResponse.json({ message: NOOP_MESSAGE }, { status: 200 })
     }
 
@@ -116,7 +119,7 @@ export async function POST(request: Request): Promise<Response> {
     })
 
     const baseUrl = getBaseUrl()
-    const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`
     try {
       await sendPasswordResetEmail(normalizedEmail, { resetUrl })
     } catch (error) {

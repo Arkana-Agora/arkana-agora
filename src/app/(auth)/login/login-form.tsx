@@ -55,7 +55,7 @@ export function LoginForm() {
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_EMAIL_NOT_VERIFIED") {
         router.push(
-          `/auth/verify-email?email=${encodeURIComponent(data.email.trim())}`,
+          `/verify-email?email=${encodeURIComponent(data.email.trim())}`,
         )
         return
       }

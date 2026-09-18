@@ -44,7 +44,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 
 | Categoria | Descrição | Exemplos | Consentimento |
 |---|---|---|---|
-| **Necessários** | Essenciais para o funcionamento | `akasha_session`, `csrf_token` | Não requerido |
+| **Necessários** | Essenciais para o funcionamento | `akasha_session`, `csrf-token` (`__Host-csrf-token` em produção) | Não requerido |
 | **Funcionais** | Lembram preferências do usuário | `theme`, `locale`, `notifications_prefs` | Sim (padrão: aceito) |
 | **Análise** | Métricas de uso e performance | `_ga`, `_gid` (Google Analytics) | Sim (padrão: recusado) |
 | **Marketing** | Publicidade e recomendações | `_fbp`, anúncios personalizados | Sim (padrão: recusado) |

@@ -325,7 +325,7 @@ describe("POST /api/v1/auth/verify-email/resend (T30)", () => {
 
     expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1)
     const url = sendVerificationEmailMock.mock.calls[0]![1].verificationUrl
-    expect(url).toContain("/auth/verify-email?token=")
+    expect(url).toContain("/verify-email?token=")
     expect(url).toContain(createArgs.data.token)
   })
 

@@ -145,7 +145,7 @@ async function handleAccountDeletion(req: Request, res: Response) {
 > — `count === 0` means the account was restored or anonymized concurrently → no-op 200 identical),
 > then sets `isActive: true` + `deletedAt: null` + `tokenVersion: { increment: 1 }`. After commit:
 > mirrors `tokenVersion` to Redis (best-effort) and logs `AUTH_ACCOUNT_RESTORED`. Anti-enumeration:
-> identical `200 { message }` (+250 ms equalize) for wrong password, unknown/anonymized email,
+> identical `200 { message }` (jittered 240–400 ms equalize) for wrong password, unknown/anonymized email,
 > active account and concurrent restore; **400 `AUTH_RESTORE_WINDOW_EXPIRED` only after proof of
 > possession** outside the window (owner confirmed → no enumeration risk). No session is created on
 > restore — the user logs in afterwards. Do NOT copy the naive non-transactional `restoreUser`

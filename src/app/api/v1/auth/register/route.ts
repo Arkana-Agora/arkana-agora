@@ -67,13 +67,15 @@ export async function POST(request: Request): Promise<Response> {
   const ipLimit = isRegisterIpLimited(ip)
   if (!ipLimit.allowed) {
     logger.warn({ reqId, ip }, "[auth:register] limite de tentativas por IP")
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_RATE_LIMITED",
         message: "Muitas tentativas de cadastro tente novamente em instantes",
         retryAfter: ipLimit.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return res
   }
 
   const emailLimit = isRegisterLimited(normalizedEmail)
@@ -82,13 +84,15 @@ export async function POST(request: Request): Promise<Response> {
       { reqId, email: normalizedEmail },
       "[auth:register] limite de cadastro por email",
     )
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_RATE_LIMITED",
         message: "Muitas tentativas de cadastro tente novamente em instantes",
         retryAfter: emailLimit.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(emailLimit.retryAfter))
+    return res
   }
 
   if (!validateCsrfToken(request)) {
@@ -144,7 +148,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const baseUrl = getBaseUrl()
-    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
+    const verificationUrl = `${baseUrl}/verify-email?token=${token}`
     try {
       await sendVerificationEmail(normalizedEmail, { verificationUrl })
     } catch (error) {

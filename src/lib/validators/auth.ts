@@ -22,6 +22,7 @@ export const registerSchema = z
       .boolean()
       .refine((v) => v === true, "Voce deve aceitar os termos"),
   })
+  .strict()
   .refine((data) => data.password === data.passwordConfirmation, {
     message: "Confirmacao de senha nao confere",
     path: ["passwordConfirmation"],
@@ -29,16 +30,20 @@ export const registerSchema = z
 
 export type RegisterInput = z.infer<typeof registerSchema>
 
-export const loginSchema = z.object({
-  email: z.string().trim().email("Formato de e-mail invalido"),
-  password: z.string().min(1, "Senha obrigatoria"),
-})
+export const loginSchema = z
+  .object({
+    email: z.string().trim().email("Formato de e-mail invalido"),
+    password: z.string().min(1, "Senha obrigatoria"),
+  })
+  .strict()
 
 export type LoginInput = z.infer<typeof loginSchema>
 
-export const logoutSchema = z.object({
-  allDevices: z.boolean().optional(),
-})
+export const logoutSchema = z
+  .object({
+    allDevices: z.boolean().optional(),
+  })
+  .strict()
 
 export type LogoutInput = z.infer<typeof logoutSchema>
 

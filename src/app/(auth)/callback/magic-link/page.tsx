@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 
@@ -29,7 +29,11 @@ function getErrorMessage(code?: string): string {
 }
 
 function LoadingState() {
-  return <LoadingState />
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+    </main>
+  )
 }
 
 export default function MagicLinkCallbackPage() {

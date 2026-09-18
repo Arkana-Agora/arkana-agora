@@ -67,6 +67,7 @@ async function callPost(body: unknown): Promise<Response> {
       headers: {
         "content-type": "application/json",
         "x-forwarded-for": "127.0.0.1",
+        "x-real-ip": "127.0.0.1",
       },
       body: JSON.stringify(body),
     }),
@@ -125,7 +126,7 @@ describe("POST /api/v1/auth/register — integration (T29)", () => {
     expect(sendVerificationEmailMock).toHaveBeenCalledWith(
       "maria@email.com",
       expect.objectContaining({
-        verificationUrl: expect.stringContaining("/auth/verify-email?token="),
+        verificationUrl: expect.stringContaining("/verify-email?token="),
       }),
     )
     expect(rateLimitMock.recordRegisterAttempt).toHaveBeenCalledWith(

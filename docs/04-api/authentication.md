@@ -116,6 +116,7 @@ Cadastro de novo usuário.
 POST /api/v1/auth/register
 Content-Type: application/json
 Accept-Language: pt-BR
+x-csrf-token: <csrf_token>
 ```
 
 ```json
@@ -130,9 +131,17 @@ Accept-Language: pt-BR
 
 > **Nota:** o body **não** inclui `birthDate` (mantido para evolução de perfil, fora do MVP).
 
+> **CSRF (double-submit):** a rota valida o token CSRF via `validateCsrfToken`
+> (`src/lib/csrf`) — cookie `csrf-token` (dev) / `__Host-csrf-token` (produção) vs header
+> `x-csrf-token`; falha → **403 `CSRF_TOKEN_INVALID`**. O cookie é definido pela página
+> `src/app/(auth)/register/page.tsx` (Server Component, `httpOnly: false`,
+> `sameSite: strict`, 24h). Este é o padrão que o login passou a seguir (2026-09-18).
+
 ### Validação
 
 Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `registerSchema`):
+
+> **Nota:** `registerSchema` usa `.strict()` para rejeitar campos extras no body.
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
@@ -167,7 +176,7 @@ Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `regis
 3. Hash da senha com **bcrypt custo 12**
 4. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase`
 5. Cria `VerificationToken` `type=EMAIL` (24h) e envia e-mail de verificação para
-   `/auth/verify-email?token=...`
+   `/verify-email?token=...`
 6. Retorna **201** com `user` + `message`
 
 ### Erros
@@ -175,7 +184,9 @@ Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `regis
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 409 | `AUTH_EMAIL_ALREADY_EXISTS` | E-mail já cadastrado |
+| 403 | `CSRF_TOKEN_INVALID` | Token CSRF ausente ou divergente (double-submit: cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`) |
 | 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de cadastro atingido (3/15min por e-mail ou 3/h por IP, via `isRegisterLimited`/`isRegisterIpLimited`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha interna ao criar conta |
 
 > **Divergência supersedida:** o contrato antigo desta seção (body com `birthDate`, resposta com
@@ -199,6 +210,7 @@ Login com e-mail e senha.
 ```http
 POST /api/v1/auth/login
 Content-Type: application/json
+x-csrf-token: <csrf_token>
 ```
 
 ```json
@@ -208,9 +220,19 @@ Content-Type: application/json
 }
 ```
 
+> **CSRF (double-submit, implementado 2026-09-18):** a rota valida o token CSRF via
+> `validateCsrfToken` (`src/lib/csrf`) logo após a validação do body — o cookie
+> `csrf-token` (dev) / `__Host-csrf-token` (produção) deve casar com o header
+> `x-csrf-token`. Falha → **403 `CSRF_TOKEN_INVALID`**, antes de qualquer efeito
+> colateral (lockout, rate limit, bcrypt, DB). O cookie é definido pela página
+> `src/app/(auth)/login/page.tsx` (Server Component, `httpOnly: false`,
+> `sameSite: strict`, 24h) — mesmo padrão do register.
+
 ### Validação
 
 Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
+
+> **Nota:** `loginSchema` usa `.strict()` para rejeitar campos extras no body.
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
@@ -250,22 +272,24 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`loginSchema`):
 ### Comportamento
 
 1. Valida o body com `loginSchema` (422 `VALIDATION_ERROR` em falha, com `details` por campo)
-2. Checa lockout de conta (5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900`)
-3. Checa limite de volume por IP (5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`)
-4. Busca usuário por e-mail normalizado (`findFirst`); e-mail inexistente → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
-5. Conta suspensa (`isActive=false` ou `deletedAt` set) → 403 `AUTH_ACCOUNT_SUSPENDED`
-6. E-mail não verificado (`emailVerified=null`) → 401 `AUTH_EMAIL_NOT_VERIFIED`
-7. Compara hash bcrypt (custo 12); falha → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
-8. Sucesso: `signAccessToken` (RS256, 15min, claims `role`/`plan`/`tokenVersion`) + `createRefreshSession` (Session 30d) + `Set-Cookie` refreshToken + cookie de sessão do Auth.js (ADR-011 — `encode` de `next-auth/jwt`, payload `{ sub, userId, customAuth }`)
-9. Reseta contador de falhas da conta
+2. Valida CSRF double-submit (`validateCsrfToken` de `src/lib/csrf` — cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`); falha → 403 `CSRF_TOKEN_INVALID` (antes de qualquer efeito colateral)
+3. Checa lockout de conta (5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900`)
+4. Checa limite de volume por IP (5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`)
+5. Busca usuário por e-mail normalizado (`findFirst`); e-mail inexistente → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração, com piso de timing `equalizeNoopTiming()` de 240–400ms no branch user-not-found)
+6. Conta suspensa (`isActive=false` ou `deletedAt` set) → 403 `AUTH_ACCOUNT_SUSPENDED`
+7. E-mail não verificado (`emailVerified=null`) → 401 `AUTH_EMAIL_NOT_VERIFIED`
+8. Compara hash bcrypt (custo 12); falha → 401 `AUTH_INVALID_CREDENTIALS` (anti-enumeração)
+9. Sucesso: `signAccessToken` (RS256, 15min, claims `role`/`plan`/`tokenVersion`) + `createRefreshSession` (Session 30d) + `Set-Cookie` refreshToken + cookie de sessão do Auth.js (ADR-011 — `encode` de `next-auth/jwt`, payload `{ sub, userId, customAuth }`); o cookie de sessão é cunhado via `mintAuthJsSessionCookie` **antes** de montar a resposta (fail-fast: `AUTH_SECRET` ausente → erro claro, sem resposta parcial)
+10. Reseta contador de falhas da conta
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) |
+| 403 | `CSRF_TOKEN_INVALID` | Token CSRF ausente ou divergente (double-submit: cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`) |
 | 403 | `AUTH_ACCOUNT_LOCKED` | Conta bloqueada por 5 falhas consecutivas (body com `retryAfter: 900`) |
-| 429 | `AUTH_RATE_LIMITED` | Limite de volume por IP atingido (5/15min; body com `retryAfter`) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de volume por IP atingido (5/15min; body com `retryAfter` + header `Retry-After`) |
 | 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa pelo admin (`isActive=false`/`deletedAt`) |
 | 401 | `AUTH_EMAIL_NOT_VERIFIED` | E-mail não verificado |
 | 401 | `AUTH_INVALID_CREDENTIALS` | E-mail ou senha incorretos (anti-enumeração) |
@@ -333,7 +357,7 @@ Envia link mágico por e-mail para login sem senha.
 > (`randomBytes(32).toString("hex")`), persiste `VerificationToken type=MAGIC_LINK` com
 > `expiresAt` 15 min, envia via `sendMagicLinkEmail`, retorna **200 flat `{ message }`**.
 > No-op anti-enumeração (email inexistente/inativo/não verificado) responde o **mesmo 200 com
-> delay mínimo de 250ms** (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
+> delay mínimo de 240–400ms** (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
 > fluxo completo (o envio de email tem latência variável); dificulta a enumeração por timing em vez
 > de eliminá-la (residual documentado).
 > `POST /auth/magic-link/verify` (T10) — que redime o token — está **implementado** em
@@ -383,7 +407,7 @@ Content-Type: application/json
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | Body inválido ou campo extra rejeitado (Zod, com `details` por campo) |
-| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail ou por IP (`retryAfter` no body) |
+| 429 | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail ou por IP (`retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Erro interno ao persistir token (inclui `meta.requestId`) |
 
 > **Nota:** falha no envio do e-mail **não** retorna erro — o 200 é mantido (token persistido,
@@ -401,7 +425,9 @@ Content-Type: application/json
 > **Contrato LGPD:** revalida `isActive=true AND deletedAt=null` do usuário (resolvido pelo
 > `identifier` do token) antes de re-autenticar — inativo/deletado → 401 e token consumido.
 > Sucesso: `signAccessToken` + `createRefreshSession` (ip/userAgent) → **200 `{ accessToken,
-> user }`** + `Set-Cookie` httpOnly (`Path=/api/v1/auth`), mesmo formato do `/auth/login`.
+> user }`** + `Set-Cookie` httpOnly (`Path=/api/v1/auth`) + cookie de sessão do Auth.js
+> (ADR-011 — `mintAuthJsSessionCookie`, cunhado **antes** de montar a resposta, fail-fast se
+> `AUTH_SECRET` ausente), mesmo formato do `/auth/login`.
 >
 > **Nota (interop com Auth.js):** a rota redime qualquer `VerificationToken` `MAGIC_LINK`
 > vigente. Tokens emitidos por `POST /auth/magic-link` (T9) só existem para usuários com
@@ -447,8 +473,13 @@ Renova o access token usando o refresh token do cookie httpOnly.
 
 > **Status (T13 implementado):** esta rota está **implementada** em
 > `src/app/api/v1/auth/refresh/route.ts`. Lê o `refreshToken` do cookie httpOnly e chama
-> `rotateRefresh` de `src/services/token-service.ts` (rotação condicional anti-race +
-> revogação de família em reuso). O contrato abaixo reflete o comportamento implementado.
+> `rotateRefresh` de `src/services/token-service.ts` (rotação **transacional** anti-race: o
+> `updateMany` condicional revalida `revokedAt: null` AND `expiresAt > now` atomicamente dentro
+> de um `prisma.$transaction` interativo — fecha a corrida rotação-vs-revogação; `signAccessToken`
+> roda **antes** da transação, então falha de assinatura não comete a rotação — + revogação de
+> família em reuso). No sucesso, também cunha o cookie de sessão do Auth.js (ADR-011 —
+> `mintAuthJsSessionCookie`, fail-fast se `AUTH_SECRET` ausente) para os guards do `/dashboard`
+> reconhecerem a renovação. O contrato abaixo reflete o comportamento implementado.
 
 ### Requisição
 
@@ -536,7 +567,9 @@ Cookie: refreshToken=<rt_token>
 > **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
 > wrapper `data` — consistente com login/register/refresh implementados. A resposta sempre
 > limpa o cookie de refresh via `Set-Cookie: refreshToken=; Path=/api/v1/auth; HttpOnly;
-> SameSite=Strict; Max-Age=0` e define `Cache-Control: no-store`.
+> SameSite=Strict; Max-Age=0`, **expira também o cookie de sessão do Auth.js** via
+> `buildSessionExpireCookie` (`authjs.session-token`/`__Secure-` com `Max-Age=0`, ADR-011) e
+> define `Cache-Control: no-store`.
 
 ### Comportamento
 
@@ -551,7 +584,8 @@ Cookie: refreshToken=<rt_token>
 5. **`allDevices=true`:** chama `revokeAllSessions(userId)` — revoga **todas** as `Session` do
    usuário **pareado com bump de `tokenVersion`** (contrato de segurança architecture-review:
    invalida todos os access tokens emitidos)
-6. Sempre limpa o cookie de refresh (`Max-Age=0`) e retorna `200 { message }`
+6. Sempre limpa o cookie de refresh (`Max-Age=0`) **e expira o cookie de sessão do Auth.js**
+   (`buildSessionExpireCookie`, ADR-011) e retorna `200 { message }`
 7. `Cache-Control: no-store`; erros incluem `meta.requestId` (C13); log estruturado não expõe tokens
 
 ### Erros
@@ -596,7 +630,7 @@ Content-Type: application/json
 > **Nota**: Sempre retorna 200 para evitar enumeração (a mensagem é idêntica para e-mail existente ou
 > não — o cliente não consegue distinguir). Contas suspensas (`isActive=false`) ou deletadas
 > (`deletedAt` preenchido, LGPD) também recebem 200 sem gerar token nem enviar e-mail. O no-op
-> aplica delay mínimo de 250ms (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
+> aplica delay mínimo de 240–400ms (`equalizeNoopTiming`) — **piso de duração**, não equalização exata do
 > fluxo completo (o envio de email tem latência variável); dificulta a enumeração por tempo em vez de
 > eliminá-la (residual documentado).
 >
@@ -614,7 +648,7 @@ Content-Type: application/json
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON |
-| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`) |
+| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha DB/SMTP desconhecida (inclui `meta.requestId`, C13) |
 
 A contagem é registrada **antes** da verificação de existência do usuário, então pedidos de
@@ -824,6 +858,7 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`verifyEmailResendSchema`)
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON (Zod, com `details` por campo) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de reenvio atingido (1/min por e-mail, via `isVerifyEmailResendLimited`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
 
 ---
@@ -896,7 +931,7 @@ Marca a conta para **exclusão soft (LGPD, RF-AUTH-008)** com confirmação digi
 
 > **Anti-enumeração:** a resposta é **sempre idêntica** (`200 { message }` abaixo) para sucesso,
 > e-mail divergente do logado e conta inexistente. No no-op (e-mail divergente/usuário não
-> encontrado), a rota aguarda 250 ms (`equalizeNoopTiming`) antes de responder. Cookies/comparação:
+> encontrado), a rota aguarda 240–400 ms (`equalizeNoopTiming`) antes de responder. Cookies/comparação:
 > o e-mail digitado é comparado **exatamente** ao e-mail armazenado (após trim do Zod) — variações
 > de caixa **não** confirmam a exclusão.
 
@@ -967,7 +1002,7 @@ Restaura uma conta **não autenticada** dentro da janela LGPD de 30 dias (RF-AUT
 > **Anti-enumeração:** a resposta é **sempre idêntica** (`200 { message }` abaixo) para conta
 > restaurada, senha incorreta, e-mail inexistente, conta ativa, conta anonimizada (hard delete já
 > rodou — a busca pelo e-mail original não encontra a conta) e restauração concorrente. No no-op,
-> a rota aguarda 250 ms (`equalizeNoopTiming`) antes de responder. O **400 só ocorre após prova de
+> a rota aguarda 240–400 ms (`equalizeNoopTiming`) antes de responder. O **400 só ocorre após prova de
 > posse** (senha correta) — não vaza enumeração.
 
 ```http
@@ -998,7 +1033,7 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`restoreAccountSchema`):
 1. Valida corpo (422 `VALIDATION_ERROR` com `details`; corpo não-JSON → 422 sem detalhes)
 2. Busca `User` por e-mail (lowercase)
 3. **Prova de posse:** `bcrypt.compare(password, passwordHash)` — senha incorreta ou e-mail
-   inexistente/anonimizado → no-op 200 idêntico (com piso de 250 ms)
+   inexistente/anonimizado → no-op 200 idêntico (com piso de 240–400 ms)
 4. **Conta não está em soft-delete** (`isActive === true || deletedAt === null`) → no-op 200 idêntico
 5. **Janela expirada** (`deletedAt` há mais de 30 dias, `LGPD_WINDOW_DAYS` em `src/lib/lgpd.ts`)
    com posse provada → **400 `AUTH_RESTORE_WINDOW_EXPIRED`** (os dados ainda estão no banco até o
@@ -1036,6 +1071,7 @@ Header `Cache-Control: no-store` na resposta 200.
 |--------|--------|-----------|
 | 400 | `AUTH_RESTORE_WINDOW_EXPIRED` | Posse provada, mas a janela de 30 dias expirou (restauração rejeitada) |
 | 422 | `VALIDATION_ERROR` | Corpo não-JSON, e-mail/senha vazios ou campo extra (Zod, com `details`) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de tentativas de restauração atingido (3/h por e-mail, via `isPasswordResetLimited`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
 
 ---
@@ -1154,6 +1190,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_REFRESH_TOKEN_REVOKED` | 401 | Refresh token revogado (reuso revoga família) | Refazer login |
 | `AUTH_EMAIL_ALREADY_EXISTS` | 409 | E-mail já cadastrado | Oferecer login |
 | `AUTH_ACCOUNT_LOCKED` | 403 | Conta bloqueada (5 falhas consecutivas; `retryAfter: 900`) | Aguardar ou contato suporte |
+| `CSRF_TOKEN_INVALID` | 403 | Token CSRF ausente/divergente (double-submit em register/login) | Recarregar a página (novo cookie CSRF) e tentar novamente |
 | `AUTH_RATE_LIMITED` | 429 | Limite de volume por IP atingido (5/15min) | Aguardar `retryAfter` |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Conta suspensa | Contato suporte |
 | `AUTH_SOCIAL_TOKEN_INVALID` | 401 | Token social inválido | Reautenticar com provedor |

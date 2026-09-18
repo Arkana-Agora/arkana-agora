@@ -47,6 +47,9 @@ async function callPost(body: unknown, ip = "127.0.0.1"): Promise<Response> {
       headers: {
         "content-type": "application/json",
         "x-forwarded-for": ip,
+        "x-real-ip": ip,
+        "x-csrf-token": "test-csrf-token",
+        cookie: "csrf-token=test-csrf-token",
       },
       body: JSON.stringify(body),
     }),

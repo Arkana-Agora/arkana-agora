@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { deleteAccountSchema } from "@/lib/validators/auth"
@@ -9,45 +8,16 @@ import {
   softDeleteAccount,
   verifyAccessToken,
 } from "@/services/token-service"
+import {
+  errorResponse,
+  successResponse,
+  getBearerToken,
+  equalizeNoopTiming,
+} from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const SUCCESS_MESSAGE = `Conta marcada para exclusao. Voce tem ${LGPD_WINDOW_DAYS} dias para reverter.`
-
-const NOOP_EQUALIZE_MS = 250
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      details?: { field: string; message: string }[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function successResponse(): Response {
-  const response = NextResponse.json(
-    { message: SUCCESS_MESSAGE },
-    { status: 200 },
-  )
-  response.headers.set("cache-control", "no-store")
-  return response
-}
-
-function getBearerToken(request: Request): string {
-  const header = request.headers.get("authorization") ?? ""
-  const match = /^Bearer\s+(.+)$/i.exec(header)
-  return match?.[1] ?? ""
-}
-
-async function equalizeNoopTiming(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, NOOP_EQUALIZE_MS))
-}
 
 export async function DELETE(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -79,7 +49,7 @@ export async function DELETE(request: Request): Promise<Response> {
           },
         })
       }
-      if (typeof code !== "string" || code.startsWith("AUTH_TOKEN_")) {
+      if (code.startsWith("AUTH_TOKEN_")) {
         return errorResponse(reqId, 401, {
           error: {
             code,
@@ -146,7 +116,7 @@ export async function DELETE(request: Request): Promise<Response> {
         "[auth:account] confirmacao digitada nao confere — 200 identico (anti-enumeracao)",
       )
       await equalizeNoopTiming()
-      return successResponse()
+      return successResponse({ message: SUCCESS_MESSAGE })
     }
 
     await softDeleteAccount(userId)
@@ -170,5 +140,5 @@ export async function DELETE(request: Request): Promise<Response> {
   }
 
   logger.info({ reqId, userId }, "[auth:account] exclusao registrada")
-  return successResponse()
+  return successResponse({ message: SUCCESS_MESSAGE })
 }

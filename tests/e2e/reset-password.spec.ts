@@ -63,6 +63,7 @@ test.describe("Fluxo: forgot password → reset password", () => {
 
   test("CA-AUTH-012: login com nova senha retorna 200", async ({ request }) => {
     const response = await request.post(`${BASE_URL}/api/v1/auth/login`, {
+      ...csrfHeaders(),
       data: { email: TEST_EMAIL, password: NEW_PASSWORD },
     })
 

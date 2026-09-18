@@ -211,7 +211,7 @@ describe("LoginForm", () => {
       })
     })
 
-    it("redirects to /auth/verify-email on AUTH_EMAIL_NOT_VERIFIED", async () => {
+    it("redirects to /verify-email on AUTH_EMAIL_NOT_VERIFIED", async () => {
       mockLogin.mockRejectedValue(new Error("AUTH_EMAIL_NOT_VERIFIED"))
       render(<LoginForm />)
 
@@ -225,7 +225,7 @@ describe("LoginForm", () => {
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith(
-          "/auth/verify-email?email=user%40example.com",
+          "/verify-email?email=user%40example.com",
         )
       })
     })

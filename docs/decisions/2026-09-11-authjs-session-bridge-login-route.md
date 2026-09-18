@@ -42,4 +42,18 @@ A rota `POST /api/v1/auth/login`, no caminho de sucesso, passa a **cunhar o cook
 
 ---
 
+### Atualização (2026-09-18)
+
+Escopo da ponte ampliado (autorizado após revisão de segurança, sem alteração das cláusulas acima):
+
+1. **`POST /api/v1/auth/refresh` (T13)** agora também cunha o cookie de sessão do Auth.js, dentro do caminho de sucesso da rotação — mantém a sessão do dashboard válida após cada rotação de refresh token (payload espelha o `customAuth` com os **novos** tokens emitidos). Emissão antes da resposta, mesmo fluxo do login.
+2. **`POST /api/v1/auth/magic-link/verify`** cunha o cookie de sessão do Auth.js no caminho de sucesso da verificação — unifica o pós-login do magic link com os demais fluxos (ADR-010), sem `CredentialsProvider`.
+3. **`POST /api/v1/auth/logout`** passa a **expirar** também o cookie de sessão do Auth.js (além do refresh cookie custom): `Max-Age=0` no mesmo nome (`authjs.session-token` / `__Secure-authjs.session-token` conforme segurança), encerrando a sessão do dashboard imediatamente.
+4. Cookie de sessão do Auth.js tem `SameSite=Lax` — mitigação H1 da revisão de segurança: sessão de autenticação não é enviada em cross-site requests; combina com o CSRF double-submit já descrito em §7.1 do design.
+5. Emissão nos três caminhos (login, refresh, magic-link/verify) ocorre **antes** da construção da resposta (fail-fast se `AUTH_SECRET` ausente; cookie nunca é cunhado com segredo vazio).
+
+Acoplamento pontual com o callback `jwt` (nota em "Negativas / riscos") segue válido: qualquer evolução do formato do token deve revisar login, refresh e magic-link/verify em conjunto.
+
+---
+
 *Documento parte do SDD (Software Design Document) do arkana-agora.*

@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { magicLinkVerifySchema } from "@/lib/validators/auth"
 import { signAccessToken, createRefreshSession } from "@/services/token-service"
-import { errorResponse, buildAuthCookie, getIp } from "../../_helpers"
+import {
+  errorResponse,
+  buildAuthCookie,
+  getIp,
+  mintAuthJsSessionCookie,
+} from "../../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -129,6 +134,13 @@ export async function POST(request: Request): Promise<Response> {
       "[auth:magic-link:verify] magic link redimido com sucesso",
     )
 
+    // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize magic link login
+    const authSessionCookie = await mintAuthJsSessionCookie(request, {
+      userId: user.id,
+      accessToken,
+      refreshToken: session.rawToken,
+    })
+
     const response = NextResponse.json(
       {
         accessToken,
@@ -144,7 +156,11 @@ export async function POST(request: Request): Promise<Response> {
       },
       { status: 200 },
     )
-    response.headers.set("set-cookie", buildAuthCookie(session.rawToken))
+    response.headers.set(
+      "set-cookie",
+      buildAuthCookie(session.rawToken, request),
+    )
+    response.headers.append("set-cookie", authSessionCookie)
 
     return response
   } catch (error) {

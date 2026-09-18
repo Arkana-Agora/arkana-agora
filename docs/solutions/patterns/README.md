@@ -27,15 +27,15 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 
 3. **`docs/solutions/patterns/security/auth-uniform-response-timing-equalization.md`**
    - Uniform-200 is not enough for anti-enumeration — response timing is a second channel
-   - Timing floor (`NOOP_EQUALIZE_MS = 250`) on the no-op branch via `equalizeNoopTiming()`
-   - Used in magic-link, forgot-password, verify-email/resend; test asserts `>= 240ms`
+   - Timing floor (jittered 240–400ms via `equalizeNoopTiming()`) applied unconditionally on both success and no-op branches (centralized in `src/app/api/v1/auth/_helpers.ts` since the 2026-09-18 auth remediation)
+   - Used in magic-link, forgot-password, verify-email/resend, account, restore-account, and login's user-not-found branch; test asserts `>= 240ms`
    - Rate limit (RNF-AUTH-004, 1/min) is separate and implemented in T27 — do not conflate
    - **Implemented**: T9, T11, T30, T15 (all four auth endpoints)
 
 4. **`docs/solutions/patterns/security/atomic-account-lifecycle-invalidation.md`** (2026-09-05, T15)
    - Credential invalidation + account state change must be ONE `prisma.$transaction` (session revoke + `isActive`/`deletedAt` + single `tokenVersion` bump), Redis mirror best-effort after commit
    - Implemented: `softDeleteAccount`/`revokeAllSessions` in `src/services/token-service.ts`
-   - Anti-enumeration no-op must equalize body + `cache-control: no-store` header + 250ms floor (headers are a 3rd channel)
+   - Anti-enumeration no-op must equalize body + `cache-control: no-store` header + jittered 240–400ms floor (headers are a 3rd channel)
    - Route calls ONE service function; never chain `user.update` + `bumpTokenVersion` + `revokeAllSessions` in a route
 
 ### Backend Patterns

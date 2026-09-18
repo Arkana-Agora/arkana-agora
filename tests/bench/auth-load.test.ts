@@ -47,7 +47,7 @@ describe("T32 — NFR RNF-AUTH-001: P95 < 500ms", () => {
     revokeRefreshSession: vi.fn(),
     revokeAllSessions: vi.fn(),
   }))
-  const bcryptMock = vi.hoisted(() => ({ compare: vi.fn() }))
+  const bcryptMock = vi.hoisted(() => ({ compare: vi.fn(), hash: vi.fn() }))
   const rateLimitMock = vi.hoisted(() => ({
     isAccountLocked: vi.fn(),
     isIpLimited: vi.fn(),
@@ -67,7 +67,7 @@ describe("T32 — NFR RNF-AUTH-001: P95 < 500ms", () => {
   vi.mock("@/services/token-service", () => tokenServiceMock)
   vi.mock("bcryptjs", () => ({
     __esModule: true,
-    default: { compare: bcryptMock.compare },
+    default: { compare: bcryptMock.compare, hash: bcryptMock.hash },
   }))
   vi.mock("@/lib/rate-limit", () => rateLimitMock)
   vi.mock("@/lib/email/email", () => ({
@@ -164,6 +164,7 @@ describe("T32 — NFR RNF-AUTH-001: P95 < 500ms", () => {
 
     // bcrypt
     bcryptMock.compare.mockResolvedValue(true)
+    bcryptMock.hash.mockResolvedValue("$2a$12$hash")
   })
 
   afterEach(() => {
@@ -186,6 +187,9 @@ describe("T32 — NFR RNF-AUTH-001: P95 < 500ms", () => {
           headers: {
             "content-type": "application/json",
             "x-forwarded-for": "127.0.0.1",
+            "x-real-ip": "127.0.0.1",
+            "x-csrf-token": "bench-csrf-token",
+            cookie: "csrf-token=bench-csrf-token",
           },
           body,
         }),
