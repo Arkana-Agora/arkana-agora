@@ -83,7 +83,7 @@ expect(elapsedMs).toBeGreaterThanOrEqual(240); // floor 250ms, tolerance for CI 
 
 2. **Belt and suspenders**: The timing floor is redundant with the uniform-200 body by design. Removing either one re-opens an enumeration channel. Both must be present.
 
-3. **Rate limiting is separate**: The 1/min-per-email limit (RNF-AUTH-004) is a distinct mitigation deferred to T27 (Redis rate limiting). Do not conflate it with this pattern or block on it.
+3. **Rate limiting is separate**: The 1/min-per-email limit (RNF-AUTH-004) is a distinct mitigation implemented in T27 (`src/lib/rate-limit.ts`). Do not conflate it with this pattern.
 
 4. **Success path untouched**: Only the no-op branch sleeps. Adding the delay to the success path degrades UX without security benefit.
 
@@ -95,7 +95,7 @@ expect(elapsedMs).toBeGreaterThanOrEqual(240); // floor 250ms, tolerance for CI 
 
 ## Sources
 
-- `.specs/001-auth/design.md` (lines 227, 242 — "piso de 250ms no no-op", rate limit deferred to T27)
+- `.specs/001-auth/design.md` (lines 227, 242 — "piso de 250ms no no-op"; rate limit implemented in T27)
 - `docs/04-api/authentication.md` (lines 300–301, 551 — "delay mínimo de 250ms (equalizeNoopTiming) — piso de duração"; T15 section — header equality on 200s)
 - `docs/plans/20260901165326-modulo1-auth-plan.md` (T9, T11, T30, T15 — implementation history)
 - `src/app/api/v1/auth/magic-link/route.ts` (lines 18–22 — first implementation)

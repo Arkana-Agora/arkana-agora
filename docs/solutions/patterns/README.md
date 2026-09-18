@@ -29,7 +29,7 @@ This refresh ensures the pattern registry reflects all documented solutions in `
    - Uniform-200 is not enough for anti-enumeration — response timing is a second channel
    - Timing floor (`NOOP_EQUALIZE_MS = 250`) on the no-op branch via `equalizeNoopTiming()`
    - Used in magic-link, forgot-password, verify-email/resend; test asserts `>= 240ms`
-   - Rate limit (RNF-AUTH-004, 1/min) is separate and deferred to T27 — do not conflate
+   - Rate limit (RNF-AUTH-004, 1/min) is separate and implemented in T27 — do not conflate
    - **Implemented**: T9, T11, T30, T15 (all four auth endpoints)
 
 4. **`docs/solutions/patterns/security/atomic-account-lifecycle-invalidation.md`** (2026-09-05, T15)

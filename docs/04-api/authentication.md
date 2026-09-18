@@ -635,8 +635,8 @@ Redefine a senha usando token de recuperação.
 > password, passwordConfirmation }`, `.strict()` — rejeita campos extras), hash bcrypt **custo
 > 12**, invalida **todas** as sessões do usuário via `revokeAllSessions(userId)` de
 > `src/services/token-service.ts` (bump de `tokenVersion` + espelho Redis) e loga evento de
-> segurança com código `AUTH_PASSWORD_RESET` (IP/userAgent). **Sem rate limit** nesta rota
-> (rate limiting, incl. Redis-based, é tarefa posterior T27).
+> segurança com código `AUTH_PASSWORD_RESET` (IP/userAgent). **Rate limit** nesta rota: 3/h
+> por email (via `src/lib/rate-limit.ts`, T27 implementado).
 
 ### Requisição
 
@@ -781,8 +781,8 @@ Reenvia o e-mail de verificação (RF-AUTH-005).
 > LGPD) ou já verificada (`emailVerified` setado — não se reenvia para e-mail verificado). Caso
 > contrário: `deleteMany` dos tokens `EMAIL` anteriores do mesmo `identifier`+tipo e criação de
 > novo token 24h (`randomBytes(32).hex`), envio via `sendVerificationEmail` (falha de envio é
-> logada, **não** fatal — token permanece persistido, precedente do register T6). **Sem rate
-> limit nesta task** — limite de 1/min por e-mail (RNF-AUTH-004) será implementado em T27.
+> logada, **não** fatal — token permanece persistido, precedente do register T6). **Rate limit**
+> nesta rota: 1/min por e-mail (via `src/lib/rate-limit.ts`, T27 implementado).
 
 ### Requisição
 
