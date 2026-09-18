@@ -4,33 +4,13 @@ import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { resetPasswordSchema } from "@/lib/validators/auth"
 import { revokeAllSessions } from "@/services/token-service"
+import { errorResponse, getIp } from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const BCRYPT_COST = 12
 
 const SUCCESS_MESSAGE = "Senha redefinida com sucesso"
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  )
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()

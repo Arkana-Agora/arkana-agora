@@ -3,41 +3,14 @@ import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { magicLinkVerifySchema } from "@/lib/validators/auth"
 import { signAccessToken, createRefreshSession } from "@/services/token-service"
+import {
+  errorResponse,
+  buildAuthCookie,
+  getIp,
+  mintAuthJsSessionCookie,
+} from "../../_helpers"
 
 export const dynamic = "force-dynamic"
-
-const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 dias
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function buildAuthCookie(rawToken: string): string {
-  return [
-    `refreshToken=${rawToken}`,
-    "Path=/api/v1/auth",
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${REFRESH_COOKIE_MAX_AGE}`,
-  ].join("; ")
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  )
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -161,6 +134,13 @@ export async function POST(request: Request): Promise<Response> {
       "[auth:magic-link:verify] magic link redimido com sucesso",
     )
 
+    // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize magic link login
+    const authSessionCookie = await mintAuthJsSessionCookie(request, {
+      userId: user.id,
+      accessToken,
+      refreshToken: session.rawToken,
+    })
+
     const response = NextResponse.json(
       {
         accessToken,
@@ -176,7 +156,11 @@ export async function POST(request: Request): Promise<Response> {
       },
       { status: 200 },
     )
-    response.headers.set("set-cookie", buildAuthCookie(session.rawToken))
+    response.headers.set(
+      "set-cookie",
+      buildAuthCookie(session.rawToken, request),
+    )
+    response.headers.append("set-cookie", authSessionCookie)
 
     return response
   } catch (error) {

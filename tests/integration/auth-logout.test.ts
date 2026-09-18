@@ -70,6 +70,7 @@ describe("POST /api/v1/auth/logout — integration (T29)", () => {
     expect(setCookie).toContain("refreshToken=")
     expect(setCookie).toContain("Max-Age=0")
     expect(setCookie).toContain("HttpOnly")
+    expect(setCookie).toContain("authjs.session-token=")
   })
 
   it("retorna 401 quando bearer está ausente", async () => {

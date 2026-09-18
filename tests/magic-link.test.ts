@@ -122,7 +122,7 @@ describe("POST /api/v1/auth/magic-link (T9)", () => {
     const callArgs = sendMagicLinkEmailMock.mock.calls[0] as
       [string, { url: string }] | undefined
     expect(callArgs?.[0]).toBe("maria@email.com")
-    expect(callArgs?.[1]?.url).toContain("/auth/login")
+    expect(callArgs?.[1]?.url).toContain("/callback/magic-link?token=")
     expect(callArgs?.[1]?.url).not.toContain("/api/v1/auth")
   })
 
@@ -244,6 +244,7 @@ describe("POST /api/v1/auth/magic-link (T9)", () => {
     expect(res.status).toBe(429)
     expect(json.error.code).toBe("AUTH_MAGIC_LINK_RATE_LIMIT")
     expect(json.error.retryAfter).toBe(1200)
+    expect(res.headers.get("Retry-After")).toBe("1200")
     expect(prismaMock.verificationToken.create).not.toHaveBeenCalled()
     expect(sendMagicLinkEmailMock).not.toHaveBeenCalled()
   })
@@ -262,6 +263,7 @@ describe("POST /api/v1/auth/magic-link (T9)", () => {
     expect(res.status).toBe(429)
     expect(json.error.code).toBe("AUTH_MAGIC_LINK_RATE_LIMIT")
     expect(json.error.retryAfter).toBe(900)
+    expect(res.headers.get("Retry-After")).toBe("900")
     expect(rateLimitMock.recordMagicLinkIpAttempt).not.toHaveBeenCalled()
     expect(prismaMock.verificationToken.create).not.toHaveBeenCalled()
     expect(sendMagicLinkEmailMock).not.toHaveBeenCalled()

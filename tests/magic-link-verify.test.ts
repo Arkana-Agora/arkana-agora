@@ -17,6 +17,9 @@ const tokenServiceMock = vi.hoisted(() => ({
   createRefreshSession: vi.fn(),
 }))
 vi.mock("@/services/token-service", () => tokenServiceMock)
+vi.mock("next-auth/jwt", () => ({
+  encode: vi.fn().mockResolvedValue("mocked-session-token"),
+}))
 
 const activeUser = {
   id: "usr_verify1",
@@ -61,6 +64,7 @@ async function callPost(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  process.env.AUTH_SECRET = "test-secret"
   prismaMock.verificationToken.findUnique.mockResolvedValue(validTokenRow())
   prismaMock.verificationToken.deleteMany.mockResolvedValue({ count: 1 })
   prismaMock.user.findFirst.mockResolvedValue(activeUser)
@@ -75,6 +79,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  delete process.env.AUTH_SECRET
   vi.resetModules()
 })
 
@@ -106,6 +111,10 @@ describe("POST /api/v1/auth/magic-link/verify (T10)", () => {
     expect(setCookie).toContain("Path=/api/v1/auth")
     expect(setCookie).toContain("SameSite=Strict")
     expect(setCookie).toContain("Max-Age=2592000")
+
+    // ADR-011: magic link verify tambem cunha o cookie de sessao Auth.js p/ guard do /dashboard
+    expect(setCookie).toContain("authjs.session-token=mocked-session-token")
+    expect(setCookie).toContain("SameSite=Lax")
   })
 
   it("valida token e retorna 422 VALIDATION_ERROR para corpo sem token", async () => {
@@ -235,7 +244,11 @@ describe("POST /api/v1/auth/magic-link/verify (T10)", () => {
   it("passa ip e userAgent para createRefreshSession", async () => {
     await callPost(
       { token: validToken },
-      { "x-forwarded-for": "203.0.113.7", "user-agent": "TestAgent/1.0" },
+      {
+        "x-forwarded-for": "203.0.113.7",
+        "x-real-ip": "203.0.113.7",
+        "user-agent": "TestAgent/1.0",
+      },
     )
 
     expect(tokenServiceMock.createRefreshSession).toHaveBeenCalledWith(

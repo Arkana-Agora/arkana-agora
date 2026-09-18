@@ -12,6 +12,7 @@ import { registerSchema } from "@/lib/validators/auth"
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 import { randomBytes } from "node:crypto"
+import { errorResponse, getIp, getBaseUrl } from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -24,35 +25,6 @@ function isUniqueViolation(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "P2002"
-  )
-}
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      details?: unknown[]
-      retryAfter?: number
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getBaseUrl(): string {
-  return (
-    process.env.AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  )
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
   )
 }
 
@@ -95,13 +67,15 @@ export async function POST(request: Request): Promise<Response> {
   const ipLimit = isRegisterIpLimited(ip)
   if (!ipLimit.allowed) {
     logger.warn({ reqId, ip }, "[auth:register] limite de tentativas por IP")
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_RATE_LIMITED",
         message: "Muitas tentativas de cadastro tente novamente em instantes",
         retryAfter: ipLimit.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return res
   }
 
   const emailLimit = isRegisterLimited(normalizedEmail)
@@ -110,13 +84,15 @@ export async function POST(request: Request): Promise<Response> {
       { reqId, email: normalizedEmail },
       "[auth:register] limite de cadastro por email",
     )
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_RATE_LIMITED",
         message: "Muitas tentativas de cadastro tente novamente em instantes",
         retryAfter: emailLimit.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(emailLimit.retryAfter))
+    return res
   }
 
   if (!validateCsrfToken(request)) {
@@ -172,7 +148,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const baseUrl = getBaseUrl()
-    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
+    const verificationUrl = `${baseUrl}/verify-email?token=${token}`
     try {
       await sendVerificationEmail(normalizedEmail, { verificationUrl })
     } catch (error) {

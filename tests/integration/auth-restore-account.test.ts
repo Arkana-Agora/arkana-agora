@@ -15,16 +15,17 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 
 const tokenServiceMock = vi.hoisted(() => ({
   mirrorTokenVersion: vi.fn<typeof mirrorTokenVersion>(),
-  mirrorTokenVersionWithRetry: vi.fn(),
 }))
 
 vi.mock("@/services/token-service", () => tokenServiceMock)
 
 const rateLimitMock = vi.hoisted(() => ({
   isPasswordResetLimited: vi.fn(),
+  recordPasswordResetRequest: vi.fn(),
 }))
 vi.mock("@/lib/rate-limit", () => ({
   isPasswordResetLimited: rateLimitMock.isPasswordResetLimited,
+  recordPasswordResetRequest: rateLimitMock.recordPasswordResetRequest,
 }))
 
 const TEST_EMAIL = "maria@email.com"
@@ -126,7 +127,8 @@ describe("POST /api/v1/auth/restore-account — integration (T29)", () => {
     const json = await res.json()
 
     expect(res.status).toBe(429)
-    expect(json.error.code).toBe("RATE_LIMIT_EXCEEDED")
+    expect(json.error.code).toBe("AUTH_RATE_LIMITED")
+    expect(json.error.retryAfter).toBe(60)
   })
 
   it("retorna 422 quando body é invalido", async () => {

@@ -80,6 +80,7 @@ export async function login(
   password: string,
 ) {
   const response = await request.post(`${BASE_URL}/api/v1/auth/login`, {
+    ...csrfHeaders(),
     data: { email, password },
   })
   return response

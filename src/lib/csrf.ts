@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto"
+
 const IS_PRODUCTION = process.env.NODE_ENV === "production"
 const CSRF_COOKIE_NAME = IS_PRODUCTION ? "__Host-csrf-token" : "csrf-token"
 
@@ -7,31 +9,18 @@ export function generateCsrfToken(): string {
   return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("")
 }
 
-export function setCsrfCookie(token: string): string {
-  const parts = [
-    `${CSRF_COOKIE_NAME}=${token}`,
-    "SameSite=Strict",
-    "Path=/",
-    `Max-Age=${60 * 60 * 24}`,
-  ]
-  if (IS_PRODUCTION) parts.splice(1, 0, "Secure")
-  return parts.join("; ")
-}
-
 export function getCsrfTokenFromCookie(request: Request): string | undefined {
   const cookieHeader = request.headers.get("cookie")
   if (!cookieHeader) return undefined
 
-  const cookies = cookieHeader.split("; ").reduce(
-    (acc, cookie) => {
-      const [key, value] = cookie.split("=")
-      if (key) acc[key.trim()] = value ?? ""
-      return acc
-    },
-    {} as Record<string, string>,
-  )
-
-  return cookies[CSRF_COOKIE_NAME]
+  for (const cookie of cookieHeader.split("; ")) {
+    const eqIndex = cookie.indexOf("=")
+    if (eqIndex === -1) continue
+    const key = cookie.slice(0, eqIndex).trim()
+    const value = cookie.slice(eqIndex + 1)
+    if (key === CSRF_COOKIE_NAME) return value
+  }
+  return undefined
 }
 
 export function validateCsrfToken(request: Request): boolean {
@@ -41,5 +30,18 @@ export function validateCsrfToken(request: Request): boolean {
   const headerToken = request.headers.get("x-csrf-token")
   if (!headerToken) return false
 
-  return cookieToken === headerToken
+  if (cookieToken.length !== headerToken.length) return false
+  return timingSafeEqual(
+    Buffer.from(cookieToken, "utf8"),
+    Buffer.from(headerToken, "utf8"),
+  )
+}
+
+export function isAuthTokenError(err: unknown): err is { code: string } {
+  return (
+    err instanceof Error &&
+    err.name === "AuthTokenError" &&
+    "code" in err &&
+    typeof (err as { code: unknown }).code === "string"
+  )
 }

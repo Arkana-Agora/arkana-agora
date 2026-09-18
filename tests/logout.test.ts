@@ -81,6 +81,9 @@ describe("POST /api/v1/auth/logout (T14)", () => {
     expect(setCookie).toContain("refreshToken=")
     expect(setCookie).toContain("Max-Age=0")
     expect(setCookie).toContain("Path=/api/v1/auth")
+    // ADR-011: logout tambem expira o cookie de sessao Auth.js usado pelo guard do /dashboard
+    expect(setCookie).toContain("authjs.session-token=")
+    expect(setCookie).toContain("Max-Age=0")
   })
 
   it("passa 200 e limpa o cookie quando nao ha refresh cookie (idempotente)", async () => {

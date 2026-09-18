@@ -1,44 +1,28 @@
-import { NextResponse } from "next/server"
 import { logger, newReqId } from "@/lib/logger"
 import { restoreAccountSchema } from "@/lib/validators/auth"
-import { isPasswordResetLimited } from "@/lib/rate-limit"
+import {
+  isPasswordResetLimited,
+  recordPasswordResetRequest,
+} from "@/lib/rate-limit"
 import {
   restoreAccount,
-  RestoreAccountResult,
+  type RestoreAccountResult,
 } from "@/services/account-service"
+import {
+  errorResponse,
+  getIp,
+  equalizeNoopTiming,
+  successResponse,
+} from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      details?: { field: string; message: string }[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function successResponse(): Response {
-  const response = NextResponse.json(
-    {
-      message:
-        "Se a conta estava na janela de restauracao, o acesso foi restabelecido",
-    },
-    { status: 200 },
-  )
-  response.headers.set("cache-control", "no-store")
-  return response
-}
+const RESTORE_SUCCESS_MESSAGE =
+  "Se a conta estava na janela de restauracao, o acesso foi restabelecido"
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
+  const ip = getIp(request)
   const userAgent = request.headers.get("user-agent") ?? "unknown"
 
   let payload: unknown
@@ -79,13 +63,18 @@ export async function POST(request: Request): Promise<Response> {
       { reqId, email: normalizedEmail, ip },
       "[auth:restore-account] limite de tentativas excedido",
     )
-    return errorResponse(reqId, 429, {
+    const res = errorResponse(reqId, 429, {
       error: {
-        code: "RATE_LIMIT_EXCEEDED",
-        message: `Muitas tentativas. Tente novamente em ${rateCheck.retryAfter} segundos.`,
+        code: "AUTH_RATE_LIMITED",
+        message:
+          "Muitas tentativas de restauracao, tente novamente em instantes",
+        retryAfter: rateCheck.retryAfter,
       },
     })
+    res.headers.set("Retry-After", String(rateCheck.retryAfter))
+    return res
   }
+  recordPasswordResetRequest(normalizedEmail)
 
   // Use service layer for business logic
   let result: RestoreAccountResult
@@ -97,16 +86,18 @@ export async function POST(request: Request): Promise<Response> {
       { err: error, reqId, email },
       "[auth:restore-account] erro interno - retorna 200 sem expor",
     )
-    return successResponse()
+    return successResponse({ message: RESTORE_SUCCESS_MESSAGE })
   }
 
   // Anti-enumeration returns 200 for all no-op cases
   if (!result.success && result.error?.code === "AUTH_RESTORE_WINDOW_EXPIRED") {
+    // Piso de timing p/ nao diferenciar conta deletada ha tempo da inexistente
+    await equalizeNoopTiming()
     return errorResponse(reqId, 400, {
       error: result.error,
     })
   }
 
   // All other cases (success, anti-enumeration, no-op) return 200 with timing floor
-  return successResponse()
+  return successResponse({ message: RESTORE_SUCCESS_MESSAGE })
 }

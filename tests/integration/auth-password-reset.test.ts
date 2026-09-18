@@ -43,7 +43,7 @@ beforeEach(() => {
   })
   rateLimitMock.recordPasswordResetRequest.mockImplementation(() => undefined)
   prismaMock.user.findFirst.mockResolvedValue(
-    activeUserRow({ id: "usr_reset1", name: "Maria Silva" }),
+    activeUserRow({ id: "usr_reset1" }),
   )
   prismaMock.verificationToken.create.mockResolvedValue({ id: "vt_1" })
   sendPasswordResetEmailMock.mockResolvedValue({ data: { id: "em_1" } })

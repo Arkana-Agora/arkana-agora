@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
+import { validateCsrfToken } from "@/lib/csrf"
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { loginSchema } from "@/lib/validators/auth"
@@ -11,48 +12,14 @@ import {
   resetLoginFailures,
   recordIpAttempt,
 } from "@/lib/rate-limit"
+import {
+  errorResponse,
+  buildAuthCookie,
+  getIp,
+  equalizeNoopTiming,
+  mintAuthJsSessionCookie,
+} from "../_helpers"
 export const dynamic = "force-dynamic"
-
-const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 dias
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function buildAuthCookie(rawToken: string): string {
-  return [
-    `refreshToken=${rawToken}`,
-    "Path=/api/v1/auth",
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${REFRESH_COOKIE_MAX_AGE}`,
-  ].join("; ")
-}
-
-function getIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) {
-    const parts = forwarded.split(",")
-    for (const part of parts) {
-      const trimmed = part.trim()
-      if (trimmed && trimmed !== "unknown") {
-        return trimmed
-      }
-    }
-  }
-  return "unknown"
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -88,6 +55,18 @@ export async function POST(request: Request): Promise<Response> {
 
   const { email, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
+
+  // CSRF (double-submit): validado antes de qualquer efeito colateral
+  // (mesmo padrao do register; login CSRF = sessao do vinculo a conta do atacante)
+  if (!validateCsrfToken(request)) {
+    logger.warn({ reqId }, "[auth:login] CSRF token invalido")
+    return errorResponse(reqId, 403, {
+      error: {
+        code: "CSRF_TOKEN_INVALID",
+        message: "Token CSRF invalido",
+      },
+    })
+  }
 
   const lockout = isAccountLocked(normalizedEmail)
   if (!lockout.allowed) {
@@ -139,6 +118,8 @@ export async function POST(request: Request): Promise<Response> {
     recordLoginFailure(normalizedEmail)
     recordIpAttempt(ip)
     logger.info({ reqId }, "[auth:login] credenciais invalidas")
+    // Anti-enumeracao: piso de timing p/ nao diferenciar email inexistente de senha errada
+    await equalizeNoopTiming()
     return errorResponse(reqId, 401, {
       error: {
         code: "AUTH_INVALID_CREDENTIALS",
@@ -189,6 +170,7 @@ export async function POST(request: Request): Promise<Response> {
     recordLoginFailure(normalizedEmail)
     recordIpAttempt(ip)
     logger.info({ reqId }, "[auth:login] credenciais invalidas")
+    await equalizeNoopTiming()
     return errorResponse(reqId, 401, {
       error: {
         code: "AUTH_INVALID_CREDENTIALS",
@@ -209,6 +191,13 @@ export async function POST(request: Request): Promise<Response> {
 
   logger.info({ reqId, userId: user.id }, "[auth:login] login bem-sucedido")
 
+  // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize credentials login
+  const authSessionCookie = await mintAuthJsSessionCookie(request, {
+    userId: user.id,
+    accessToken,
+    refreshToken: session.rawToken,
+  })
+
   const response = NextResponse.json(
     {
       accessToken,
@@ -224,46 +213,9 @@ export async function POST(request: Request): Promise<Response> {
     },
     { status: 200 },
   )
-  response.headers.set("set-cookie", buildAuthCookie(session.rawToken))
-
-  // ADR-011: mint Auth.js session cookie so /dashboard guards (proxy.ts + (app)/layout.tsx) recognize credentials login
-  const authSecret = process.env.AUTH_SECRET
-  if (!authSecret) {
-    logger.error(
-      { reqId, userId: user.id },
-      "[auth:login] AUTH_SECRET ausente — impossivel cunhar sessao Auth.js",
-    )
-    throw new Error(
-      "AUTH_SECRET environment variable is required for session token issuance",
-    )
-  }
-  const { encode } = await import("next-auth/jwt")
-  const isSecure = new URL(request.url).protocol === "https:"
-  const sessionJwtMaxAge = REFRESH_COOKIE_MAX_AGE
-  const sessionCookieName = isSecure
-    ? "__Secure-authjs.session-token"
-    : "authjs.session-token"
-  const sessionToken = await encode({
-    token: {
-      sub: user.id,
-      userId: user.id,
-      customAuth: {
-        accessToken,
-        refreshToken: session.rawToken,
-        emittedAt: Date.now(),
-      },
-    },
-    secret: authSecret,
-    salt: sessionCookieName,
-    maxAge: sessionJwtMaxAge,
-  })
-  response.headers.append(
-    "set-cookie",
-    `${sessionCookieName}=${sessionToken}; Path=/; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}; Max-Age=${sessionJwtMaxAge}`,
-  )
-
-  // TODO: Production check: validate SameSite=Strict cookie attribute in production
-  // Enable during development: `if (process.env.NODE_ENV === "production") { ... }`
+  response.headers.set("cache-control", "no-store")
+  response.headers.set("set-cookie", buildAuthCookie(session.rawToken, request))
+  response.headers.append("set-cookie", authSessionCookie)
 
   return response
 }

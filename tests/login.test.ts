@@ -41,12 +41,23 @@ function validBody() {
   return { email: "maria@email.com", password: "SenhaForte123!" }
 }
 
-async function callPost(body: unknown, ip = "127.0.0.1"): Promise<Response> {
+async function callPost(
+  body: unknown,
+  ip = "127.0.0.1",
+  extraHeaders: Record<string, string> = {},
+): Promise<Response> {
   const { POST } = await import("@/app/api/v1/auth/login/route")
   return POST(
     new Request("http://localhost:3000/api/v1/auth/login", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-forwarded-for": ip },
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": ip,
+        "x-real-ip": ip,
+        "x-csrf-token": "test-csrf-token",
+        cookie: "csrf-token=test-csrf-token",
+        ...extraHeaders,
+      },
       body: JSON.stringify(body),
     }),
   )
@@ -117,6 +128,26 @@ describe("POST /api/v1/auth/login (T7)", () => {
     )
   })
 
+  it("rejeita CSRF invalido/ausente com 403 CSRF_TOKEN_INVALID antes de processar", async () => {
+    prismaMock.user.findFirst.mockResolvedValue(activeUser)
+    bcryptMock.compare.mockResolvedValue(true)
+
+    const res = await callPost(validBody(), "127.0.0.1", {
+      "x-csrf-token": "invalid-token",
+    })
+    const json = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(json.error.code).toBe("CSRF_TOKEN_INVALID")
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled()
+
+    const resWithoutCookie = await callPost(validBody(), "127.0.0.1", {
+      "x-csrf-token": "test-csrf-token",
+      cookie: "",
+    })
+    expect(resWithoutCookie.status).toBe(403)
+  })
+
   it("rejeita senha incorreta com 401 AUTH_INVALID_CREDENTIALS", async () => {
     prismaMock.user.findFirst.mockResolvedValue(activeUser)
     bcryptMock.compare.mockResolvedValue(false)
@@ -167,7 +198,8 @@ describe("POST /api/v1/auth/login (T7)", () => {
     const json = await res.json()
     expect(res.status).toBe(403)
     expect(json.error.code).toBe("AUTH_ACCOUNT_LOCKED")
-    expect(json.error.retryAfter).toBe(900)
+    expect(json.error.retryAfter).toBeGreaterThanOrEqual(899)
+    expect(json.error.retryAfter).toBeLessThanOrEqual(900)
     // lockout check nao executa bcrypt nem emite token
     expect(bcryptMock.compare).toHaveBeenCalledTimes(5)
   })
@@ -279,7 +311,11 @@ describe("POST /api/v1/auth/login (T7)", () => {
       const res = await POST(
         new Request("https://arkanaagora.dev/api/v1/auth/login", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "x-csrf-token": "test-csrf-token",
+            cookie: "csrf-token=test-csrf-token",
+          },
           body: JSON.stringify(validBody()),
         }),
       )

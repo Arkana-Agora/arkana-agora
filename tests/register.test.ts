@@ -162,7 +162,7 @@ describe("POST /api/v1/auth/register (T6)", () => {
     const to = callArgs?.[0]
     const { verificationUrl } = callArgs?.[1] ?? {}
     expect(to).toBe("maria@email.com")
-    expect(verificationUrl).toContain("/auth/verify-email")
+    expect(verificationUrl).toContain("/verify-email")
     expect(verificationUrl).not.toContain("/api/v1/auth/verify-email")
   })
 

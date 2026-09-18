@@ -432,9 +432,9 @@ interface AuthState {
 | `/register` | RegisterForm | Nao | Pagina de cadastro |
 | `/magic-link` | MagicLinkForm | Nao | Solicitacao de magic link |
 | `/forgot-password` | ForgotPasswordForm | Nao | Recuperacao de senha (envio de link) |
-| `/auth/verify-email` | VerifyEmailPage | Nao | Tela "verifique seu email" |
-| `/auth/reset-password` | ResetPasswordForm | Nao | Redefinicao de senha |
-| `/auth/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link (redime token via `POST /api/v1/auth/magic-link/verify`) |
+| `/verify-email` | VerifyEmailPage | Nao | Tela "verifique seu email" |
+| `/reset-password` | ResetPasswordForm | Nao | Redefinicao de senha |
+| `/callback/magic-link` | MagicLinkCallback | Nao | Callback magic link (redime token via `POST /api/v1/auth/magic-link/verify`) |
 | `/dashboard` | DashboardPage | Sim | Redirecionamento pos-login |
 
 > O callback OAuth (Google/Facebook) acontece no caminho fixo do NextAuth (`/api/auth/callback/google`) — não há página frontend própria em `/auth/callback/google`.
@@ -444,8 +444,9 @@ interface AuthState {
 ## 7. Seguranca
 
 ### 7.1 Protecao CSRF
-- CSRF aplica-se **apenas aos endpoints que usam cookies** (`/api/v1/auth/login|refresh|logout|register`, callbacks OAuth/magic-link); endpoints apenas-Bearer não exigem
+- CSRF aplica-se **aos endpoints que usam cookies** (`/api/v1/auth/login|refresh|logout|register`, callbacks OAuth/magic-link); endpoints apenas-Bearer não exigem
 - Double-submit token: cookie `__Host-csrf-token` + header `X-CSRF-Token` (validação: valor do cookie == valor do header)
+- `/api/v1/auth/login` **valida CSRF** (403 `CSRF_TOKEN_INVALID` antes de qualquer efeito colateral) — mesmo padrão do register; login CSRF previne o vínculo da sessão a conta do atacante
 - `/api/auth/*` mantém o CSRF nativo do NextAuth.js
 - Em dev (http, localhost), usar variante sem `__Host-` prefix para não derrubar o cookie
 

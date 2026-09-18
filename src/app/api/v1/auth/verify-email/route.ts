@@ -3,25 +3,11 @@ import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { verifyEmailSchema } from "@/lib/validators/auth"
 import { bumpTokenVersion } from "@/services/token-service"
+import { errorResponse } from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const SUCCESS_MESSAGE = "Email verificado com sucesso"
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()

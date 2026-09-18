@@ -26,6 +26,21 @@ export interface PartialUser {
   emailVerified: false
 }
 
+export interface AuthSuccessMessage {
+  success: true
+  message?: string
+}
+
+export interface AuthFailureMessage<TErrorCode extends string> {
+  success: false
+  code: TErrorCode
+  message: string
+  retryAfter?: number
+}
+
+export type AuthResult<TErrorCode extends string> =
+  AuthSuccessMessage | AuthFailureMessage<TErrorCode>
+
 export type MagicLinkErrorCode =
   | "AUTH_MAGIC_LINK_RATE_LIMIT"
   | "VALIDATION_ERROR"
@@ -33,14 +48,7 @@ export type MagicLinkErrorCode =
   | "UNEXPECTED_RESPONSE"
   | "UNKNOWN_ERROR"
 
-export type MagicLinkResult =
-  | { success: true; message?: string }
-  | {
-      success: false
-      code: MagicLinkErrorCode
-      message?: string
-      retryAfter?: number
-    }
+export type MagicLinkResult = AuthResult<MagicLinkErrorCode>
 
 export type ForgotPasswordErrorCode =
   | "AUTH_FORGOT_RATE_LIMIT"
@@ -49,13 +57,7 @@ export type ForgotPasswordErrorCode =
   | "UNEXPECTED_RESPONSE"
   | "UNKNOWN_ERROR"
 
-export type ForgotPasswordResult =
-  | { success: true; message?: string }
-  | {
-      success: false
-      code: ForgotPasswordErrorCode
-      message?: string
-    }
+export type ForgotPasswordResult = AuthResult<ForgotPasswordErrorCode>
 
 export type ResetPasswordErrorCode =
   | "AUTH_RESET_TOKEN_INVALID"
@@ -65,13 +67,7 @@ export type ResetPasswordErrorCode =
   | "UNEXPECTED_RESPONSE"
   | "UNKNOWN_ERROR"
 
-export type ResetPasswordResult =
-  | { success: true; message?: string }
-  | {
-      success: false
-      code: ResetPasswordErrorCode
-      message?: string
-    }
+export type ResetPasswordResult = AuthResult<ResetPasswordErrorCode>
 
 export type VerifyEmailErrorCode =
   | "AUTH_EMAIL_VERIFY_INVALID"
@@ -81,13 +77,7 @@ export type VerifyEmailErrorCode =
   | "UNEXPECTED_RESPONSE"
   | "UNKNOWN_ERROR"
 
-export type VerifyEmailResult =
-  | { success: true; message?: string }
-  | {
-      success: false
-      code: VerifyEmailErrorCode
-      message?: string
-    }
+export type VerifyEmailResult = AuthResult<VerifyEmailErrorCode>
 
 export type VerifyMagicLinkErrorCode =
   | "AUTH_MAGIC_TOKEN_INVALID"
@@ -98,12 +88,7 @@ export type VerifyMagicLinkErrorCode =
   | "UNKNOWN_ERROR"
 
 export type VerifyMagicLinkResult =
-  | { success: true; user: User }
-  | {
-      success: false
-      code: VerifyMagicLinkErrorCode
-      message?: string
-    }
+  { success: true; user: User } | AuthFailureMessage<VerifyMagicLinkErrorCode>
 
 export type { User }
 
@@ -123,6 +108,19 @@ function toStoredUser(userData: AuthUserPayload): User {
         ? true
         : userData.emailVerified === true,
   }
+}
+
+function getCsrfTokenFromBrowser(): string {
+  const isSecure = window.location.protocol === "https:"
+  const csrfCookieName = isSecure ? "__Host-csrf-token" : "csrf-token"
+  return (
+    document.cookie
+      .split("; ")
+      .find((row) => row.startsWith(`${csrfCookieName}=`))
+      ?.split("=")
+      .slice(1)
+      .join("=") ?? ""
+  )
 }
 
 // Guard de reidratacao: localStorage e input nao confiavel (antigo/corrompido/adulterado).
@@ -238,6 +236,41 @@ function normalizeErrorCode(
   return knownCodes.includes(code) ? code : "UNKNOWN_ERROR"
 }
 
+function hasMessage(data: unknown): data is { message: string } {
+  return (
+    data !== null &&
+    typeof data === "object" &&
+    "message" in data &&
+    typeof (data as Record<string, unknown>).message === "string"
+  )
+}
+
+function asAuthFailure<TErrorCode extends string>(
+  data: unknown,
+  category: KnownErrorCodeCategory,
+  fallbackMessage: string,
+): AuthFailureMessage<TErrorCode> {
+  const errorData = parseErrorResponse(data)
+  if (errorData) {
+    return {
+      success: false,
+      code: normalizeErrorCode(
+        errorData.code,
+        KNOWN_ERROR_CODES[category],
+      ) as TErrorCode,
+      message: errorData.message,
+      ...(errorData.retryAfter !== undefined
+        ? { retryAfter: errorData.retryAfter }
+        : {}),
+    }
+  }
+  return {
+    success: false,
+    code: "UNEXPECTED_RESPONSE" as TErrorCode,
+    message: fallbackMessage,
+  }
+}
+
 // Bearer para endpoints autenticados: sessao Auth.js -> access token validado.
 async function getAccessToken(): Promise<string | null> {
   const session = await getSession()
@@ -280,26 +313,11 @@ async function authFetch<TErrorCode extends string>(
       }
     }
 
-    const errorData = parseErrorResponse(data)
-    if (errorData) {
-      return {
-        success: false,
-        code: normalizeErrorCode(
-          errorData.code,
-          KNOWN_ERROR_CODES[category],
-        ) as TErrorCode,
-        message: errorData.message,
-        ...(errorData.retryAfter !== undefined
-          ? { retryAfter: errorData.retryAfter }
-          : {}),
-      }
-    }
-
-    return {
-      success: false,
-      code: "UNEXPECTED_RESPONSE" as TErrorCode,
-      message: "Resposta inesperada do servidor",
-    }
+    return asAuthFailure<TErrorCode>(
+      data,
+      category,
+      "Resposta inesperada do servidor",
+    )
   } catch (err) {
     if (err instanceof TypeError) {
       return {
@@ -373,9 +391,14 @@ export const useAuthStore = create<AuthState>()(
         login: async (email: string, password: string) => {
           set({ isLoading: true, error: null })
           try {
+            const csrfToken = getCsrfTokenFromBrowser()
+
             const res = await fetch("/api/v1/auth/login", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "x-csrf-token": csrfToken ?? "",
+              },
               body: JSON.stringify({ email, password }),
             })
             let data: unknown
@@ -427,12 +450,7 @@ export const useAuthStore = create<AuthState>()(
         register: async (registerData: RegisterInput) => {
           set({ isLoading: true, error: null })
           try {
-            const isSecure = window.location.protocol === "https:"
-            const csrfCookieName = isSecure ? "__Host-csrf-token" : "csrf-token"
-            const csrfToken = document.cookie
-              .split("; ")
-              .find((row) => row.startsWith(`${csrfCookieName}=`))
-              ?.split("=")[1]
+            const csrfToken = getCsrfTokenFromBrowser()
 
             const res = await fetch("/api/v1/auth/register", {
               method: "POST",
@@ -497,11 +515,7 @@ export const useAuthStore = create<AuthState>()(
               "/api/v1/auth/magic-link",
               { email: trimmed },
               "magicLink",
-              (data): boolean =>
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string",
+              hasMessage,
               "Erro ao enviar magic link",
             )
             if (!result.success) {
@@ -530,11 +544,7 @@ export const useAuthStore = create<AuthState>()(
               "/api/v1/auth/forgot-password",
               { email: trimmed },
               "forgotPassword",
-              (data): boolean =>
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string",
+              hasMessage,
               "Erro ao enviar link de recuperacao",
             )
             if (!result.success) {
@@ -567,11 +577,7 @@ export const useAuthStore = create<AuthState>()(
                 passwordConfirmation: data.passwordConfirmation,
               },
               "resetPassword",
-              (data): boolean =>
-                data !== null &&
-                typeof data === "object" &&
-                "message" in data &&
-                typeof (data as Record<string, unknown>).message === "string",
+              hasMessage,
               "Erro ao redefinir a senha",
             )
             if (!result.success) {
@@ -598,11 +604,7 @@ export const useAuthStore = create<AuthState>()(
             "/api/v1/auth/verify-email",
             { token: trimmed },
             "verifyEmail",
-            (data): boolean =>
-              data !== null &&
-              typeof data === "object" &&
-              "message" in data &&
-              typeof (data as Record<string, unknown>).message === "string",
+            hasMessage,
             "Erro ao verificar email",
           )
         },
@@ -622,11 +624,7 @@ export const useAuthStore = create<AuthState>()(
             "/api/v1/auth/verify-email/resend",
             { email: trimmed },
             "verifyEmail",
-            (data): boolean =>
-              data !== null &&
-              typeof data === "object" &&
-              "message" in data &&
-              typeof (data as Record<string, unknown>).message === "string",
+            hasMessage,
             "Erro ao reenviar email de verificação",
           )
         },
@@ -671,23 +669,11 @@ export const useAuthStore = create<AuthState>()(
               }
             }
 
-            const errorData = parseErrorResponse(data)
-            if (errorData) {
-              return {
-                success: false,
-                code: normalizeErrorCode(
-                  errorData.code,
-                  KNOWN_ERROR_CODES.verifyMagicLink,
-                ) as VerifyMagicLinkErrorCode,
-                message: errorData.message,
-              }
-            }
-
-            return {
-              success: false,
-              code: "UNEXPECTED_RESPONSE",
-              message: "Resposta inesperada do servidor",
-            }
+            return asAuthFailure<VerifyMagicLinkErrorCode>(
+              data,
+              "verifyMagicLink",
+              "Resposta inesperada do servidor",
+            )
           } catch (err) {
             if (err instanceof TypeError) {
               return {
@@ -791,10 +777,15 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          executeRefresh().then((result) => {
-            set({ refreshInFlight: null })
-            resolveOuter!(result)
-          })
+          executeRefresh()
+            .then((result) => {
+              set({ refreshInFlight: null })
+              resolveOuter!(result)
+            })
+            .catch(() => {
+              set({ refreshInFlight: null })
+              resolveOuter!(false)
+            })
 
           set({ refreshInFlight: promise })
           return promise

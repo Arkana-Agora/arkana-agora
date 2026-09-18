@@ -35,8 +35,13 @@ const tokenServiceMock = vi.hoisted(() => ({
 }))
 vi.mock("@/services/token-service", () => tokenServiceMock)
 
+vi.mock("next-auth/jwt", () => ({
+  encode: vi.fn().mockResolvedValue("mocked-session-token"),
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
+  process.env.AUTH_SECRET = "test-secret"
   rateLimitMock.isMagicLinkLimited.mockReturnValue({
     allowed: true,
     retryAfter: 0,
@@ -71,6 +76,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  delete process.env.AUTH_SECRET
   vi.resetModules()
 })
 
@@ -103,7 +109,7 @@ describe("POST /api/v1/auth/magic-link — integration (T29)", () => {
     expect(sendMagicLinkEmailMock).toHaveBeenCalledWith(
       "maria@email.com",
       expect.objectContaining({
-        url: expect.stringContaining("/auth/login?token="),
+        url: expect.stringContaining("/callback/magic-link?token="),
       }),
     )
   })

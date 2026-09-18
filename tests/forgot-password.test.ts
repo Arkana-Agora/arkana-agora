@@ -106,7 +106,7 @@ describe("POST /api/v1/auth/forgot-password (T11)", () => {
     const callArgs = sendPasswordResetEmailMock.mock.calls[0] as
       [string, { resetUrl: string }] | undefined
     expect(callArgs?.[0]).toBe("maria@email.com")
-    expect(callArgs?.[1]?.resetUrl).toContain("/auth/reset-password")
+    expect(callArgs?.[1]?.resetUrl).toContain("/reset-password")
     expect(callArgs?.[1]?.resetUrl).not.toContain("/api/v1/auth")
   })
 
@@ -235,6 +235,7 @@ describe("POST /api/v1/auth/forgot-password (T11)", () => {
     expect(res.status).toBe(429)
     expect(json.error.code).toBe("AUTH_FORGOT_RATE_LIMIT")
     expect(json.error.retryAfter).toBe(1200)
+    expect(res.headers.get("Retry-After")).toBe("1200")
     expect(rateLimitMock.recordPasswordResetRequest).not.toHaveBeenCalled()
     expect(prismaMock.verificationToken.create).not.toHaveBeenCalled()
     expect(sendPasswordResetEmailMock).not.toHaveBeenCalled()

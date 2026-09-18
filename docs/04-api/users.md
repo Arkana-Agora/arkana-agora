@@ -288,7 +288,7 @@ Authorization: Bearer <accessToken>
 > **Nota (contrato canônico):** o body de sucesso é **plano** (flat) — `{ message }`, **sem**
 > wrapper `data` — idêntico ao de `DELETE /api/v1/auth/account`. A resposta é a **mesma 200**
 > para sucesso, e-mail de confirmação divergente e usuário inexistente (anti-enumeração, com
-> piso de 250ms no no-op via `equalizeNoopTiming`).
+> piso de 240–400ms no no-op via `equalizeNoopTiming`).
 
 ```json
 {

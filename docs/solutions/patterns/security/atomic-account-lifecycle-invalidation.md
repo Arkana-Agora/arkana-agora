@@ -20,7 +20,7 @@ Any operation that must **invalidate all of a user's credentials AND change acco
 - `softDeleteAccount(userId)` runs ONE `prisma.$transaction`: `session.updateMany({ where: { userId }, data: { revokedAt: new Date() } })` + `user.update({ where: { id: userId }, data: { isActive: false, deletedAt: new Date(), tokenVersion: { increment: 1 } } })`.
 - After commit, the new `tokenVersion` is mirrored to Redis **best-effort** (`auth:tokenVersion:${userId}`, `EX ACCESS_TOKEN_TTL_SECONDS`, try/catch → warn only). DB remains the source of truth.
 - `revokeAllSessions(userId)` uses the identical shape (session revoke + single `tokenVersion` increment), minus the `isActive`/`deletedAt` flags.
-- The route (`DELETE /api/v1/auth/account`) calls only `verifyAccessToken(bearer)` + `softDeleteAccount(userId)`; the anti-enumeration no-op returns the identical 200 body, `cache-control: no-store` header, and 250ms timing floor.
+- The route (`DELETE /api/v1/auth/account`) calls only `verifyAccessToken(bearer)` + `softDeleteAccount(userId)`; the anti-enumeration no-op returns the identical 200 body, `cache-control: no-store` header, and jittered 240–400ms timing floor.
 - The email send (`sendAccountDeletionEmail`) runs AFTER the transaction; its failure is logged and swallowed — the client still gets 200 (deletion already applied).
 
 ## Planned / Optional Extensions (If Applicable)
@@ -94,7 +94,7 @@ const user = await prisma.user.findUnique({
   select: { email: true },
 })
 if (user === null || user.email !== email) {
-  await equalizeNoopTiming()          // 250ms floor
+  await equalizeNoopTiming()          // jittered 240–400ms floor
   return successResponse()            // identical body + cache-control: no-store
 }
 await softDeleteAccount(userId)       // ONE call — atomicity lives in the service
@@ -102,7 +102,7 @@ await softDeleteAccount(userId)       // ONE call — atomicity lives in the ser
 
 Key points:
 - The route must NOT re-implement the transaction. If you find yourself calling `prisma.user.update` + `bumpTokenVersion` + `revokeAllSessions` in a route, you are re-creating the bug this pattern fixes.
-- The anti-enumeration no-op must equalize **all three channels**: identical 200 body, `cache-control: no-store` header, and the 250ms timing floor (see `auth-uniform-response-timing-equalization.md`).
+- The anti-enumeration no-op must equalize **all three channels**: identical 200 body, `cache-control: no-store` header, and the jittered 240–400ms timing floor (see `auth-uniform-response-timing-equalization.md`).
 
 ### Step 3: Test the transaction shape
 
@@ -175,7 +175,7 @@ Route: `verifyAccessToken` → check state → `await suspendAccount(userId)` �
 - [ ] Exactly one `tokenVersion: { increment: 1 }` per lifecycle operation — a double bump silently invalidates nothing extra but desyncs the version counter.
 - [ ] Soft-delete sets `isActive: false` AND `deletedAt: new Date()` together; `verifyAccessToken`'s DB fallback rejects on either flag.
 - [ ] Session revocation uses `updateMany({ where: { userId }, data: { revokedAt: new Date() } })` — all sessions, not one.
-- [ ] Route anti-enumeration no-op must equalize body + `cache-control: no-store` header + 250ms timing floor (`equalizeNoopTiming`, assert `elapsedMs >= 240` in tests).
+- [ ] Route anti-enumeration no-op must equalize body + `cache-control: no-store` header + jittered 240–400ms timing floor (`equalizeNoopTiming`, assert `elapsedMs >= 240` in tests).
 - [ ] Post-transaction side effects (e.g. confirmation email) must not change the client response: log and swallow failures, return 200.
 - [ ] Tests: mock `$transaction` with `cb({ session: prismaMock.session, user: prismaMock.user })`; assert `$transaction` called exactly once.
 

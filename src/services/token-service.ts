@@ -10,10 +10,29 @@ import { redis } from "@/lib/redis"
 import { logger } from "@/lib/logger"
 import { sha256 } from "@/lib/crypto"
 
-const ACCESS_TOKEN_TTL_SECONDS = Number(
-  process.env.ACCESS_TOKEN_TTL_SECONDS ?? 15 * 60,
+function validatedEnvNumber(
+  raw: string | undefined,
+  fallback: number,
+  name: string,
+): number {
+  if (raw === undefined) return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`Invalid ${name}: ${raw}`)
+  }
+  return value
+}
+
+const ACCESS_TOKEN_TTL_SECONDS = validatedEnvNumber(
+  process.env.ACCESS_TOKEN_TTL_SECONDS,
+  15 * 60,
+  "ACCESS_TOKEN_TTL_SECONDS",
 )
-const REFRESH_TOKEN_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30)
+const REFRESH_TOKEN_TTL_DAYS = validatedEnvNumber(
+  process.env.REFRESH_TOKEN_TTL_DAYS,
+  30,
+  "REFRESH_TOKEN_TTL_DAYS",
+)
 
 export class AuthTokenError extends Error {
   readonly code: string
@@ -306,6 +325,15 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
 
   const user = await getUserWithActiveState(session.userId)
 
+  // Assina ANTES da transação: se a assinatura falhar, a rotação ainda não
+  // cometeu e o token antigo continua válido (sem perda de sessão).
+  const accessToken = await signAccessToken({
+    id: user.id,
+    role: user.role,
+    plan: user.plan,
+    tokenVersion: user.tokenVersion,
+  })
+
   const newRaw = randomBytes(32).toString("base64url")
   const newTokenHash = sha256(newRaw)
   const newTokenId = randomUUID()
@@ -314,12 +342,38 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
     Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
   )
 
-  // Rotação condicional anti-race: só marca se ainda não foi substituído
-  const { count } = await prisma.session.updateMany({
-    where: { id: session.id, replacedByTokenId: null },
-    data: { replacedByTokenId: newTokenId, revokedAt: now },
+  // Rotação condicional anti-race + criação do novo token na MESMA transação.
+  // O updateMany revalida atomicamente revogação/expiração (não apenas
+  // substituição) para o caso de logout concorrente entre o pré-check e a tx.
+  let rotated = false
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.session.updateMany({
+      where: {
+        id: session.id,
+        replacedByTokenId: null,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { replacedByTokenId: newTokenId, revokedAt: now },
+    })
+    if (count !== 1) {
+      return
+    }
+    await tx.session.create({
+      data: {
+        userId: user.id,
+        tokenHash: newTokenHash,
+        familyId: session.familyId,
+        tokenId: newTokenId,
+        userAgent: session.userAgent,
+        ipAddress: session.ipAddress,
+        expiresAt: newExpiresAt,
+      },
+    })
+    rotated = true
   })
-  if (count !== 1) {
+
+  if (!rotated) {
     logger.warn(
       `[auth:refresh] rotacao condicional falhou familia=${session.familyId} — reuso`,
     )
@@ -329,25 +383,6 @@ export async function rotateRefresh(rawToken: string): Promise<RotationResult> {
       "Refresh token ja rotacionado (reuso)",
     )
   }
-
-  await prisma.session.create({
-    data: {
-      userId: user.id,
-      tokenHash: newTokenHash,
-      familyId: session.familyId,
-      tokenId: newTokenId,
-      userAgent: session.userAgent,
-      ipAddress: session.ipAddress,
-      expiresAt: newExpiresAt,
-    },
-  })
-
-  const accessToken = await signAccessToken({
-    id: user.id,
-    role: user.role,
-    plan: user.plan,
-    tokenVersion: user.tokenVersion,
-  })
 
   return {
     accessToken,
@@ -373,7 +408,7 @@ export async function bumpTokenVersion(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
-  logger.info(`[auth:token] tokenVersion bumped p/ ${userId}`)
+  logger.info({ userId }, "[auth:token] tokenVersion bumped")
 }
 
 export async function mirrorTokenVersion(userId: string): Promise<void> {
@@ -394,32 +429,9 @@ export async function mirrorTokenVersion(userId: string): Promise<void> {
       "EX",
       ACCESS_TOKEN_TTL_SECONDS,
     )
-    logger.info(`[auth:token] tokenVersion espelhado p/ ${userId}`)
+    logger.info({ userId }, "[auth:token] tokenVersion espelhado")
   } catch {
     logger.warn("[auth:token] falha ao espelhar tokenVersion no Redis")
-  }
-}
-
-export async function mirrorTokenVersionWithRetry(
-  userId: string,
-  maxRetries = 3,
-): Promise<void> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      await mirrorTokenVersion(userId)
-      return
-    } catch (error) {
-      if (attempt === maxRetries) {
-        logger.error(
-          { err: error, userId, attempt },
-          "[token-service] falha ao sincronizar token version no Redis apos tentativas",
-        )
-        // Don't fail the operation if Redis sync fails - just log it
-        return
-      }
-      // Wait before retry with exponential backoff
-      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
-    }
   }
 }
 
@@ -460,7 +472,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
-  logger.info(`[auth:logout] todas as sessoes revogadas p/ ${userId}`)
+  logger.info({ userId }, "[auth:logout] todas as sessoes revogadas")
 }
 
 export async function softDeleteAccount(userId: string): Promise<void> {
@@ -480,5 +492,5 @@ export async function softDeleteAccount(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
-  logger.info(`[auth:account] conta soft-deletada (LGPD) p/ ${userId}`)
+  logger.info({ userId }, "[auth:account] conta soft-deletada (LGPD)")
 }

@@ -7,42 +7,14 @@ import {
   revokeRefreshSession,
   verifyAccessToken,
 } from "@/services/token-service"
+import {
+  errorResponse,
+  buildExpireCookie,
+  buildSessionExpireCookie,
+  getBearerToken,
+  getRefreshToken,
+} from "../_helpers"
 export const dynamic = "force-dynamic"
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function buildExpireCookie(): string {
-  return [
-    "refreshToken=",
-    "Path=/api/v1/auth",
-    "HttpOnly",
-    "SameSite=Strict",
-    "Max-Age=0",
-  ].join("; ")
-}
-
-function getBearerToken(request: Request): string {
-  const header = request.headers.get("authorization") ?? ""
-  const match = /^Bearer\s+(.+)$/i.exec(header)
-  return match?.[1] ?? ""
-}
-
-function getRefreshToken(request: Request): string {
-  const cookie = request.headers.get("cookie") ?? ""
-  const match = /(?:^|;\s*)refreshToken=([^;\s]+)/.exec(cookie)
-  return match?.[1] ?? ""
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -74,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
           },
         })
       }
-      if (typeof code !== "string" || code.startsWith("AUTH_TOKEN_")) {
+      if (code.startsWith("AUTH_TOKEN_")) {
         return errorResponse(reqId, 401, {
           error: {
             code,
@@ -142,7 +114,9 @@ export async function POST(request: Request): Promise<Response> {
     { status: 200 },
   )
   response.headers.set("cache-control", "no-store")
-  response.headers.set("set-cookie", buildExpireCookie())
+  response.headers.set("set-cookie", buildExpireCookie(request))
+  // ADR-011: expira tambem o cookie de sessao Auth.js (dashboard guard)
+  response.headers.append("set-cookie", buildSessionExpireCookie(request))
 
   return response
 }

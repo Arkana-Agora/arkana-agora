@@ -8,41 +8,13 @@ import {
   isVerifyEmailResendLimited,
   recordVerifyEmailResend,
 } from "@/lib/rate-limit"
+import { errorResponse, getBaseUrl, equalizeNoopTiming } from "../../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const VERIFY_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000
 
 const SUCCESS_MESSAGE = "Email de verificacao enviado"
-
-const NOOP_EQUALIZE_MS = 250
-
-async function equalizeNoopTiming(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, NOOP_EQUALIZE_MS))
-}
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getBaseUrl(): string {
-  return (
-    process.env.AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  )
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -144,7 +116,7 @@ export async function POST(request: Request): Promise<Response> {
     recordVerifyEmailResend(normalizedEmail)
 
     const baseUrl = getBaseUrl()
-    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
+    const verificationUrl = `${baseUrl}/verify-email?token=${token}`
     try {
       await sendVerificationEmail(normalizedEmail, { verificationUrl })
     } catch (error) {

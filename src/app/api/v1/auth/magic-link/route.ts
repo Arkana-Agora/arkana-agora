@@ -10,45 +10,16 @@ import {
   recordMagicLinkIpAttempt,
   recordMagicLinkRequest,
 } from "@/lib/rate-limit"
+import {
+  errorResponse,
+  getIp,
+  getBaseUrl,
+  equalizeNoopTiming,
+} from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const MAGIC_LINK_LIFETIME_MS = 15 * 60 * 1000
-
-const NOOP_EQUALIZE_MS = 250
-
-async function equalizeNoopTiming(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, NOOP_EQUALIZE_MS))
-}
-
-function errorResponse(
-  reqId: string,
-  status: number,
-  body: {
-    error: {
-      code: string
-      message: string
-      retryAfter?: number
-      details?: unknown[]
-    }
-  },
-): Response {
-  return NextResponse.json({ ...body, meta: { requestId: reqId } }, { status })
-}
-
-function getBaseUrl(): string {
-  return (
-    process.env.AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  )
-}
-
-function getIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-  )
-}
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -88,13 +59,15 @@ export async function POST(request: Request): Promise<Response> {
   const ipLimit = isMagicLinkIpLimited(ip)
   if (!ipLimit.allowed) {
     logger.warn({ reqId, ip }, "[auth:magic-link] limite por IP atingido")
-    return errorResponse(reqId, 429, {
+    const ipLimitBlocked = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_MAGIC_LINK_RATE_LIMIT",
         message: "Muitos magic links solicitados, tente novamente mais tarde",
         retryAfter: ipLimit.retryAfter,
       },
     })
+    ipLimitBlocked.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return ipLimitBlocked
   }
   recordMagicLinkIpAttempt(ip)
 
@@ -104,13 +77,15 @@ export async function POST(request: Request): Promise<Response> {
       { reqId },
       "[auth:magic-link] limite de magic links por email atingido",
     )
-    return errorResponse(reqId, 429, {
+    const limitBlocked = errorResponse(reqId, 429, {
       error: {
         code: "AUTH_MAGIC_LINK_RATE_LIMIT",
         message: "Muitos magic links solicitados, tente novamente mais tarde",
         retryAfter: limit.retryAfter,
       },
     })
+    limitBlocked.headers.set("Retry-After", String(limit.retryAfter))
+    return limitBlocked
   }
   recordMagicLinkRequest(normalizedEmail)
 
@@ -130,12 +105,14 @@ export async function POST(request: Request): Promise<Response> {
       user.deletedAt === null &&
       user.emailVerified !== null
 
+    // Anti-enumeracao: piso de timing aplicado incondicionalmente
+    await equalizeNoopTiming()
+
     if (!canIssue) {
       logger.info(
         { reqId },
         "[auth:magic-link] no-op anti-enumeracao (email inexistente/inativo/nao verificado)",
       )
-      await equalizeNoopTiming()
       return NextResponse.json(
         { message: "Magic link enviado se o e-mail estiver cadastrado" },
         { status: 200 },
@@ -155,7 +132,7 @@ export async function POST(request: Request): Promise<Response> {
     })
 
     const baseUrl = getBaseUrl()
-    const magicUrl = `${baseUrl}/auth/login?token=${token}`
+    const magicUrl = `${baseUrl}/callback/magic-link?token=${token}`
     try {
       await sendMagicLinkEmail(normalizedEmail, { url: magicUrl })
     } catch (error) {

@@ -72,8 +72,8 @@ interface JWTPayload {
 
 1. O cliente envia o refresh token via cookie httpOnly (`path=/api/v1/auth`)
 2. O servidor busca a sessão pelo hash SHA-256 do token e valida `expiresAt`/`revokedAt`
-3. O servidor invalida o refresh token anterior (marca `replacedByTokenId`)
-4. O servidor gera um novo access token e rotaciona o refresh token (mesmo `familyId`)
+3. O servidor assina o novo access token **antes** da transação — se a assinatura falhar, a rotação ainda não cometeu e o token antigo continua válido
+4. A rotação roda num **`prisma.$transaction` interativo**: o `updateMany` condicional revalida atomicamente `replacedByTokenId: null` AND `revokedAt: null` AND `expiresAt > now` (fecha a corrida rotação-vs-revogação) e, se `count === 1`, cria o novo token (mesmo `familyId`)
 5. O novo refresh token é enviado em cookie
 6. Se um refresh token já rotacionado for reenviado (reuso), todos os tokens da família (`familyId`) são revogados (detecção de roubo)
 
@@ -93,7 +93,9 @@ rotação/revogação (S10):
   `POST /api/v1/auth/reset-password` (T12) — redefinir a senha derruba todas as sessões ativas
   (incl. access tokens emitidos antes do reset).
 
-O logout sempre limpa o cookie de refresh (`Set-Cookie: Max-Age=0`) e retorna `200 { message }`
+O logout sempre limpa o cookie de refresh (`Set-Cookie: Max-Age=0`), **expira também o cookie de
+sessão do Auth.js** (`buildSessionExpireCookie` — `authjs.session-token`/`__Secure-` com
+`Max-Age=0`, ADR-011) e retorna `200 { message }`
 flat (sem wrapper `data`), com `Cache-Control: no-store`.
 
 ---
@@ -112,7 +114,7 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 | `POST /api/v1/auth/login` (volume por IP) | 5 req | 15 min | Não se aplica |
 | `POST /api/v1/auth/magic-link` (por email) | 3 req | 1 hora | Não se aplica |
 | `POST /api/v1/auth/magic-link` (por IP) | 3 req | 1 hora | Não se aplica |
-| `POST /api/v1/auth/register` | 3 req | 15 min | Não se aplica |
+| `POST /api/v1/auth/register` | 3 req (email: 15min; IP: 1h) | — | Não se aplica |
 | `POST /api/v1/auth/forgot-password` | 3 req | 1 hora | Não se aplica |
 | `GET /api/v1/*` | 100 req | 1 min | 300 req / 1 min |
 | `POST /api/v1/*` | 50 req | 1 min | 150 req / 1 min |
@@ -124,8 +126,9 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 - **Magic link por email**: 3/hora por email → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkLimited`/`recordMagicLinkRequest`).
 - **Magic link por IP**: 3/hora por IP → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkIpLimited`/`recordMagicLinkIpAttempt`; mesmo código do limite por email — não há `AUTH_MAGIC_LINK_IP_RATE_LIMIT`). Ajustado de 20/h para 3/h no review T21 (decisão de produto).
 - **Forgot-password por email**: 3/hora por email → 429 `AUTH_FORGOT_RATE_LIMIT` (1h window, `src/lib/rate-limit.ts` `isPasswordResetLimited`/`recordPasswordResetRequest`, env `MAX_PASSWORD_RESET_PER_EMAIL`). A contagem é registrada antes da verificação de existência do usuário (anti-spam).
+- **Todos os 429** (login, register, magic-link, forgot-password, restore-account, verify-email/resend) também setam o header **`Retry-After`** (segundos), além do `retryAfter` no body.
 - **Audit de reset de senha** (design §7.6): pedidos de recuperação de senha são logados com **IP** (`x-forwarded-for`) e **user agent** em `[auth:forgot-password]` (`src/app/api/v1/auth/forgot-password/route.ts`).
-- **`POST /api/v1/auth/reset-password` (T12) NÃO tem rate limit** — decisão consciente; rate limiting (incl. Redis-based) é tarefa posterior (T27). Não confundir com o limite de **emissão** de tokens (forgot-password 3/h por email), que já existe.
+- **`POST /api/v1/auth/reset-password` (T12)** — rate limit 3/h por email via `src/lib/rate-limit.ts` (T27 implementado). Não confundir com o limite de **emissão** de tokens (forgot-password 3/h por email), que já existia.
 - `resetRateLimiter()` limpa o store (usado em testes).
 
 ### CORS (Cross-Origin Resource Sharing)
@@ -134,7 +137,7 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 const corsOptions = {
   origin: process.env.ALLOWED_ORIGINS.split(','),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-csrf-token'],
   credentials: true,
   maxAge: 86400, // 24h preflight cache
 };
