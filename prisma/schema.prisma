@@ -56,10 +56,13 @@ model User {
 model UserProfile {
   id              String   @id @default(uuid())
   userId          String   @unique
+  username        String?  @unique
   bio             String?
+  birthPlace      String?
   location        String?
   website         String?
   socialLinks     Json?
+  privacy         Json?    // { profileVisibility, statsVisibility, arcanaVisibility, whoCanFollow, whoCanComment }
   skills          String[] @default([])
   specialties     String[] @default([])
   rating          Decimal  @default(0) @db.Decimal(3, 2)
