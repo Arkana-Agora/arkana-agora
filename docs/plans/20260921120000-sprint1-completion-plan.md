@@ -246,38 +246,38 @@ src/
 
 ### Phase 2: Profile Frontend
 
-**Status**: ⬜ Pending
+**Status**: ✅ Completed
 **Objective**: Componentes de perfil, formulário de edição, upload de avatar, página pública.
 **Dependencies**: Phase 1
 
 **Tasks**:
 
-- [ ] T023 [SPEC-002#13] Create `ProfileHeader` em `src/components/profile/profile-header.tsx`
+- [x] T023 [SPEC-002#13] Create `ProfileHeader` em `src/components/profile/profile-header.tsx`
   - Avatar, nome, username, bio; layout responsivo
-- [ ] T024 [SPEC-002#14] Create `ProfileStats` em `src/components/profile/profile-stats.tsx`
+- [x] T024 [SPEC-002#14] Create `ProfileStats` em `src/components/profile/profile-stats.tsx`
   - Tiragens, seguidores, seguindo; contadores formatados
-- [ ] T025 [SPEC-002#15] Create `ProfileAstrology` em `src/components/profile/profile-astrology.tsx`
+- [x] T025 [SPEC-002#15] Create `ProfileAstrology` em `src/components/profile/profile-astrology.tsx`
   - Signo zodiacal, arcano pessoal, kin maya; ícones temáticos
-- [ ] T026 [SPEC-002#16] Create `ProfileEditForm` em `src/components/profile/profile-edit-form.tsx`
+- [x] T026 [SPEC-002#16] Create `ProfileEditForm` em `src/components/profile/profile-edit-form.tsx`
   - Auto-save com debounce 1s; campos: displayName, bio, birthDate, birthPlace, gender, location, website
   - Zod client-side validation
   - **ProfileStore** (Zustand): isEditing, dirtyFields, isSaving — gerencia estado do formulário
   - Route pages: `/perfil/editar` (formulário) e `/perfil/privacidade` ( PrivacySettings)
-- [ ] T027 [SPEC-002#17] Create avatar upload component em `src/components/profile/avatar-upload.tsx`
+- [x] T027 [SPEC-002#17] Create avatar upload component em `src/components/profile/avatar-upload.tsx`
   - Preview, drag-and-drop, crop; chama presign + confirm endpoints
   - Validação client-side: max 5MB, formatos aceitos (JPEG, PNG, WebP)
   - Retry: se upload falhar, retry 1x automaticamente; se falhar novamente, mostrar erro com retry manual
   - Manter avatar anterior visível durante upload; reverter se falhar
-- [ ] T028 [SPEC-002#18] Create `PrivacySettings` em `src/components/profile/privacy-settings.tsx`
+- [x] T028 [SPEC-002#18] Create `PrivacySettings` em `src/components/profile/privacy-settings.tsx`
   - Toggles: profileVisibility (public/followers/private), statsVisibility, arcanaVisibility
   - Toggles: whoCanFollow (everyone/followers/nobody), whoCanComment (everyone/followers/nobody)
   - Chama PATCH /privacy
-- [ ] T029 [SPEC-002#19] Create public profile page em `src/app/(app)/perfil/[username]/page.tsx`
+- [x] T029 [SPEC-002#19] Create public profile page em `src/app/(app)/perfil/[username]/page.tsx`
   - Usa ProfileHeader, ProfileStats, ProfileAstrology; respeita configurações de privacidade
   - Loading: skeleton do profile; Error: retry button + mensagem; Empty: CTA para completar perfil
-- [ ] T030 [SPEC-002#20] Configure TanStack Query hooks em `src/hooks/use-profile.ts`
+- [x] T030 [SPEC-002#20] Configure TanStack Query hooks em `src/hooks/use-profile.ts`
   - `useProfile(username)`, `useMyProfile()`, `useUpdateProfile()`, `useUploadAvatar()`
-- [ ] T031 [SPEC-002#25-26] Create profile tests em `tests/integration/profile-frontend.test.ts`
+- [x] T031 [SPEC-002#25-26] Create profile tests em `tests/integration/profile-frontend.test.ts`
   - Testes de componentes (render, validação); testes de privacidade
 
 **After completing this phase**:
@@ -633,16 +633,16 @@ src/
 - [x] TypeScript validation + lint + tests pass
 
 ### Phase 2: Profile Frontend
-- [ ] T023 ProfileHeader component
-- [ ] T024 ProfileStats component
-- [ ] T025 ProfileAstrology component
-- [ ] T026 ProfileEditForm (auto-save)
-- [ ] T027 Avatar upload (drag-and-drop)
-- [ ] T028 PrivacySettings toggles
-- [ ] T029 Public profile page
-- [ ] T030 TanStack Query hooks
-- [ ] T031 Profile tests
-- [ ] TypeScript validation + lint + tests pass
+- [x] T023 ProfileHeader component
+- [x] T024 ProfileStats component
+- [x] T025 ProfileAstrology component
+- [x] T026 ProfileEditForm (auto-save)
+- [x] T027 Avatar upload (drag-and-drop)
+- [x] T028 PrivacySettings toggles
+- [x] T029 Public profile page
+- [x] T030 TanStack Query hooks
+- [x] T031 Profile tests
+- [x] TypeScript validation + lint + tests pass
 
 ### Phase 3: Tarot Engine Data & Algorithms
 - [ ] T032 TypeScript types (Deck, TarotCard, Spread)
