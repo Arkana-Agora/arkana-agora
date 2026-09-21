@@ -5,34 +5,42 @@ import {
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME
+function getR2Config() {
+  const accountId = process.env.R2_ACCOUNT_ID
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+  const bucketName = process.env.R2_BUCKET_NAME
 
-if (
-  !R2_ACCOUNT_ID ||
-  !R2_ACCESS_KEY_ID ||
-  !R2_SECRET_ACCESS_KEY ||
-  !R2_BUCKET_NAME
-) {
-  throw new Error(
-    "R2 credentials not configured: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME",
-  )
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
+    throw new Error(
+      "R2 credentials not configured: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME",
+    )
+  }
+
+  return { accountId, accessKeyId, secretAccessKey, bucketName }
 }
 
-const R2_ENDPOINT = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+let _client: S3Client | null = null
 
-export const r2Client = new S3Client({
-  endpoint: R2_ENDPOINT,
-  region: "auto",
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-})
+function getR2Client(): S3Client {
+  if (!_client) {
+    const config = getR2Config()
+    _client = new S3Client({
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      region: "auto",
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    })
+  }
+  return _client
+}
 
-export const R2_BUCKET = R2_BUCKET_NAME
+export function getR2Bucket(): string {
+  return getR2Config().bucketName
+}
+
 export const R2_PUBLIC_URL =
   process.env.R2_PUBLIC_URL ?? `https://r2.arkanaagora.com`
 
@@ -41,17 +49,17 @@ export async function generatePresignedUrl(
   contentType: string,
 ): Promise<string> {
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: getR2Bucket(),
     Key: key,
     ContentType: contentType,
   })
-  return getSignedUrl(r2Client, command, { expiresIn: 300 })
+  return getSignedUrl(getR2Client(), command, { expiresIn: 300 })
 }
 
 export async function deleteObject(key: string): Promise<void> {
   const command = new DeleteObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: getR2Bucket(),
     Key: key,
   })
-  await r2Client.send(command)
+  await getR2Client().send(command)
 }
