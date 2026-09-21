@@ -189,51 +189,51 @@ src/
 
 ### Phase 1: Profile Backend & DB
 
-**Status**: ⬜ Pending
+**Status**: ✅ Completed
 **Objective**: Estender UserProfile com campos faltantes (username, birthPlace, privacy), configurar R2, implementar API routes de profile e cálculos.
 **Dependencies**: Phase 0
 
 **Tasks**:
 
-- [ ] T006 [SPEC-002#1] Extend UserProfile schema em `prisma/schema.prisma`
+- [x] T006 [SPEC-002#1] Extend UserProfile schema em `prisma/schema.prisma`
   - Adicionar campos: `username String? @unique`, `birthPlace String?`, `privacy Json?` (guarda configurações de visibilidade)
   - User já tem: `birthDate`, `astrologicalSign`, `mayanKin`, `personalArcana`, `avatar`
-- [ ] T007 [SPEC-002#2] Run Profile migration em `prisma/migrations/`
+- [x] T007 [SPEC-002#2] Run Profile migration em `prisma/migrations/`
   - Gerar migration → drift-check → run locally IMMEDIATELY (atomic chain)
-- [ ] T008 [SPEC-002#3] Configure Cloudflare R2 em `src/lib/r2.ts`
+- [x] T008 [SPEC-002#3] Configure Cloudflare R2 em `src/lib/r2.ts`
   - Cliente S3-compatible; presigned URL generation; env vars: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
-- [ ] T009 [SPEC-002#4] Install sharp em `package.json`
+- [x] T009 [SPEC-002#4] Install sharp em `package.json`
   - `npm install sharp @types/sharp`; configurar para processamento de avatar
-- [ ] T010 [SPEC-002#5] Implement `GET /api/v1/users/:username/profile` em `src/app/api/v1/users/[username]/profile/route.ts`
+- [x] T010 [SPEC-002#5] Implement `GET /api/v1/users/:username/profile` em `src/app/api/v1/users/[username]/profile/route.ts`
   - Filtros de privacidade baseado nas configurações do UserProfile.privacy; 404 se não encontrado
-- [ ] T011 [SPEC-002#6] Implement `GET /api/v1/users/me/profile` em `src/app/api/v1/users/me/profile/route.ts`
+- [x] T011 [SPEC-002#6] Implement `GET /api/v1/users/me/profile` em `src/app/api/v1/users/me/profile/route.ts`
   - Bearer; retorna perfil completo (User + UserProfile) do usuário autenticado
-- [ ] T012 [SPEC-002#7] Implement `PATCH /api/v1/users/me/profile` em `src/app/api/v1/users/me/profile/route.ts`
+- [x] T012 [SPEC-002#7] Implement `PATCH /api/v1/users/me/profile` em `src/app/api/v1/users/me/profile/route.ts`
   - Bearer; Zod validation; atualiza campos permitidos: displayName, bio, birthDate, birthPlace, gender, location, website
   - Recalcula astrologicalSign, mayanKin, personalArcana se birthDate mudou
-- [ ] T013 [SPEC-002#8] Implement `GET /api/v1/users/check-username/:username` em `src/app/api/v1/users/check-username/[username]/route.ts`
+- [x] T013 [SPEC-002#8] Implement `GET /api/v1/users/check-username/:username` em `src/app/api/v1/users/check-username/[username]/route.ts`
   - Verifica disponibilidade do username; 200 `{available: boolean}`
-- [ ] T014 [SPEC-002#9] Implement `POST /api/v1/users/me/avatar/presign` em `src/app/api/v1/users/me/avatar/presign/route.ts`
+- [x] T014 [SPEC-002#9] Implement `POST /api/v1/users/me/avatar/presign` em `src/app/api/v1/users/me/avatar/presign/route.ts`
   - Bearer; gera presigned URL para upload no R2; 200 `{uploadUrl, key}`
-- [ ] T015 [SPEC-002#10] Implement `PATCH /api/v1/users/me/avatar/confirm` em `src/app/api/v1/users/me/avatar/confirm/route.ts`
+- [x] T015 [SPEC-002#10] Implement `PATCH /api/v1/users/me/avatar/confirm` em `src/app/api/v1/users/me/avatar/confirm/route.ts`
   - Bearer; processa imagem com sharp: 3 tamanhos (48x48, 120x120, 400x400) WebP; remove EXIF metadata
   - Salva 400x400 como avatar principal; 48/120 para thumbnails
   - Retry: se processamento falhar, retry 1x; se falhar novamente, manter avatar anterior
   - Validação: max 5MB, formatos aceitos (JPEG, PNG, WebP)
-- [ ] T016 [SPEC-002#11] Implement `DELETE /api/v1/users/me/avatar` em `src/app/api/v1/users/me/avatar/route.ts`
+- [x] T016 [SPEC-002#11] Implement `DELETE /api/v1/users/me/avatar` em `src/app/api/v1/users/me/avatar/route.ts`
   - Bearer; remove avatar do R2; limpa User.avatar
-- [ ] T017 [SPEC-002#12] Implement `PATCH /api/v1/users/me/privacy` em `src/app/api/v1/users/me/privacy/route.ts`
+- [x] T017 [SPEC-002#12] Implement `PATCH /api/v1/users/me/privacy` em `src/app/api/v1/users/me/privacy/route.ts`
   - Bearer; Zod validation; atualiza UserProfile.privacy (visibilidade de perfil, stats, arcano)
-- [ ] T018 [SPEC-002#21] Create zodiac sign calculation em `src/lib/calculations/zodiac.ts`
+- [x] T018 [SPEC-002#21] Create zodiac sign calculation em `src/lib/calculations/zodiac.ts`
   - Função pura: `calculateZodiacSign(birthDate: Date): string`; datas precisas dos signos
-- [ ] T019 [SPEC-002#22] Create personal arcana calculation em `src/lib/arcana/calculate.ts`
+- [x] T019 [SPEC-002#22] Create personal arcana calculation em `src/lib/arcana/calculate.ts`
   - `calculatePersonalArcana(birthDate: Date, name: string): number`; caminho canônico (SPEC-005#5)
   - T091-T095 (Phase 6) implementam os algoritmos detalhados; T019 cria a função stub que chama esses algoritmos
-- [ ] T020 [SPEC-002#23] Create Kin Maya calculation em `src/lib/calculations/kin-maya.ts`
+- [x] T020 [SPEC-002#23] Create Kin Maya calculation em `src/lib/calculations/kin-maya.ts`
   - `calculateKinMaya(birthDate: Date): number`; ciclo de 260 dias
-- [ ] T021 [SPEC-002#21] Auto-calculate astrological fields on profile update
+- [x] T021 [SPEC-002#21] Auto-calculate astrological fields on profile update
   - No PATCH /profile: se birthDate mudou, recalcular astrologicalSign, mayanKin, personalArcana e salvar no User
-- [ ] T022 [SPEC-002#24] Create integration tests em `tests/integration/profile.test.ts`
+- [x] T022 [SPEC-002#24] Create integration tests em `tests/integration/profile.test.ts`
   - Cobrir todos os endpoints de profile; mocks de Prisma + R2
 
 **After completing this phase**:
@@ -613,24 +613,24 @@ src/
 - [x] TypeScript validation + lint + tests pass
 
 ### Phase 1: Profile Backend & DB
-- [ ] T006 Extend UserProfile schema (username, birthPlace, privacy)
-- [ ] T007 Profile migration
-- [ ] T008 Cloudflare R2 config
-- [ ] T009 Install sharp
-- [ ] T010 GET /api/v1/users/:username/profile
-- [ ] T011 GET /api/v1/users/me/profile
-- [ ] T012 PATCH /api/v1/users/me/profile
-- [ ] T013 GET /api/v1/users/check-username/:username
-- [ ] T014 POST /api/v1/users/me/avatar/presign
-- [ ] T015 PATCH /api/v1/users/me/avatar/confirm
-- [ ] T016 DELETE /api/v1/users/me/avatar
-- [ ] T017 PATCH /api/v1/users/me/privacy
-- [ ] T018 Zodiac sign calculation
-- [ ] T019 Personal arcana calculation
-- [ ] T020 Kin Maya calculation
-- [ ] T021 Auto-calculate astrological fields on update
-- [ ] T022 Profile integration tests
-- [ ] TypeScript validation + lint + tests pass
+- [x] T006 Extend UserProfile schema (username, birthPlace, privacy)
+- [x] T007 Profile migration
+- [x] T008 Cloudflare R2 config
+- [x] T009 Install sharp
+- [x] T010 GET /api/v1/users/:username/profile
+- [x] T011 GET /api/v1/users/me/profile
+- [x] T012 PATCH /api/v1/users/me/profile
+- [x] T013 GET /api/v1/users/check-username/:username
+- [x] T014 POST /api/v1/users/me/avatar/presign
+- [x] T015 PATCH /api/v1/users/me/avatar/confirm
+- [x] T016 DELETE /api/v1/users/me/avatar
+- [x] T017 PATCH /api/v1/users/me/privacy
+- [x] T018 Zodiac sign calculation
+- [x] T019 Personal arcana calculation
+- [x] T020 Kin Maya calculation
+- [x] T021 Auto-calculate astrological fields on update
+- [x] T022 Profile integration tests
+- [x] TypeScript validation + lint + tests pass
 
 ### Phase 2: Profile Frontend
 - [ ] T023 ProfileHeader component
