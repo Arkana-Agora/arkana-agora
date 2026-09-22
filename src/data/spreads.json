@@ -1,0 +1,371 @@
+[
+  {
+    "id": "single-card",
+    "name": "Carta Única",
+    "description": "Resposta rápida para uma pergunta específica. Ideal para decisões do dia a dia.",
+    "deckType": "tarot",
+    "cardCount": 1,
+    "difficulty": "beginner",
+    "estimatedTime": 1,
+    "layout": "linear",
+    "positions": [
+      {
+        "id": "answer",
+        "name": "Resposta",
+        "description": "A resposta para a sua pergunta",
+        "gridX": 0,
+        "gridY": 0
+      }
+    ]
+  },
+  {
+    "id": "three-card",
+    "name": "Três Cartas",
+    "description": "Passado, Presente e Futuro. Um dos espalhamentos mais versáteis e populares.",
+    "deckType": "tarot",
+    "cardCount": 3,
+    "difficulty": "beginner",
+    "estimatedTime": 3,
+    "layout": "linear",
+    "positions": [
+      {
+        "id": "past",
+        "name": "Passado",
+        "description": "Influências e eventos do passado que moldaram a situação atual",
+        "gridX": 0,
+        "gridY": 0
+      },
+      {
+        "id": "present",
+        "name": "Presente",
+        "description": "A situação atual e o que está acontecendo agora",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "future",
+        "name": "Futuro",
+        "description": "O provável desdobramento e resultado da situação",
+        "gridX": 2,
+        "gridY": 0
+      }
+    ]
+  },
+  {
+    "id": "yes-no",
+    "name": "Sim / Não",
+    "description": "Resposta direta para perguntas de sim ou não. Usa a lógica par/impar.",
+    "deckType": "tarot",
+    "cardCount": 1,
+    "difficulty": "beginner",
+    "estimatedTime": 1,
+    "layout": "linear",
+    "positions": [
+      {
+        "id": "answer",
+        "name": "Resposta",
+        "description": "Sim (carta normal) ou Não (carta reversa)",
+        "gridX": 0,
+        "gridY": 0
+      }
+    ]
+  },
+  {
+    "id": "celtic-cross",
+    "name": "Cruz Celta",
+    "description": "O espalhamento mais completo e tradicional. Ideal para análises profundas de situação.",
+    "deckType": "tarot",
+    "cardCount": 10,
+    "difficulty": "advanced",
+    "estimatedTime": 15,
+    "layout": "cross",
+    "positions": [
+      {
+        "id": "present",
+        "name": "Presente",
+        "description": "A situação atual e o desafio principal",
+        "gridX": 1,
+        "gridY": 1
+      },
+      {
+        "id": "challenge",
+        "name": "Desafio",
+        "description": "O obstáculo ou conflito que precisa ser enfrentado",
+        "gridX": 0,
+        "gridY": 1
+      },
+      {
+        "id": "root",
+        "name": "Raiz",
+        "description": "A causa fundamental ou origem da situação",
+        "gridX": 1,
+        "gridY": 2
+      },
+      {
+        "id": "recent-past",
+        "name": "Passado Recente",
+        "description": "Eventos recentes que influenciaram a situação",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "best-outcome",
+        "name": "Melhor Resultado",
+        "description": "O melhor resultado possível se tudo correr bem",
+        "gridX": 2,
+        "gridY": 1
+      },
+      {
+        "id": "near-future",
+        "name": "Futuro Próximo",
+        "description": "O que está prestes a acontecer",
+        "gridX": 1,
+        "gridY": 3
+      },
+      {
+        "id": "self",
+        "name": "Você",
+        "description": "Sua atitude e posicionamento diante da situação",
+        "gridX": 4,
+        "gridY": 4
+      },
+      {
+        "id": "environment",
+        "name": "Ambiente",
+        "description": "Influências externas e o ambiente ao redor",
+        "gridX": 3,
+        "gridY": 4
+      },
+      {
+        "id": "hopes",
+        "name": "Esperanças e Medos",
+        "description": "Seus anseios e expectativas subconscientes",
+        "gridX": 2,
+        "gridY": 4
+      },
+      {
+        "id": "final-outcome",
+        "name": "Resultado Final",
+        "description": "O desfecho mais provável da situação",
+        "gridX": 1,
+        "gridY": 4
+      }
+    ]
+  },
+  {
+    "id": "love-cross",
+    "name": "Cruz do Amor",
+    "description": "Espalhamento focado em relacionamentos e questões do coração.",
+    "deckType": "tarot",
+    "cardCount": 7,
+    "difficulty": "intermediate",
+    "estimatedTime": 8,
+    "layout": "diamond",
+    "positions": [
+      {
+        "id": "you",
+        "name": "Você",
+        "description": "Seu estado atual e sentimentos",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "partner",
+        "name": "Parceiro(a)",
+        "description": "O estado e sentimentos do outro",
+        "gridX": 1,
+        "gridY": 2
+      },
+      {
+        "id": "relationship",
+        "name": "Relacionamento",
+        "description": "A dinâmica entre vocês dois",
+        "gridX": 0,
+        "gridY": 1
+      },
+      {
+        "id": "strength",
+        "name": "Força",
+        "description": "Os pontos fortes da conexão",
+        "gridX": 2,
+        "gridY": 1
+      },
+      {
+        "id": "challenge",
+        "name": "Desafio",
+        "description": "O obstáculo a ser superado",
+        "gridX": 0,
+        "gridY": 3
+      },
+      {
+        "id": "advice",
+        "name": "Conselho",
+        "description": "O que o universo quer que você saiba",
+        "gridX": 2,
+        "gridY": 3
+      },
+      {
+        "id": "outcome",
+        "name": "Desfecho",
+        "description": "O resultado mais provável",
+        "gridX": 1,
+        "gridY": 4
+      }
+    ]
+  },
+  {
+    "id": "lenormand-3",
+    "name": "Lenormand 3 Cartas",
+    "description": "Espalhamento simples para questões rápidas com o baralho Lenormand.",
+    "deckType": "lenormand",
+    "cardCount": 3,
+    "difficulty": "beginner",
+    "estimatedTime": 2,
+    "layout": "linear",
+    "positions": [
+      {
+        "id": "circumstance",
+        "name": "Circunstância",
+        "description": "O contexto da situação",
+        "gridX": 0,
+        "gridY": 0
+      },
+      {
+        "id": "obstacle",
+        "name": "Obstáculo",
+        "description": "O que está atrapalhando",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "advice",
+        "name": "Conselho",
+        "description": "O caminho a seguir",
+        "gridX": 2,
+        "gridY": 0
+      }
+    ]
+  },
+  {
+    "id": "lenormand-5",
+    "name": "Lenormand 5 Cartas",
+    "description": "Análise mais detalhada com o baralho Lenormand.",
+    "deckType": "lenormand",
+    "cardCount": 5,
+    "difficulty": "intermediate",
+    "estimatedTime": 5,
+    "layout": "linear",
+    "positions": [
+      {
+        "id": "past",
+        "name": "Passado",
+        "description": "O que já aconteceu",
+        "gridX": 0,
+        "gridY": 0
+      },
+      {
+        "id": "present",
+        "name": "Presente",
+        "description": "O que está acontecendo agora",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "challenge",
+        "name": "Desafio",
+        "description": "O que precisa ser enfrentado",
+        "gridX": 2,
+        "gridY": 0
+      },
+      {
+        "id": "advice",
+        "name": "Conselho",
+        "description": "O que fazer",
+        "gridX": 3,
+        "gridY": 0
+      },
+      {
+        "id": "outcome",
+        "name": "Desfecho",
+        "description": "O resultado esperado",
+        "gridX": 4,
+        "gridY": 0
+      }
+    ]
+  },
+  {
+    "id": "lenormand-9",
+    "name": "Lenormand 9 Cartas",
+    "description": "Espalhamento completo em grade 3x3 para análise profunda.",
+    "deckType": "lenormand",
+    "cardCount": 9,
+    "difficulty": "advanced",
+    "estimatedTime": 10,
+    "layout": "grid",
+    "positions": [
+      {
+        "id": "past-1",
+        "name": "Passado (1)",
+        "description": "Influência remota do passado",
+        "gridX": 0,
+        "gridY": 0
+      },
+      {
+        "id": "past-2",
+        "name": "Passado (2)",
+        "description": "Influência intermediária do passado",
+        "gridX": 1,
+        "gridY": 0
+      },
+      {
+        "id": "past-3",
+        "name": "Passado (3)",
+        "description": "Influência recente do passado",
+        "gridX": 2,
+        "gridY": 0
+      },
+      {
+        "id": "present-1",
+        "name": "Presente (1)",
+        "description": "Aspecto da situação atual",
+        "gridX": 0,
+        "gridY": 1
+      },
+      {
+        "id": "present-2",
+        "name": "Presente (2)",
+        "description": "Núcleo da situação atual",
+        "gridX": 1,
+        "gridY": 1
+      },
+      {
+        "id": "present-3",
+        "name": "Presente (3)",
+        "description": "Aspecto externo da situação atual",
+        "gridX": 2,
+        "gridY": 1
+      },
+      {
+        "id": "future-1",
+        "name": "Futuro (1)",
+        "description": "Desenvolvimento próximo",
+        "gridX": 0,
+        "gridY": 2
+      },
+      {
+        "id": "future-2",
+        "name": "Futuro (2)",
+        "description": "Desenvolvimento intermediário",
+        "gridX": 1,
+        "gridY": 2
+      },
+      {
+        "id": "future-3",
+        "name": "Futuro (3)",
+        "description": "Resultado final",
+        "gridX": 2,
+        "gridY": 2
+      }
+    ]
+  }
+]
