@@ -290,38 +290,38 @@ src/
 
 ### Phase 3: Tarot Engine Data & Algorithms
 
-**Status**: ⬜ Pending
+**Status**: ✅ Completed
 **Objective**: Dados dos baralhos (JSON), tipos TypeScript, algoritmos de embaralhamento e seleção.
 **Dependencies**: None (pode paralelizar com Phase 0/1)
 
 **Tasks**:
 
-- [ ] T032 [SPEC-003#4] Create TypeScript types em `src/types/tarot.ts`
+- [x] T032 [SPEC-003#4] Create TypeScript types em `src/types/tarot.ts`
   - `Deck`, `TarotCard`, `LenormandCard`, `Spread`, `SpreadPosition`; suit enums (MAJOR, WANDS, CUPS, SWORDS, PENTACLES)
-- [ ] T033 [SPEC-003#1] Create RWS deck data em `src/data/decks/rws.json`
+- [x] T033 [SPEC-003#1] Create RWS deck data em `src/data/decks/rws.json`
   - 78 cartas (22 Arcanos Maiores + 56 Arcanos Menores); significados em português (upright/reversed)
-- [ ] T034 [SPEC-003#2] Create Thoth deck data em `src/data/decks/thoth.json`
+- [x] T034 [SPEC-003#2] Create Thoth deck data em `src/data/decks/thoth.json`
   - 78 cartas com significados em português
-- [ ] T035 [SPEC-003#3] Create Lenormand deck data em `src/data/decks/lenormand.json`
+- [x] T035 [SPEC-003#3] Create Lenormand deck data em `src/data/decks/lenormand.json`
   - 36 cartas com significados em português
-- [ ] T036 [SPEC-003#5] Create Prisma schema for Reading + ReadingCard em `prisma/schema.prisma`
+- [x] T036 [SPEC-003#5] Create Prisma schema for Reading + ReadingCard em `prisma/schema.prisma`
   - Reading: userId, deckId, spreadType, title?, notes?, duration?, seed, isDaily, isPublic (default false), cards (relation), createdAt
   - ReadingCard: readingId, cardId, position, isReversed
-- [ ] T037 [SPEC-003#6] Run Reading migration em `prisma/migrations/`
+- [x] T037 [SPEC-003#6] Run Reading migration em `prisma/migrations/`
   - Gerar migration → drift-check → run locally IMMEDIATELY
-- [ ] T038 [SPEC-003#7] Create CSPRNG seed generator em `src/lib/tarot/seed.ts`
+- [x] T038 [SPEC-003#7] Create CSPRNG seed generator em `src/lib/tarot/seed.ts`
   - `generateSeed(): string` usando `crypto.randomBytes`; seed para reprodutibilidade
-- [ ] T039 [SPEC-003#8] Implement Fisher-Yates shuffle em `src/lib/tarot/shuffle.ts`
+- [x] T039 [SPEC-003#8] Implement Fisher-Yates shuffle em `src/lib/tarot/shuffle.ts`
   - `shuffleDeck(cards: TarotCard[], seed: string): TarotCard[]`; algoritmo determinístico com seed
-- [ ] T040 [SPEC-003#9] Implement `drawCards` em `src/lib/tarot/draw.ts`
+- [x] T040 [SPEC-003#9] Implement `drawCards` em `src/lib/tarot/draw.ts`
   - `drawCards(deck: TarotCard[], count: number, seed: string): DrawnCard[]`; detecção de repetição; assignação de reversed
-- [ ] T041 [SPEC-003#10] Implement daily reading limit em `src/lib/tarot/daily-limit.ts`
+- [x] T041 [SPEC-003#10] Implement daily reading limit em `src/lib/tarot/daily-limit.ts`
   - `checkDailyLimit(userId: string): Promise<{allowed: boolean, remaining: number, tier: string}>`
   - Limites: 3/dia (free), 10/dia (Plus), ilimitado (Premium)
   - Enforcement: checar antes de criar reading em POST /readings
-- [ ] T042 [SPEC-003#11] Implement Yes/No spread logic em `src/lib/tarot/spreads.ts`
+- [x] T042 [SPEC-003#11] Implement Yes/No spread logic em `src/lib/tarot/spreads.ts`
   - `resolveYesNo(cards: DrawnCard[]): {answer: 'yes'|'no'|'maybe', confidence: number}`; lógica par/impar
-- [ ] T043 [SPEC-003#12] Create spread position layouts em `src/data/spreads.json`
+- [x] T043 [SPEC-003#12] Create spread position layouts em `src/data/spreads.json`
   - Tarot: Single Card, Three Cards, Yes/No, Cruz Celta (10 cartas), Cruz do Amor (7 cartas)
   - Lenormand: 3 cartas, 5 cartas, 9 cartas
   - Cada spread: positions array com name, meaning, cardCount
@@ -645,19 +645,19 @@ src/
 - [x] TypeScript validation + lint + tests pass
 
 ### Phase 3: Tarot Engine Data & Algorithms
-- [ ] T032 TypeScript types (Deck, TarotCard, Spread)
-- [ ] T033 RWS deck data (78 cartas)
-- [ ] T034 Thoth deck data (78 cartas)
-- [ ] T035 Lenormand deck data (36 cartas)
-- [ ] T036 Prisma schema Reading + ReadingCard
-- [ ] T037 Reading migration
-- [ ] T038 CSPRNG seed generator
-- [ ] T039 Fisher-Yates shuffle
-- [ ] T040 drawCards with duplicate detection
-- [ ] T041 Daily reading limit
-- [ ] T042 Yes/No spread logic
-- [ ] T043 Spread position layouts
-- [ ] TypeScript validation + lint + tests pass
+- [x] T032 TypeScript types (Deck, TarotCard, Spread)
+- [x] T033 RWS deck data (78 cartas)
+- [x] T034 Thoth deck data (78 cartas)
+- [x] T035 Lenormand deck data (36 cartas)
+- [x] T036 Prisma schema Reading + ReadingCard
+- [x] T037 Reading migration
+- [x] T038 CSPRNG seed generator
+- [x] T039 Fisher-Yates shuffle
+- [x] T040 drawCards with duplicate detection
+- [x] T041 Daily reading limit
+- [x] T042 Yes/No spread logic
+- [x] T043 Spread position layouts
+- [x] TypeScript validation + lint + tests pass
 
 ### Phase 4: Tarot Engine Backend & Frontend
 - [ ] T044 GET /api/v1/decks + /decks/:id/cards
