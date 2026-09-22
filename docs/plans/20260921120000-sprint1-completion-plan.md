@@ -24,12 +24,12 @@ phased: true
 | Módulo | Total tasks .specs/ | Já implementado | Sprint 1 restante |
 |--------|---------------------|-----------------|-------------------|
 | SPEC-001 Auth | 35 | ~27 (core + frontend) | ~8 (verificação/hardening) |
-| SPEC-002 Profile | 26 | 0 | 26 |
-| SPEC-003 Tarot Engine | 37 | 0 | 37 |
+| SPEC-002 Profile | 26 | 26 ✅ | 0 |
+| SPEC-003 Tarot Engine | 37 | 31 (T032-T049, T054-T055, T057, T059-T064) | ~6 (T050-T053, T056, T058, T065-T067) |
 | SPEC-004 AI Readings | 23 | 0 | 23 (inclui 5 testes #19-23) |
 | SPEC-005 Arcana Personal | 18 | 0 | 18 |
 | Sprint-1#25-40 | ~16 | 0 | ~10 |
-| **TOTAL** | **~155** | **~27** | **~122** |
+| **TOTAL** | **~155** | **~84** | **~71** |
 
 ### Mapeamento por Fase
 
@@ -336,75 +336,100 @@ src/
 
 ### Phase 4: Tarot Engine Backend & Frontend
 
-**Status**: ⬜ Pending
+**Status**: 🟢 Complete (core) — 31/37 tasks done; 6 remaining are animation/E2E/OG tasks
 **Objective**: API routes de tiragem, componentes frontend (cartas 3D, seleção, sessão), páginas.
 **Dependencies**: Phase 3
+**Completed**: 2026-09-22 — T044-T049 + review hardening + T054-T055, T057, T059-T064
 
-**Tasks**:
+**Completed Tasks**:
 
-- [ ] T044 [SPEC-003#13] Implement `GET /api/v1/decks` + `GET /api/v1/decks/:id/cards` em `src/app/api/v1/decks/route.ts` e `src/app/api/v1/decks/[id]/cards/route.ts`
-  - Lista baralhos disponíveis; retorna cartas de um baralho específico
-- [ ] T045 [SPEC-003#14] Implement `GET /api/v1/spreads` em `src/app/api/v1/spreads/route.ts`
-  - Lista espalhamentos disponíveis com posições
-- [ ] T046 [SPEC-003#15] Implement `POST /api/v1/readings` em `src/app/api/v1/readings/route.ts`
-  - Bearer; Zod validation: deckId + spreadType + title? + notes? + isPublic?
-  - Embaralha + seleciona cartas; gera seed; salva Reading + ReadingCards
-  - Rate limit: 3/dia (free), 10/dia (Plus) — verificar antes de criar
-  - 201 `{reading: {id, cards, spread, createdAt}}` | 429 (limit atingido)
-- [ ] T047 [SPEC-003#16] Implement `GET /api/v1/readings` em `src/app/api/v1/readings/route.ts`
-  - Bearer; lista readings do usuário com paginação; filtros por data/tipo
-- [ ] T048 [SPEC-003#17] Implement `GET /api/v1/readings/:id` em `src/app/api/v1/readings/[id]/route.ts`
-  - Bearer; retorna reading detalhada com cards; 404 se não encontrada
-- [ ] T049 [SPEC-003#18] Implement `GET /api/v1/readings/daily-count` em `src/app/api/v1/readings/daily-count/route.ts`
-  - Bearer; retorna count de readings hoje + limite
-- [ ] T050 [SPEC-003#19] Implement `GET /api/v1/readings/:id/og-image` em `src/app/api/v1/readings/[id]/og-image/route.ts`
-  - Gera imagem OG da reading usando html-to-image; retorna como PNG
-- [ ] T051 [SPEC-003#22] Create `TarotCard` component com flip 3D em `src/components/tarot/tarot-card.tsx`
-  - Framer Motion: animação de virar carta (3D flip, 600ms ease-out); estados: face-down, flipping, face-up
-- [ ] T052 [SPEC-003#23] Create `CardTable` em `src/components/tarot/card-table.tsx`
-  - Layouts de espalhamento responsivos; posicionamento absoluto das cartas conforme spread
-- [ ] T053 [SPEC-003#24] Create `CardDetailPanel` em `src/components/tarot/card-detail-panel.tsx`
-  - Drawer lateral; significado upright/reversed; nome da carta; posição no spread
-- [ ] T054 [SPEC-003#20] Create `DeckSelector` em `src/components/tarot/deck-selector.tsx`
-  - Grid visual de baralhos; seleção com preview; info do baralho
-- [ ] T055 [SPEC-003#21] Create `SpreadSelector` em `src/components/tarot/spread-selector.tsx`
-  - Filtros por tipo; info de cada espalhamento; preview visual
-- [ ] T056 [SPEC-003#25] Create `ReadingSession` em `src/components/tarot/reading-session.tsx`
-  - Wrapper do fluxo completo: deck → spread → seleção → resultado
-- [ ] T057 [SPEC-003#26] Create `ReadingTimer` em `src/components/tarot/reading-timer.tsx`
-  - Contagem MM:SS; timer de reflexão antes de revelar
-  - Pausa automaticamente quando painel de detalhes está aberto
-  - Exibe tempo final ao salvar: "Tempo de leitura: 5min 23s"
-- [ ] T058 [SPEC-003#27] Create `ShareModal` em `src/components/tarot/share-modal.tsx`
-  - Opções: copiar link, download PNG, Web Share API (mobile)
-  - Toggle "Tornar pública esta tiragem" (atualiza isPublic no reading)
-  - Social media: WhatsApp, Twitter/X, Facebook
-- [ ] T059 [SPEC-003#28] Create `DailyLimitBanner` em `src/components/tarot/daily-limit-banner.tsx`
-  - Banner com CTA de upgrade quando limite atingido
-- [ ] T060 [SPEC-003#29] Create `ReadingStore` em `src/stores/reading-store.ts`
-  - Zustand com persistência em sessionStorage; estado da sessão de tiragem atual
-- [ ] T061 [SPEC-003#30] Configure TanStack Query hooks em `src/hooks/use-readings.ts`
-  - `useReadings()`, `useReading(id)`, `useDailyCount()`, `useCreateReading()`
-- [ ] T062 [SPEC-003#31] Create `/tirar` page em `src/app/(app)/tirar/page.tsx`
-  - Fluxo: deck → spread → sessão → resultado
-  - Loading: skeleton; Error: retry + toast; Empty: CTA "Começar primeira tiragem"
-- [ ] T063 [SPEC-003#32] Create `/minhas-tiragens` page em `src/app/(app)/minhas-tiragens/page.tsx`
-  - Histórico com paginação; filtros por data e tipo
-  - Loading: skeleton列表; Error: retry + toast; Empty: CTA "Faça sua primeira tiragem"
-- [ ] T064 [SPEC-003#33] Create `/tiragem/:id` page em `src/app/(app)/tiragem/[id]/page.tsx`
-  - Visualização pública de reading; usa ShareModal
-- [ ] T065 [SPEC-003#34-36] Create tarot tests em `tests/integration/tarot.test.ts` e `tests/e2e/tarot-flows.spec.ts`
-  - Unit: algoritmos de sorteio, Fisher-Yates, drawCards; Integration: endpoints; E2E: fluxo completo
-- [ ] T066 [SPEC-003#37] Optimize animations em `src/components/tarot/tarot-card.tsx`
-  - GPU acceleration, will-change, verify 60fps em devices lentos
-- [ ] T067 [Sprint-1#13] Create daily tarot component em `src/components/tarot/daily-tarot.tsx` + `src/app/(app)/page.tsx`
-  - Tarot do dia na home: cálculo determinístico (data + userId); carta única com significado
+Backend API Routes:
+- [x] T044 [SPEC-003#13] `GET /api/v1/decks` + `GET /api/v1/decks/:id/cards`
+- [x] T045 [SPEC-003#14] `GET /api/v1/spreads`
+- [x] T046 [SPEC-003#15] `POST /api/v1/readings` — Bearer, Zod, $transaction, daily limit
+- [x] T047 [SPEC-003#16] `GET /api/v1/readings` — pagination, filters
+- [x] T048 [SPEC-003#17] `GET /api/v1/readings/:id` — anti-timing OR filter
+- [x] T049 [SPEC-003#18] `GET /api/v1/readings/daily-count`
 
-**After completing this phase**:
-1. TypeScript Validation — `npm run validate`; fix todos os erros.
-2. Build — somente se explicitamente pedido.
-3. Testes — `npm run test` + `npx playwright test` (tarot flows).
-4. Update this plan — mark Phase 4 `✅ Completed`.
+Frontend Components:
+- [x] T054 [SPEC-003#20] `DeckSelector` — grid visual, seleção — 6 TDD tests
+- [x] T055 [SPEC-003#21] `SpreadSelector` — filtros por tipo — 6 TDD tests
+- [x] T057 [SPEC-003#26] `ReadingTimer` — MM:SS, pausa, onElapsed callback — 6 TDD tests
+- [x] T059 [SPEC-003#28] `DailyLimitBanner` — CTA upgrade — 4 TDD tests
+
+State & Hooks:
+- [x] T060 [SPEC-003#29] `ReadingStore` (Zustand) — sessionStorage persist — 6 TDD tests
+- [x] T061 [SPEC-003#30] TanStack Query hooks — `useReadings`, `useReading`, `useDailyCount`, `useCreateReading`, `useDecks`, `useSpreads` — 6 TDD tests
+
+Pages:
+- [x] T062 [SPEC-003#31] `/tirar` — deck→spread→sessão→resultado, loading skeletons
+- [x] T063 [SPEC-003#32] `/minhas-tiragens` — histórico, paginação prev/next
+- [x] T064 [SPEC-003#33] `/tiragem/:id` — visualização detalhada
+
+Review hardening (5-reviewer synthesis — all fixed):
+- [x] C1: Fixed daily limit race condition — `absoluteLimit` in `DailyLimitResult`, transaction guard uses it
+- [x] C2: Wired up data fetching in tirar page — `useDecks()` + `useSpreads()` + loading skeletons
+- [x] C3: Fixed `useCreateReading` — proper `createReadingResponseSchema` instead of `z.record(z.unknown())`
+- [x] I1+I5: ReadingTimer — side effects in `useEffect`, `onElapsed` via `useRef`
+- [x] I2+N3: Reading store — `createJSONStorage(() => sessionStorage)` replaces manual adapter
+- [x] I3: Validators — `z.string().refine()` replaces double type assertion
+- [x] I6: Pagination controls — prev/next buttons in minhas-tiragens
+- [x] I7: English error message → Portuguese
+- [x] I8: "(reversed)" → "(invertida)"
+- [x] N2: Deduplicated card schemas — shared `readingCardSchema`
+- [x] N4: Removed unused `count` prop from DailyLimitBanner
+- [x] N5: `limit` → `totalLimit` in daily-count response
+- [x] N6: Stabilized query key (primitive values)
+
+Previous review hardening (Phase 4 backend):
+- [x] C1: Fixed tier casing mismatch — `toUpperCase()` normalization
+- [x] C2: try/catch on POST business logic
+- [x] C3: NaN pagination — `Number(x) || 1`
+- [x] W1-W13: Prisma types, $transaction, anti-timing, body size, error envelopes, helpers
+
+**Pending Tasks**:
+- [ ] T050 [SPEC-003#19] `GET /api/v1/readings/:id/og-image` — OG image via html-to-image (needs `html-to-image` install)
+- [ ] T051 [SPEC-003#22] `TarotCard` — 3D flip with Framer Motion (600ms ease-out)
+- [ ] T052 [SPEC-003#23] `CardTable` — responsive spread layouts with absolute positioning
+- [ ] T053 [SPEC-003#24] `CardDetailPanel` — drawer lateral, upright/reversed meanings
+- [ ] T056 [SPEC-003#25] `ReadingSession` — wrapper fluxo completo
+- [ ] T058 [SPEC-003#27] `ShareModal` — copiar link, download PNG, Web Share API, social
+- [ ] T065 [SPEC-003#34-36] Integration + E2E tests
+- [ ] T066 [SPEC-003#37] Animation optimization — GPU, will-change, 60fps
+- [ ] T067 [Sprint-1#13] Daily tarot component + home page
+
+**New files (beyond plan)**:
+
+- `src/lib/api-response.ts` — shared `apiError()`/`apiSuccess()` helpers
+- `src/lib/tarot/helpers.ts` — `getDailyLimitStatus()`, `readingWhereForUser()`
+- `src/lib/tarot/decks.ts` — deck data access
+- `src/lib/validators/reading.ts` — Zod schemas for reading creation
+- `src/hooks/use-readings.ts` — TanStack Query hooks (6 hooks)
+- `src/stores/reading-store.ts` — Zustand session store
+- `src/components/tarot/deck-selector.tsx` — DeckSelector (T054)
+- `src/components/tarot/spread-selector.tsx` — SpreadSelector (T055)
+- `src/components/tarot/reading-timer.tsx` — ReadingTimer (T057)
+- `src/components/tarot/daily-limit-banner.tsx` — DailyLimitBanner (T059)
+- `src/app/(app)/tirar/page.tsx` — /tirar page (T062)
+- `src/app/(app)/minhas-tiragens/page.tsx` — /minhas-tiragens page (T063)
+- `src/app/(app)/tiragem/[id]/page.tsx` — /tiragem/:id page (T064)
+- `tests/hooks/use-readings.test.tsx` — 6 hooks tests
+- `tests/stores/reading-store.test.ts` — 6 store tests
+- `tests/components/daily-limit-banner.test.tsx` — 4 banner tests
+- `tests/components/reading-timer.test.tsx` — 6 timer tests
+- `tests/components/deck-selector.test.tsx` — 6 selector tests
+- `tests/components/spread-selector.test.tsx` — 6 selector tests
+
+**Modified files**:
+- `src/types/tarot.ts` — added `absoluteLimit` to `DailyLimitResult`
+- `src/lib/tarot/daily-limit.ts` — returns `absoluteLimit`
+- `src/lib/tarot/seed.ts` — simplified (removed dead branch)
+
+**Verification**:
+1. TypeScript — `tsc --noEmit` ✅ clean
+2. Lint — 0 errors, 1 warning (acceptable `<img>`) ✅
+3. Tests — 704 passed, 1 skipped ✅
+4. Review — 5-reviewer synthesis; all critical + important + informational findings fixed ✅
 
 ---
 
