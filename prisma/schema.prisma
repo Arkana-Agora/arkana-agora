@@ -49,6 +49,7 @@ model User {
   profile      UserProfile?
   subscription Subscription?
   sessions     Session[]
+  readings     Reading[]
 
   @@unique([provider, providerId])
 }
@@ -141,4 +142,36 @@ enum SubscriptionStatus {
   CANCELLED
   EXPIRED
   TRIAL
+}
+
+model Reading {
+  id        String   @id @default(cuid())
+  userId    String
+  deckId    String   // "rws" | "thoth" | "lenormand"
+  spreadId  String   // "three-card", "celtic-cross", etc.
+  title     String?
+  notes     String?
+  seed      String
+  duration  Int      // em segundos
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards ReadingCard[]
+
+  @@index([userId, createdAt])
+  @@map("readings")
+}
+
+model ReadingCard {
+  id            String  @id @default(cuid())
+  readingId     String
+  cardId        String  // ex: "rws-major-0"
+  positionIndex Int
+  isReversed    Boolean @default(false)
+
+  reading Reading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+
+  @@index([readingId])
+  @@map("reading_cards")
 }

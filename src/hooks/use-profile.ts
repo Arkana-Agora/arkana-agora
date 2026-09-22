@@ -79,18 +79,6 @@ export function useMyProfile() {
   })
 }
 
-export function useCheckUsername(username: string) {
-  return useQuery({
-    queryKey: ["check-username", username],
-    queryFn: async () => {
-      const res = await authApi.get(`/users/check-username/${username}`)
-      return z.object({ available: z.boolean() }).parse(res.data)
-    },
-    enabled: username.length >= 3,
-    staleTime: 30 * 1000,
-  })
-}
-
 export function useUpdateProfile() {
   const queryClient = useQueryClient()
 

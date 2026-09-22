@@ -1,0 +1,567 @@
+{
+  "deck": {
+    "id": "lenormand",
+    "name": "Grand Lenormand",
+    "description": "Baralho de 36 cartas baseado no sistema de Madame Lenormand. Focado em respostas práticas e situações cotidianas.",
+    "author": "Jean-Baptiste Alliette (Etteilla)",
+    "year": 1799,
+    "cardCount": 36,
+    "hasReversals": false,
+    "coverImageUrl": "/images/decks/lenormand-cover.jpg",
+    "cardBackImageUrl": "/images/decks/lenormand-back.jpg"
+  },
+  "cards": [
+    {
+      "id": "lenormand-01",
+      "number": 1,
+      "name": "Cavaleiro",
+      "keywords": ["movimento", "viajem", "notícias", "ação", "energia"],
+      "meaningGeneral": "O Cavaleiro representa movimento, chegadas e mudanças imminentes. Pode indicar uma notícia importante ou uma pessoa que está a caminho. Há uma energia de ação e progresso no momento.",
+      "meaningLove": "Em relacionamentos, pode indicar uma nova paixão chegando ou uma visita inesperada. Se está em um relacionamento, traz energia de renovação e aventura. Para solteiros, pode representar alguém que chegará em breve.",
+      "meaningWork": "Indica oportunidades profissionais que estão a caminho. Pode representar uma mudança de emprego ou um novo projeto chegando. Há movimentação no ambiente de trabalho.",
+      "meaningHealth": "Sugere melhoria na saúde ou início de um tratamento. Há uma energia de recuperação ativa. Pode indicar a necessidade de se manter em movimento para bem-estar.",
+      "imageUrl": "/images/decks/lenormand/lenormand-01.jpg",
+      "category": "pessoas"
+    },
+    {
+      "id": "lenormand-02",
+      "number": 2,
+      "name": "Trevo",
+      "keywords": [
+        "sorte",
+        "oportunidade",
+        "alegria",
+        "espontaneidade",
+        "harmonia"
+      ],
+      "meaningGeneral": "O Trevo é um símbolo de sorte e boas oportunidades. Representa alegria, espontaneidade e momentos felizes. Indica que as coisas estão fluindo de forma positiva.",
+      "meaningLove": "Em amor, traz encontros casuais e alegres. Pode indicar um romance leve e sem compromissos. Para relacionamentos estabelecidos, renova a paixão e a diversão.",
+      "meaningWork": "Boas notícias no trabalho podem surgir de forma inesperada. Uma oportunidade de networking ou parceria está disponível. A sorte está a seu favor profissionalmente.",
+      "meaningHealth": "Indica bem-estar geral e disposição. Pequenos prazeres contribuem para a saúde. Momento favorável para atividades ao ar livre.",
+      "imageUrl": "/images/decks/lenormand/lenormand-02.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-03",
+      "number": 3,
+      "name": "Barco",
+      "keywords": [
+        "viagem",
+        "liberdade",
+        "aventura",
+        "distância",
+        "exploração"
+      ],
+      "meaningGeneral": "O Barco representa viagens, especialmente por água, e uma sensação de liberdade. Indica uma jornada física ou emocional. Pode sugerir um período de exploração e descobertas.",
+      "meaningLove": "Em relacionamentos à distância, indica boas notícias. Pode representar um encontro romântico em uma viagem. Para solteiros, sugere que o amor pode estar longe ou em uma viagem.",
+      "meaningWork": "Viagens de negócios ou oportunidades no exterior estão indicadas. Pode representar uma expansão profissional. Há um período de transição no trabalho.",
+      "meaningHealth": "Sugere que viajar pode trazer benefícios à saúde. Mudança de ambiente contribui para o bem-estar. Momento de recarregar as energias.",
+      "imageUrl": "/images/decks/lenormand/lenormand-03.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-04",
+      "number": 4,
+      "name": "Casa",
+      "keywords": ["lar", "família", "segurança", "estabilidade", "conforto"],
+      "meaningGeneral": "A Casa representa o lar, a família e a sensação de pertencimento. Indica estabilidade, segurança e conforto emocional. Pode se referir a questões domésticas ou familiares.",
+      "meaningLove": "Em amor, indica um relacionamento sólido e estável. Pode representar morar juntos ou fortalecer laços familiares. Um ambiente doméstico harmonioso.",
+      "meaningWork": "Indica estabilidade profissional. Pode representar trabalho em casa ou uma empresa familiar. Ambiente de trabalho acolhedor e produtivo.",
+      "meaningHealth": "Sugere que o lar é um local importante para a recuperação. Saúde está ligada ao ambiente doméstico. Momento de cuidar do espaço de vida.",
+      "imageUrl": "/images/decks/lenormand/lenormand-04.jpg",
+      "category": "abstrato"
+    },
+    {
+      "id": "lenormand-05",
+      "number": 5,
+      "name": "Árvore",
+      "keywords": ["crescimento", "saúde", "raízes", "longevidade", "natureza"],
+      "meaningGeneral": "A Árvore simboliza crescimento, saúde e conexão com a natureza. Representa raízes firmes e um desenvolvimento gradual e constante. Indica vitalidade e longevidade.",
+      "meaningLove": "Em relacionamentos, indica crescimento conjunto ao longo do tempo. Uma relação que está se aprofundando. Paciência e dedicação são fundamentais.",
+      "meaningWork": "Crescimento profissional gradual e sustentável. Pode representar uma carreira em áreas ligadas à natureza ou saúde. Progresso constante.",
+      "meaningHealth": "Forte indicativo de boa saúde e vitalidade. Pode indicar a importância de atividades ao ar livre. Recuperação lenta porém segura.",
+      "imageUrl": "/images/decks/lenormand/lenormand-05.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-06",
+      "number": 6,
+      "name": "Nuvens",
+      "keywords": ["confusão", "dúvida", "nevoeiro", "incerteza", "transição"],
+      "meaningGeneral": "As Nuvens representam confusão, dúvidas e falta de clareza. Indica um período de incerteza onde as coisas não estão completamente visíveis. Pode haver escuridão antes da claridade.",
+      "meaningLove": "Em amor, pode indicar confusão nos sentimentos. Um relacionamento que passa por um período nebuloso. Dúvidas sobre a direção da relação.",
+      "meaningWork": "Falta de clareza em projetos ou decisões profissionais. Pode haver mal-entendidos no trabalho. É necessário esperar as nuvens passarem.",
+      "meaningHealth": "Pode indicar problemas de saúde que ainda não foram diagnosticados. Momento de buscar esclarecimentos médicos. A ansiedade pode estar presente.",
+      "imageUrl": "/images/decks/lenormand/lenormand-06.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-07",
+      "number": 7,
+      "name": "Sereno",
+      "keywords": ["claridade", "paz", "comunicação", "harmonia", "expressão"],
+      "meaningGeneral": "O Sereno representa claridade, paz e comunicação eficaz. Indica que as nuvens se dispersam e a verdade emerge. Há uma sensação de renovação e limpeza.",
+      "meaningLove": "Em relacionamentos, traz conversas importantes e esclarecedoras. Um momento de entendimento mútuo. A comunicação flui de forma harmoniosa.",
+      "meaningWork": "Boas notícias e clareza em projetos profissionais. Comunicação eficaz com colegas e superiores. Momento favorável para reuniões e apresentações.",
+      "meaningHealth": "Indica melhoria na saúde após um período difícil. Clareza mental e emocional contribui para o bem-estar. Momento de renovação.",
+      "imageUrl": "/images/decks/lenormand/lenormand-07.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-08",
+      "number": 8,
+      "name": "Baluarte",
+      "keywords": ["proteção", "defesa", "força", "segurança", "resistência"],
+      "meaningGeneral": "O Baluarte representa proteção, defesa e segurança. Indica que você está cercado de proteção ou que precisa se defender de algo. Há uma força que resiste a ameaças.",
+      "meaningLove": "Em amor, pode indicar a necessidade de proteger o relacionamento. Uma defesa dos sentimentos ou da parceira. Pode representar ciúme ou posse.",
+      "meaningWork": "Proteção no ambiente profissional. Pode indicar a necessidade de defender suas ideias ou posição. Segurança no emprego atual.",
+      "meaningHealth": "Indica que o corpo está se defendendo. Pode representar o sistema imunológico trabalhando. Cuidados preventivos são importantes.",
+      "imageUrl": "/images/decks/lenormand/lenormand-08.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-09",
+      "number": 9,
+      "name": "Estrelas",
+      "keywords": [
+        "esperança",
+        "inspiração",
+        "espiritualidade",
+        "sorte",
+        "conquista"
+      ],
+      "meaningGeneral": "As Estrelas representam esperança, inspiração e guia espiritual. Indicam que seus desejos estão se alinhando com o universo. Há uma luz que guia seu caminho.",
+      "meaningLove": "Em amor, traz esperança e otimismo. Pode indicar um amor idealizado ou uma conexão espiritual. Relacionamento inspirador e elevado.",
+      "meaningWork": "Inspiração profissional e clareza de objetivos. Um projeto que vai além do material. Reconhecimento e admiração dos colegas.",
+      "meaningHealth": "Indica esperança na recuperação. Saúde espiritual e emocional está em alta. Meditação e práticas contemplativas são benéficas.",
+      "imageUrl": "/images/decks/lenormand/lenormand-09.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-10",
+      "number": 10,
+      "name": "Anel",
+      "keywords": ["compromisso", "aliança", "eternidade", "união", "ciclo"],
+      "meaningGeneral": "O Anel representa compromisso, aliança e união. Indica ciclos que se completam e promessas que são cumpridas. Há uma ligação duradoura e significativa.",
+      "meaningLove": "Em amor, é um forte indicativo de compromisso. Pode representar noivado, casamento ou uma parceria séria. Fidelidade e lealdade.",
+      "meaningWork": "Contratos e acordos profissionais importantes. Parcerias de longo prazo. Compromisso com projetos de grande escala.",
+      "meaningHealth": "Indica ciclos de saúde que se completam. Um tratamento que chega ao fim com sucesso. Continuidade nos cuidados com a saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-10.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-11",
+      "number": 11,
+      "name": "Cruz",
+      "keywords": ["destino", "provação", "fé", "carga", "propósito"],
+      "meaningGeneral": "A Cruz representa destino, provações e fé. Indica que há uma carga ou responsabilidade que precisa ser carregada. Uma lição importante está sendo aprendida.",
+      "meaningLove": "Em amor, pode indicar um relacionamento que traz lições difíceis. Uma carga emocional compartilhada. Fé no amor é testada.",
+      "meaningWork": "Responsabilidades profissionais pesadas. Um projeto que exige dedicação total. Pode indicar dificuldades que levam ao crescimento.",
+      "meaningHealth": "Pode indicar uma condição de saúde que precisa ser enfrentada. Uma provação que fortalece. Cuidados com a saúde exigem disciplina.",
+      "imageUrl": "/images/decks/lenormand/lenormand-11.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-12",
+      "number": 12,
+      "name": "Pássaros",
+      "keywords": [
+        "comunicação",
+        "alegria",
+        "sociedade",
+        "conversa",
+        "diversão"
+      ],
+      "meaningGeneral": "Os Pássaros representam comunicação, alegria e interações sociais. Indicam conversas animadas e momentos de diversão em grupo. Há uma energia leve e sociável.",
+      "meaningLove": "Em amor, pode indicar flertes e conversasromânticas. Uma relação que começa com comunicação. Diversão e leveza no relacionamento.",
+      "meaningWork": "Networking e interações profissionais produtivas. Reuniões e apresentações bem-sucedidas. Ambiente de trabalho colaborativo.",
+      "meaningHealth": "Indica que a socialização contribui para a saúde. Momento de aproveitar a companhia de amigos. Bem-estar emocional através de conexões.",
+      "imageUrl": "/images/decks/lenormand/lenormand-12.jpg",
+      "category": "abstrato"
+    },
+    {
+      "id": "lenormand-13",
+      "number": 13,
+      "name": "Criança",
+      "keywords": [
+        "inocência",
+        "novo começo",
+        "pureza",
+        "curiosidade",
+        "potencial"
+      ],
+      "meaningGeneral": "A Criança representa inocência, novos começos e potencial. Indica algo que está começando de forma pura e cheia de possibilidades. Há uma energia de descoberta.",
+      "meaningLove": "Em amor, pode indicar um novo relacionamento inocente. Curiosidade e descoberta mútua. Uma conexão que está apenas começando.",
+      "meaningWork": "Novos projetos e oportunidades que estão nascendo. Um período de aprendizado e crescimento profissional. Potencial não explorado.",
+      "meaningHealth": "Indica vitalidade e disposição. Saúde em um estado puro e forte. Momento de cuidar do corpo com carinho.",
+      "imageUrl": "/images/decks/lenormand/lenormand-13.jpg",
+      "category": "pessoas"
+    },
+    {
+      "id": "lenormand-14",
+      "number": 14,
+      "name": "Raposa",
+      "keywords": [
+        "astúcia",
+        "inteligência",
+        "estratégia",
+        "cautela",
+        "adaptação"
+      ],
+      "meaningGeneral": "A Raposa representa astúcia, inteligência e estratégias. Indica a necessidade de ser esperto e adaptável. Pode haver uma situação que exige cautela.",
+      "meaningLove": "Em amor, pode indicar uma pessoa astuta ou calculista. Cuidado com possíveis enganos. Uma relação que exige atenção e estratégia.",
+      "meaningWork": "Estratégias profissionais são necessárias. Pode representar concorrência no ambiente de trabalho. Inteligência é uma vantagem.",
+      "meaningHealth": "Indica a importância de ser esperto com a saúde. Cuidados preventivos e estratégicos. Pode indicar a necessidade de buscar uma segunda opinião.",
+      "imageUrl": "/images/decks/lenormand/lenormand-14.jpg",
+      "category": "animais"
+    },
+    {
+      "id": "lenormand-15",
+      "number": 15,
+      "name": "Urso",
+      "keywords": ["força", "poder", "proteção", "liderança", "determinação"],
+      "meaningGeneral": "O Urso representa força, poder e liderança. Indica uma energia de proteção e determinação. Há uma autoridade natural e uma capacidade de superar obstáculos.",
+      "meaningLove": "Em amor, pode indicar uma pessoa protetora e forte. Uma relação que traz segurança e estabilidade. Proteção mútua no relacionamento.",
+      "meaningWork": "Liderança profissional é reconhecida. Uma posição de poder ou autoridade. Força para enfrentar desafios no trabalho.",
+      "meaningHealth": "Indica força física e vitalidade. Saúde robusta e resistência. Momento de aproveitar a energia disponível.",
+      "imageUrl": "/images/decks/lenormand/lenormand-15.jpg",
+      "category": "animais"
+    },
+    {
+      "id": "lenormand-16",
+      "number": 16,
+      "name": "Estrela",
+      "keywords": ["esperança", "fé", "iluminação", "paz", "espiritualidade"],
+      "meaningGeneral": "A Estrela de 16 raios representa esperança, fé e iluminação espiritual. Indica que há uma luz guiando seu caminho. Paz e serenidade estão presentes.",
+      "meaningLove": "Em amor, traz esperança e otimismo. Uma conexão espiritual e elevada. Fé no amor e nos sentimentos.",
+      "meaningWork": "Inspiração profissional e clareza de propósito. Um projeto que vai além do material. Reconhecimento e admiração.",
+      "meaningHealth": "Indica esperança na recuperação. Saúde espiritual e emocional elevada. Meditação e práticas contemplativas são benéficas.",
+      "imageUrl": "/images/decks/lenormand/lenormand-16.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-17",
+      "number": 17,
+      "name": "Cigana",
+      "keywords": [
+        "mistério",
+        "mudança",
+        "aventura",
+        "liberdade",
+        "imprevisibilidade"
+      ],
+      "meaningGeneral": "A Cigana representa mistério, mudanças inesperadas e aventura. Indica um período de transformação e imprevisibilidade. Há uma energia de liberdade e descoberta.",
+      "meaningLove": "Em amor, pode indicar um romance inesperado e aventureiro. Uma pessoa misteriosa que chega à sua vida. Mudanças emocionais intensas.",
+      "meaningWork": "Mudanças profissionais inesperadas. Uma jornada que traz novas oportunidades. Flexibilidade é necessária.",
+      "meaningHealth": "Indica que a saúde pode mudar de forma imprevisível. Cuidados com o corpo são importantes. Uma jornada de autodescoberta.",
+      "imageUrl": "/images/decks/lenormand/lenormand-17.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-18",
+      "number": 18,
+      "name": "Alcaides",
+      "keywords": ["ajuda", "aliados", "apoio", "proteção", "oportunidade"],
+      "meaningGeneral": "Os Alcaides representam ajuda, aliados e oportunidades. Indicam que há pessoas dispostas a apoiá-lo. Uma porta se abre graças à influência de alguém.",
+      "meaningLove": "Em amor, pode indicar apoio de amigos no relacionamento. Uma relação que se fortalece com a ajuda de terceiros. Aliados no amor.",
+      "meaningWork": "Apoio profissional de colegas ou superiores. Uma oportunidade que surge através de contatos. Networking é fundamental.",
+      "meaningHealth": "Indica que o apoio de outros é importante para a saúde. Cuidados compartilhados. Profissionais de saúde disponíveis.",
+      "imageUrl": "/images/decks/lenormand/lenormand-18.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-19",
+      "number": 19,
+      "name": "Caminho",
+      "keywords": [
+        "decisão",
+        "direção",
+        "escolha",
+        "jornada",
+        "possibilidades"
+      ],
+      "meaningGeneral": "O Caminho representa decisões, direções e escolhas. Indica que há um cruzamento onde uma decisão precisa ser tomada. Múltiplas possibilidades se abrem.",
+      "meaningLove": "Em amor, pode indicar uma decisão importante no relacionamento. Escolher entre caminhos diferentes. Uma jornada amorosa que exige escolhas.",
+      "meaningWork": "Decisões profissionais que definem o futuro. Múltiplas oportunidades disponíveis. Uma escolha de carreira importante.",
+      "meaningHealth": "Indica que escolhas de estilo de vida afetam a saúde. Um caminho que precisa ser decidido. Mudanças nos hábitos são necessárias.",
+      "imageUrl": "/images/decks/lenormand/lenormand-19.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-20",
+      "number": 20,
+      "name": "Leite",
+      "keywords": [
+        "nutrição",
+        "cuidado",
+        "generosidade",
+        "abundância",
+        "maternidade"
+      ],
+      "meaningGeneral": "O Leite representa nutrição, cuidado e generosidade. Indica uma abundância de recursos e cuidado com o próximo. Há uma energia maternal e acolhedora.",
+      "meaningLove": "Em amor, pode indicar cuidado mútuo e nutrição emocional. Uma relação que alimenta a alma. Generosidade e afeto.",
+      "meaningWork": "Cuidado com projetos e colegas. Uma profissão que envolve cuidar dos outros. Recursos abundantes disponíveis.",
+      "meaningHealth": "Indica nutrição adequada e cuidados com o corpo. Alimentação saudável é importante. Cuidados maternais com a saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-20.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-21",
+      "number": 21,
+      "name": "Cruzamento",
+      "keywords": [
+        "decisão",
+        "encruzilhada",
+        "opções",
+        "transformação",
+        "cruzamento"
+      ],
+      "meaningGeneral": "O Cruzamento representa decisões importantes e encruzilhadas. Indica que há um ponto de virada onde uma escolha precisa ser feita. Uma transformação está em curso.",
+      "meaningLove": "Em amor, pode indicar um momento decisivo no relacionamento. Uma escolha entre diferentes caminhos amorosos. Transformação nos sentimentos.",
+      "meaningWork": "Decisões profissionais que mudam a direção da carreira. Um ponto de virada no trabalho. Transformação profissional.",
+      "meaningHealth": "Indica que decisões de saúde são necessárias. Um ponto de virada no bem-estar. Transformação nos hábitos de vida.",
+      "imageUrl": "/images/decks/lenormand/lenormand-21.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-22",
+      "number": 22,
+      "name": "Livro",
+      "keywords": [
+        "conhecimento",
+        "estudo",
+        "segredos",
+        "educação",
+        "mistério"
+      ],
+      "meaningGeneral": "O Livro representa conhecimento, estudo e segredos. Indica que há informações importantes a serem descobertas. Uma busca por sabedoria e entendimento.",
+      "meaningLove": "Em amor, pode indicar um relacionamento que traz aprendizado. Conhecimento mútuo e descoberta. Segredos que são revelados.",
+      "meaningWork": "Estudo e formação profissional são importantes. Um projeto que exige conhecimento. Segredos do ofício.",
+      "meaningHealth": "Indica a importância de se informar sobre saúde. Pesquisas e estudos médicos. Conhecimento é poder para a saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-22.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-23",
+      "number": 23,
+      "name": "Carta",
+      "keywords": [
+        "mensagem",
+        "comunicação",
+        "notícia",
+        "correspondência",
+        "informação"
+      ],
+      "meaningGeneral": "A Carta representa mensagens, comunicação e notícias. Indica que uma mensagem importante está a caminho. Há informações que precisam ser recebidas.",
+      "meaningLove": "Em amor, pode indicar uma mensagem romântica. Comunicação importante no relacionamento. Uma carta ou mensagem que traz notícias.",
+      "meaningWork": "Mensagens profissionais importantes. Correspondência que traz notícias. Comunicação no ambiente de trabalho.",
+      "meaningHealth": "Indica que informações sobre saúde são importantes. Resultados de exames. Comunicação com profissionais de saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-23.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-24",
+      "number": 24,
+      "name": "Homens",
+      "keywords": [
+        "figura masculina",
+        "pessoa",
+        "presença",
+        "influência",
+        "representação"
+      ],
+      "meaningGeneral": "Os Homens representam uma figura masculina importante ou uma presença significativa. Indica a influência de uma pessoa no seu destino. Uma figura que exerce poder.",
+      "meaningLove": "Em amor, pode indicar uma figura masculina importante. Uma pessoa que exerce influência no relacionamento. Presença de um homem significativo.",
+      "meaningWork": "Uma figura masculina influencia a carreira. Um colega ou chefe importante. Influência masculina no trabalho.",
+      "meaningHealth": "Indica que uma figura masculina pode influenciar a saúde. Cuidados com um homem importante. Presença masculina na recuperação.",
+      "imageUrl": "/images/decks/lenormand/lenormand-24.jpg",
+      "category": "pessoas"
+    },
+    {
+      "id": "lenormand-25",
+      "number": 25,
+      "name": "Coração",
+      "keywords": ["amor", "paixão", "emoção", "afeto", "sentimento"],
+      "meaningGeneral": "O Coração representa amor, paixão e emoções profundas. Indica que o coração está aberto e pronto para sentir. Uma energia de afeto e carinho.",
+      "meaningLove": "Em amor, é o indicador mais forte de paixão e sentimento. Amor verdadeiro e profundo. Um relacionamento cheio de emoção.",
+      "meaningWork": "Paixão pelo que faz. Um trabalho que traz satisfação emocional. Dedicação e amor à profissão.",
+      "meaningHealth": "Indica saúde do coração e emoções. Bem-estar emocional é fundamental. Cuidados com o coração.",
+      "imageUrl": "/images/decks/lenormand/lenormand-25.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-26",
+      "number": 26,
+      "name": "Diamante",
+      "keywords": [
+        "riqueza",
+        "valor",
+        "preciosidade",
+        "estabilidade",
+        "sucesso"
+      ],
+      "meaningGeneral": "O Diamante representa riqueza, valor e estabilidade financeira. Indica prosperidade e sucesso material. Há um valor precioso que precisa ser reconhecido.",
+      "meaningLove": "Em amor, pode indicar um relacionamento valioso e precioso. Uma conexão que tem grande valor emocional. Riqueza no amor.",
+      "meaningWork": "Sucesso financeiro e prosperidade profissional. Um projeto valioso que traz retorno. Estabilidade financeira.",
+      "meaningHealth": "Indica que a saúde é um tesouro precioso. Cuidados que trazem valor à vida. Bem-estar que não tem preço.",
+      "imageUrl": "/images/decks/lenormand/lenormand-26.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-27",
+      "number": 27,
+      "name": "Chave",
+      "keywords": ["solução", "resposta", "segredo", "abertura", "descoberta"],
+      "meaningGeneral": "A Chave representa soluções, respostas e descobertas. Indica que uma porta será aberta ou um segredo revelado. Há uma solução para o problema atual.",
+      "meaningLove": "Em amor, pode indicar a solução para um problema no relacionamento. Uma descoberta importante sobre os sentimentos. A chave para entender o amor.",
+      "meaningWork": "Uma solução profissional surge. Uma descoberta que muda a perspectiva. Uma chave para o sucesso.",
+      "meaningHealth": "Indica uma solução para um problema de saúde. Uma descoberta médica importante. A chave para o bem-estar.",
+      "imageUrl": "/images/decks/lenormand/lenormand-27.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-28",
+      "number": 28,
+      "name": "Âncora",
+      "keywords": [
+        "estabilidade",
+        "segurança",
+        "permanência",
+        "firmamento",
+        "equilíbrio"
+      ],
+      "meaningGeneral": "A Âncora representa estabilidade, segurança e permanência. Indica que você está firme e seguro em sua posição. Há um equilíbrio que precisa ser mantido.",
+      "meaningLove": "Em amor, indica um relacionamento estável e seguro. Uma base sólida para o amor. Permanência e fidelidade.",
+      "meaningWork": "Estabilidade profissional é mantida. Um emprego seguro e permanente. Firmamento na carreira.",
+      "meaningHealth": "Indica equilíbrio na saúde. Estabilidade emocional e física. Cuidados que mantêm a saúde firme.",
+      "imageUrl": "/images/decks/lenormand/lenormand-28.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-29",
+      "number": 29,
+      "name": "Cruz",
+      "keywords": ["destino", "provação", "fé", "carga", "propósito"],
+      "meaningGeneral": "A Cruz de 29 representa destino, provações e fé. Indica uma carga ou responsabilidade significativa. Uma lição importante que traz crescimento.",
+      "meaningLove": "Em amor, pode indicar um relacionamento que traz lições profundas. Uma carga emocional compartilhada. Fé no amor é testada e fortalecida.",
+      "meaningWork": "Responsabilidades profissionais significativas. Um projeto que exige dedicação total. Dificuldades que levam ao crescimento.",
+      "meaningHealth": "Pode indicar uma condição de saúde que precisa ser enfrentada. Uma provação que fortalece. Cuidados com a saúde exigem disciplina.",
+      "imageUrl": "/images/decks/lenormand/lenormand-29.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-30",
+      "number": 30,
+      "name": "Lua",
+      "keywords": [
+        "intuição",
+        "emocões",
+        "subconsciente",
+        "criatividade",
+        "mistério"
+      ],
+      "meaningGeneral": "A Lua representa intuição, emoções e o subconsciente. Indica que há algo oculto que precisa ser revelado. Uma conexão com o mundo dos sonhos.",
+      "meaningLove": "Em amor, pode indicar um romance misterioso e intenso. Intuição sobre os sentimentos. Um relacionamento que explora o subconsciente.",
+      "meaningWork": "Criatividade e intuição profissional são importantes. Um projeto que exige imaginação. Sonhos e aspirações no trabalho.",
+      "meaningHealth": "Indica que a saúde emocional é fundamental. Intuição sobre o corpo. Meditação e práticas noturnas são benéficas.",
+      "imageUrl": "/images/decks/lenormand/lenormand-30.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-31",
+      "number": 31,
+      "name": "Chave",
+      "keywords": ["solução", "resposta", "segredo", "abertura", "descoberta"],
+      "meaningGeneral": "A Chave de 31 representa soluções definitivas e respostas finais. Indica que uma porta será aberta de forma permanente. Uma descoberta que transforma.",
+      "meaningLove": "Em amor, pode indicar a solução definitiva para um problema. Uma descoberta que muda tudo. A chave para o amor eterno.",
+      "meaningWork": "Uma solução profissional definitiva. Uma descoberta que muda a carreira. Uma chave para o sucesso duradouro.",
+      "meaningHealth": "Indica uma solução definitiva para um problema de saúde. Uma descoberta médica transformadora. A chave para a saúde permanente.",
+      "imageUrl": "/images/decks/lenormand/lenormand-31.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-32",
+      "number": 32,
+      "name": "Peixe",
+      "keywords": [
+        "abundância",
+        "prosperidade",
+        "recursos",
+        "fluidez",
+        "movimento"
+      ],
+      "meaningGeneral": "O Peixe representa abundância, prosperidade e recursos. Indica uma fluidez de recursos e uma abundância disponível. Há uma movimentação constante de bens.",
+      "meaningLove": "Em amor, pode indicar abundância de sentimentos. Uma relação que traz prosperidade emocional. Fluidez no relacionamento.",
+      "meaningWork": "Prosperidade profissional e recursos abundantes. Um trabalho que traz retorno financeiro. Movimentação constante de negócios.",
+      "meaningHealth": "Indica que a saúde está em abundância. Recursos disponíveis para o bem-estar. Fluidez na recuperação.",
+      "imageUrl": "/images/decks/lenormand/lenormand-32.jpg",
+      "category": "animais"
+    },
+    {
+      "id": "lenormand-33",
+      "number": 33,
+      "name": "Ánima",
+      "keywords": [
+        "alma",
+        "essência",
+        "espiritualidade",
+        "conexao",
+        "profundidade"
+      ],
+      "meaningGeneral": "A Ánima representa a alma, a essência e a espiritualidade. Indica uma conexão profunda com algo maior. Há uma busca pelo sentido da vida.",
+      "meaningLove": "Em amor, pode indicar uma conexão de alma. Um relacionamento que toca a essência. Espiritualidade no amor.",
+      "meaningWork": "Propósito profundo no trabalho. Uma carreira que traz sentido à vida. Conexão espiritual com o que faz.",
+      "meaningHealth": "Indica que a saúde da alma é fundamental. Bem-estar espiritual contribui para a saúde. Conexão com a essência.",
+      "imageUrl": "/images/decks/lenormand/lenormand-33.jpg",
+      "category": "pessoas"
+    },
+    {
+      "id": "lenormand-34",
+      "number": 34,
+      "name": "Corrente",
+      "keywords": ["fluxo", "movimento", "energia", "conexão", "ciclo"],
+      "meaningGeneral": "A Corrente representa fluxo, movimento e energia. Indica que há um fluxo constante de energia e conexões. Um ciclo que se renova continuamente.",
+      "meaningLove": "Em amor, indica um fluxo de sentimentos e conexões. Uma relação que está em movimento constante. Energia que circula no relacionamento.",
+      "meaningWork": "Fluxo de trabalho e energia profissional. Um ciclo que se renova. Conexões que trazem movimento.",
+      "meaningHealth": "Indica que o fluxo de energia é importante para a saúde. Circulação e movimento contribuem para o bem-estar. Ciclos de saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-34.jpg",
+      "category": "natureza"
+    },
+    {
+      "id": "lenormand-35",
+      "number": 35,
+      "name": "Coroa",
+      "keywords": [
+        "sucesso",
+        "conquista",
+        "reconhecimento",
+        "liderança",
+        "vitória"
+      ],
+      "meaningGeneral": "A Coroa representa sucesso, conquista e reconhecimento. Indica que uma vitória está próxima. Há uma sensação de realizaçãoe orgulho.",
+      "meaningLove": "Em amor, pode indicar um relacionamento que traz realização. Uma conquista amorosa. Reconhecimento no amor.",
+      "meaningWork": "Sucesso profissional e reconhecimento. Uma conquista que traz orgulho. Liderança e vitória no trabalho.",
+      "meaningHealth": "Indica uma conquista na saúde. Uma vitória sobre uma doença. Reconhecimento do esforço para a saúde.",
+      "imageUrl": "/images/decks/lenormand/lenormand-35.jpg",
+      "category": "objetos"
+    },
+    {
+      "id": "lenormand-36",
+      "number": 36,
+      "name": "Roda",
+      "keywords": [
+        "ciclo",
+        "mudança",
+        "destino",
+        "roda da sorte",
+        "transformação"
+      ],
+      "meaningGeneral": "A Roda representa ciclos, mudanças e destino. Indica que a vida está em constante movimento e transformação. Uma roda que gira e traz novas possibilidades.",
+      "meaningLove": "Em amor, pode indicar um ciclo que se completa. Mudanças no relacionamento que trazem transformação. O destino no amor.",
+      "meaningWork": "Ciclos profissionais que se repetem. Mudanças na carreira que trazem transformação. A roda da sorte profissional.",
+      "meaningHealth": "Indica ciclos de saúde que se transformam. Mudanças que trazem bem-estar. A roda da saúde gira constantemente.",
+      "imageUrl": "/images/decks/lenormand/lenormand-36.jpg",
+      "category": "natureza"
+    }
+  ]
+}
