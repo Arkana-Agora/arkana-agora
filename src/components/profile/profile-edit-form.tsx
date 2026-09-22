@@ -60,15 +60,14 @@ export function ProfileEditForm() {
   }, [profile, reset])
 
   const onSubmit = async (data: EditProfileFormData) => {
-    const cleaned = {
-      ...(data.displayName && { displayName: data.displayName }),
-      ...(data.bio && { bio: data.bio }),
-      ...(data.birthDate && { birthDate: data.birthDate }),
-      ...(data.birthPlace && { birthPlace: data.birthPlace }),
-      ...(data.location && { location: data.location }),
-      ...(data.website && { website: data.website }),
-      ...(data.username && { username: data.username }),
-    }
+    const cleaned: Record<string, string> = {}
+    if (data.displayName !== undefined) cleaned.displayName = data.displayName
+    if (data.bio !== undefined) cleaned.bio = data.bio
+    if (data.birthDate !== undefined) cleaned.birthDate = data.birthDate
+    if (data.birthPlace !== undefined) cleaned.birthPlace = data.birthPlace
+    if (data.location !== undefined) cleaned.location = data.location
+    if (data.website !== undefined) cleaned.website = data.website
+    if (data.username !== undefined) cleaned.username = data.username
 
     await updateProfile.mutateAsync(cleaned)
     setLastSavedAt(new Date())
