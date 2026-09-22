@@ -29,14 +29,18 @@ const CAREER_SUFFIX = `\n\nFOCO: Carreira e Financas. Foque sua interpretacao em
 
 const YESNO_SUFFIX = `\n\nMODO SIM/NAO: O usuario fara uma pergunta especifica. Responda PRIMEIRO com uma unica palavra: 'Sim', 'Nao' ou 'Inconclusivo'. Depois, em um unico paragrafo, justifique sua resposta com base nas cartas tiradas.`
 
+const SPIRITUAL_SUFFIX = `\n\nFOCO: Espiritualidade e Proposito. Foque sua interpretacao em crescimento espiritual, proposito de vida, autoconhecimento, intuição e conexao com o divino.`
+
 export function getSystemPrompt(
-  mode?: "general" | "love" | "career" | "yesno",
+  mode?: "general" | "love" | "career" | "spiritual" | "yesno",
 ): string {
   switch (mode) {
     case "love":
       return SYSTEM_PROMPT + LOVE_SUFFIX
     case "career":
       return SYSTEM_PROMPT + CAREER_SUFFIX
+    case "spiritual":
+      return SYSTEM_PROMPT + SPIRITUAL_SUFFIX
     case "yesno":
       return SYSTEM_PROMPT + YESNO_SUFFIX
     default:

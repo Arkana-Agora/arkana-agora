@@ -1,0 +1,60 @@
+import { logger, newReqId } from "@/lib/logger"
+import { requireAuth } from "@/app/api/v1/users/_helpers"
+import { apiError } from "@/lib/api-response"
+import { calculatePersonalArcana } from "@/lib/arcana/calculate"
+import { getArcanaByNumber } from "@/data/arcana"
+import { prisma } from "@/lib/prisma"
+
+export const dynamic = "force-dynamic"
+
+export async function GET(request: Request): Promise<Response> {
+  const reqId = newReqId()
+
+  const auth = await requireAuth(request, reqId)
+  if (auth instanceof Response) return auth
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { name: true, birthDate: true, personalArcana: true },
+    })
+
+    if (!user) {
+      return apiError("USER_NOT_FOUND", "Usuario nao encontrado", reqId, 404)
+    }
+
+    if (!user.birthDate || !user.name) {
+      return apiError(
+        "INCOMPLETE_PROFILE",
+        "Data de nascimento e nome sao obrigatorios para calcular o arcano",
+        reqId,
+        422,
+      )
+    }
+
+    const arcanaNumber =
+      user.personalArcana ?? calculatePersonalArcana(user.birthDate, user.name)
+
+    if (arcanaNumber === null) {
+      return apiError(
+        "CALCULATION_ERROR",
+        "Nao foi possivel calcular o arcano pessoal",
+        reqId,
+        500,
+      )
+    }
+
+    const arcanaData = getArcanaByNumber(arcanaNumber)
+
+    return Response.json({
+      arcana: arcanaNumber,
+      arcanaData,
+      name: user.name,
+      birthDate: user.birthDate,
+      meta: { requestId: reqId },
+    })
+  } catch (err) {
+    logger.error({ reqId, err }, "[arcana/calculate] erro interno")
+    return apiError("INTERNAL_ERROR", "Erro interno", reqId, 500)
+  }
+}
