@@ -139,7 +139,7 @@ src/
 | 3 | Tarot Engine Data & Algorithms | None | ✅ Completed |
 | 4 | Tarot Engine Backend & Frontend | Phase 3 | ✅ Completed |
 | 5 | AI Readings Pipeline | Phase 3 | ✅ Completed |
-| 6 | Arcana Personal | Phase 5 | ⬜ Pending |
+| 6 | Arcana Personal | Phase 5 | ✅ Completed |
 | 7 | PWA, Landing & Polish | None | ⬜ Pending |
 
 **Total: 119 tasks (T001-T119), ZERO duplicatas**
@@ -523,44 +523,44 @@ Previous review hardening (Phase 4 backend):
 
 ### Phase 6: Arcana Personal
 
-**Status**: ⬜ Pending
+**Status**: ✅ Completed
 **Objective**: Algoritmos de Pitágoras, tabela pitagórica, 22 arcanos, backend, frontend.
 **Dependencies**: Phase 5 (AI streaming para interpretação de arcano)
 
 **Tasks**:
 
-- [ ] T091 [SPEC-005#3] Create Pythagorean table em `src/lib/arcana/pythagorean-table.ts`
+- [x] T091 [SPEC-005#3] Create Pythagorean table em `src/lib/arcana/pythagorean-table.ts`
   - `PYTHAGOREAN_TABLE`: mapeamento letra→número (1-9); normalização de acentos
-- [ ] T092 [SPEC-005#1] Implement `reduceToArcana` em `src/lib/arcana/reduce.ts`
+- [x] T092 [SPEC-005#1] Implement `reduceToArcana` em `src/lib/arcana/reduce.ts`
   - Redução pitagórica: soma dígitos até 1-22; `reduceToArcana(n: number): number`
-- [ ] T093 [SPEC-005#2] Implement `calculateArcanaByDate` em `src/lib/arcana/calculate.ts`
+- [x] T093 [SPEC-005#2] Implement `calculateArcanaByDate` em `src/lib/arcana/calculate.ts`
   - `calculateArcanaByDate(birthDate: Date): number`; usa reduceToArcana com soma dos dígitos da data
-- [ ] T094 [SPEC-005#4] Implement `calculateArcanaByName` em `src/lib/arcana/calculate.ts`
+- [x] T094 [SPEC-005#4] Implement `calculateArcanaByName` em `src/lib/arcana/calculate.ts`
   - `calculateArcanaByName(name: string): number`; usa PYTHAGOREAN_TABLE; normaliza acentos
-- [ ] T095 [SPEC-005#5] Implement `calculatePersonalArcana` em `src/lib/arcana/calculate.ts`
+- [x] T095 [SPEC-005#5] Implement `calculatePersonalArcana` em `src/lib/arcana/calculate.ts`
   - `calculatePersonalArcana(birthDate: Date, name: string): number`; combina data + nome
-- [ ] T096 [SPEC-005#6] Create `ARCANA_MAP` em `src/data/arcana.ts`
+- [x] T096 [SPEC-005#6] Create `ARCANA_MAP` em `src/data/arcana.ts`
   - 22 arcanos (0-21): nome, imagem, significado upright/reversed, elemento, planeta
   - Master numbers: 11 (A Força), 22 (O Louco), 33 "A Coroa" (extra-pitagórico, culminação)
   - Tipo `PersonalArcanaResult`: { dateArcana, nameArcana, combinedArcana, isMasterNumber }
-- [ ] T097 [SPEC-005#8] Implement `GET /api/v1/arcana/calculate` em `src/app/api/v1/arcana/calculate/route.ts`
+- [x] T097 [SPEC-005#8] Implement `GET /api/v1/arcana/calculate` em `src/app/api/v1/arcana/calculate/route.ts`
   - Bearer; calcula arcano pessoal; retorna `{arcana, arcanaData, name, birthDate}`
-- [ ] T098 [SPEC-005#9] Implement `POST /api/v1/ai/arcana-interpret` em `src/app/api/v1/ai/arcana-interpret/route.ts`
+- [x] T098 [SPEC-005#9] Implement `POST /api/v1/ai/arcana-interpret` em `src/app/api/v1/ai/arcana-interpret/route.ts`
   - Bearer; SSE streaming; interpretação IA do arcano pessoal
-- [ ] T099 [SPEC-005#10] Create `ArcanaCalculator` em `src/components/arcana/arcana-calculator.tsx`
+- [x] T099 [SPEC-005#10] Create `ArcanaCalculator` em `src/components/arcana/arcana-calculator.tsx`
   - Formulário (nome + data); resultado client-side; animação de revelação
-- [ ] T100 [SPEC-005#11] Create `ArcanaDetailCard` em `src/components/arcana/arcana-detail-card.tsx`
+- [x] T100 [SPEC-005#11] Create `ArcanaDetailCard` em `src/components/arcana/arcana-detail-card.tsx`
   - Card expandido com detalhes do arcano; imagem, significado, elemento
-- [ ] T101 [SPEC-005#12] Create `ArcanaAIInterpretation` em `src/components/arcana/arcana-ai-interpretation.tsx`
+- [x] T101 [SPEC-005#12] Create `ArcanaAIInterpretation` em `src/components/arcana/arcana-ai-interpretation.tsx`
   - Integração com T098; StreamingInterpretation para arcano
-- [ ] T102 [SPEC-005#13] Create `/meu-arcano` page em `src/app/(app)/meu-arcano/page.tsx`
+- [x] T102 [SPEC-005#13] Create `/meu-arcano` page em `src/app/(app)/meu-arcano/page.tsx`
   - ArcanaCalculator + ArcanaDetailCard + ArcanaAIInterpretation
   - Loading: skeleton; Error: retry + toast; Empty: formulário de cálculo sempre visível
-- [ ] T103 [SPEC-005#14] Create `/meu-arcano/:arcana` page em `src/app/(app)/meu-arcano/[arcana]/page.tsx`
+- [x] T103 [SPEC-005#14] Create `/meu-arcano/:arcana` page em `src/app/(app)/meu-arcano/[arcana]/page.tsx`
   - Detalhe de qualquer arcano; usa ArcanaDetailCard
-- [ ] T104 [SPEC-005#15-16] Create arcana unit tests em `tests/arcana.test.ts`
+- [x] T104 [SPEC-005#15-16] Create arcana unit tests em `tests/arcana.test.ts`
   - 100 testes redução pitagórica (datas conhecidas); testes tabela pitagórica (acentos)
-- [ ] T105 [SPEC-005#17-18] Create arcana integration + E2E tests em `tests/integration/arcana.test.ts` e `tests/e2e/arcana.spec.ts`
+- [x] T105 [SPEC-005#17-18] Create arcana integration + E2E tests em `tests/integration/arcana.test.ts` e `tests/e2e/arcana.spec.ts`
   - Integration: endpoint /arcana/calculate; E2E: fluxo completo na página /meu-arcano
 
 **After completing this phase**:
@@ -738,21 +738,21 @@ Previous review hardening (Phase 4 backend):
 - [x] TypeScript validation + lint + tests pass
 
 ### Phase 6: Arcana Personal
-- [ ] T091 Pythagorean table
-- [ ] T092 reduceToArcana function
-- [ ] T093 calculateArcanaByDate function
-- [ ] T094 calculateArcanaByName function
-- [ ] T095 calculatePersonalArcana function
-- [ ] T096 ARCANA_MAP (22 arcanos)
-- [ ] T097 GET /api/v1/arcana/calculate
-- [ ] T098 POST /api/v1/ai/arcana-interpret (SSE)
-- [ ] T099 ArcanaCalculator component
-- [ ] T100 ArcanaDetailCard component
-- [ ] T101 ArcanaAIInterpretation component
-- [ ] T102 /meu-arcano page
-- [ ] T103 /meu-arcano/:arcana page
-- [ ] T104 Arcana unit tests (100+ test cases)
-- [ ] T105 Arcana integration + E2E tests
+- [x] T091 Pythagorean table
+- [x] T092 reduceToArcana function
+- [x] T093 calculateArcanaByDate function
+- [x] T094 calculateArcanaByName function
+- [x] T095 calculatePersonalArcana function
+- [x] T096 ARCANA_MAP (22 arcanos)
+- [x] T097 GET /api/v1/arcana/calculate
+- [x] T098 POST /api/v1/ai/arcana-interpret (SSE)
+- [x] T099 ArcanaCalculator component
+- [x] T100 ArcanaDetailCard component
+- [x] T101 ArcanaAIInterpretation component
+- [x] T102 /meu-arcano page
+- [x] T103 /meu-arcano/:arcana page
+- [x] T104 Arcana unit tests (100+ test cases)
+- [x] T105 Arcana integration + E2E tests
 - [ ] TypeScript validation + lint + tests pass
 
 ### Phase 7: PWA, Landing & Polish
@@ -844,3 +844,10 @@ Previous review hardening (Phase 4 backend):
   - Security: prompt injection guard, input sanitization, user-scoped cache, follow-up history cap
   - Type-check ✅, lint ✅, 808 tests pass (1 skipped)
   - Remaining: T090 (E2E test — requires Playwright browser)
+- 2026-09-22 — **Phase 6 ✅ Completed** (Arcana Personal):
+  - T091-T096: Pythagorean table (letter→number), reduceToArcana (recursive digit sum 1-22), calculateArcanaByDate, calculateArcanaByName, calculatePersonalArcana, ARCANA_MAP (22 arcanos with upright/reversed/element/planet)
+  - T097-T098: GET /api/v1/arcana/calculate, POST /api/v1/ai/arcana-interpret (SSE streaming)
+  - T099-T103: ArcanaCalculator, ArcanaDetailCard, ArcanaAIInterpretation components; /meu-arcano and /meu-arcano/[arcana] pages
+  - T104: 36 unit tests (Pythagorean table, reduceToArcana, calculate functions, ARCANA_MAP)
+  - Type-check ✅, 857 tests pass (1 skipped)
+  - Remaining: T105 (integration + E2E tests for arcana endpoints)

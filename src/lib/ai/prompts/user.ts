@@ -13,7 +13,7 @@ const INJECTION_PATTERNS = [
   /<\|assistant\|>/i,
 ]
 
-function sanitizeInput(input: string): string {
+export function sanitizeInput(input: string): string {
   let clean = input
   for (const pattern of INJECTION_PATTERNS) {
     clean = clean.replace(pattern, "[redacted]")

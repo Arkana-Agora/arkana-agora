@@ -1,0 +1,200 @@
+export interface ArcanaData {
+  number: number
+  name: string
+  upright: string
+  reversed: string
+  element: string
+  planet: string
+}
+
+export const ARCANA_MAP: Record<number, ArcanaData> = {
+  0: {
+    number: 0,
+    name: "O Louco",
+    upright: "Novos começos, espontaneidade, fé",
+    reversed: "Imaturidade, imprudência, apego ao passado",
+    element: "Ar",
+    planet: "Urano",
+  },
+  1: {
+    number: 1,
+    name: "O Mago",
+    upright: "Manifestação, poder pessoal, habilidade",
+    reversed: "Manipulação, habilidade mal usada, ilusão",
+    element: "Fogo",
+    planet: "Mercúrio",
+  },
+  2: {
+    number: 2,
+    name: "A Sacerdotisa",
+    upright: "Intuição, mistério, sabedoria interior",
+    reversed: "Segredos, superficialidade, falta de intuição",
+    element: "Água",
+    planet: "Lua",
+  },
+  3: {
+    number: 3,
+    name: "A Imperatriz",
+    upright: "Abundância, fertilidade, natureza",
+    reversed: "Dependência, criatividade bloqueada, negligência",
+    element: "Terra",
+    planet: "Vênus",
+  },
+  4: {
+    number: 4,
+    name: "O Imperador",
+    upright: "Autoridade, estrutura, estabilidade",
+    reversed: "Tirania, rigidez, controle excessivo",
+    element: "Fogo",
+    planet: "Marte",
+  },
+  5: {
+    number: 5,
+    name: "O Hierofante",
+    upright: "Tradição, ensino, espiritualidade",
+    reversed: "Rebelião, questionamento, dogma",
+    element: "Terra",
+    planet: "Júpiter",
+  },
+  6: {
+    number: 6,
+    name: "Os Amantes",
+    upright: "Amor, escolhas, harmonia",
+    reversed: "Disharmonia, desequilíbrio, má escolha",
+    element: "Ar",
+    planet: "Mercúrio",
+  },
+  7: {
+    number: 7,
+    name: "O Carro",
+    upright: "Determinação, vitória, progresso",
+    reversed: "Falta de direção, agressividade, derrota",
+    element: "Ar",
+    planet: "Sol",
+  },
+  8: {
+    number: 8,
+    name: "A Força",
+    upright: "Coragem, paciência, compaixão interior",
+    reversed: "Fraqueza, insegurança, violência",
+    element: "Fogo",
+    planet: "Sol",
+  },
+  9: {
+    number: 9,
+    name: "O Eremita",
+    upright: "Introspecção, sabedoria, busca interior",
+    reversed: "Isolamento, solidão, evasão",
+    element: "Terra",
+    planet: "Saturno",
+  },
+  10: {
+    number: 10,
+    name: "A Roda da Fortuna",
+    upright: "Ciclos, destino, sorte",
+    reversed: "Azar, resistência ao mudança, estagnação",
+    element: "Ar",
+    planet: "Júpiter",
+  },
+  11: {
+    number: 11,
+    name: "A Justiça",
+    upright: "Equilíbrio, verdade, consequências",
+    reversed: "Injustiça, desonestidade, desequilíbrio",
+    element: "Ar",
+    planet: "Vênus",
+  },
+  12: {
+    number: 12,
+    name: "O Enforcado",
+    upright: "Sacrifício, nova perspectiva, rendição",
+    reversed: "Estagnação, egoísmo, recusa a ceder",
+    element: "Água",
+    planet: "Netuno",
+  },
+  13: {
+    number: 13,
+    name: "A Morte",
+    upright: "Transformação, fim de ciclo, renascimento",
+    reversed: "Resistência à mudança, medo, estagnação",
+    element: "Água",
+    planet: "Plutão",
+  },
+  14: {
+    number: 14,
+    name: "A Temperança",
+    upright: "Equilíbrio, moderação, paciência",
+    reversed: "Desequilíbrio, excesso, impaciência",
+    element: "Água",
+    planet: "Saturno",
+  },
+  15: {
+    number: 15,
+    name: "O Diabo",
+    upright: "Apego, materialismo, sombras",
+    reversed: "Libertação, autonomia, quebra de correntes",
+    element: "Terra",
+    planet: "Saturno",
+  },
+  16: {
+    number: 16,
+    name: "A Torre",
+    upright: "Ruptura, revelação, mudança súbita",
+    reversed: "Medo da mudança, evitação, destruição lenta",
+    element: "Fogo",
+    planet: "Marte",
+  },
+  17: {
+    number: 17,
+    name: "A Estrela",
+    upright: "Esperança, inspiração, serenidade",
+    reversed: "Desespero, falta de fé, isolamento",
+    element: "Ar",
+    planet: "Urano",
+  },
+  18: {
+    number: 18,
+    name: "A Lua",
+    upright: "Ilusão, medos, inconsciente",
+    reversed: "Clareza, superação de medos, verdade",
+    element: "Água",
+    planet: "Netuno",
+  },
+  19: {
+    number: 19,
+    name: "O Sol",
+    upright: "Alegria, sucesso, vitalidade",
+    reversed: "Pessimismo, atraso, excesso de otimismo",
+    element: "Fogo",
+    planet: "Sol",
+  },
+  20: {
+    number: 20,
+    name: "O Julgamento",
+    upright: "Renascimento, chamado, reflexão",
+    reversed: "Autocrítica excessiva, duvidas, recusa",
+    element: "Fogo",
+    planet: "Plutão",
+  },
+  21: {
+    number: 21,
+    name: "O Mundo",
+    upright: "Conclusão, realização, harmonia universal",
+    reversed: "Incompletude, falta de conclusão, superficialidade",
+    element: "Terra",
+    planet: "Saturno",
+  },
+  22: {
+    number: 22,
+    name: "O Louco",
+    upright: "Novos começos, espontaneidade, fé",
+    reversed: "Imaturidade, imprudência, apego ao passado",
+    element: "Ar",
+    planet: "Urano",
+  },
+}
+
+export function getArcanaByNumber(n: number): ArcanaData | null {
+  if (n === 22) return ARCANA_MAP[0] ?? null
+  return ARCANA_MAP[n] ?? null
+}
