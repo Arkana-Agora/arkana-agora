@@ -50,6 +50,8 @@ model User {
   subscription Subscription?
   sessions     Session[]
   readings     Reading[]
+  interpretations Interpretation[]
+  aiDailyUsage   AIDailyUsage[]
 
   @@unique([provider, providerId])
 }
@@ -158,6 +160,7 @@ model Reading {
 
   user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   cards ReadingCard[]
+  interpretations Interpretation[]
 
   @@index([userId, createdAt])
   @@map("readings")
@@ -174,4 +177,53 @@ model ReadingCard {
 
   @@index([readingId])
   @@map("reading_cards")
+}
+
+model Interpretation {
+  id               String   @id @default(cuid())
+  readingId        String
+  userId           String
+  mode             String   // "general" | "love" | "career" | "yesno"
+  mood             String?
+  question         String?
+  content          String   @db.Text
+  cacheHash        String   @unique
+  modelVersion     String   @default("gpt-4o-2024-08-06")
+  tokensUsed       Int      @default(0)
+  wasCached        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  reading          Reading          @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  followUpMessages FollowUpMessage[]
+
+  @@index([readingId])
+  @@map("interpretations")
+}
+
+model FollowUpMessage {
+  id               String   @id @default(cuid())
+  interpretationId String
+  role             String   // "user" | "assistant"
+  content          String   @db.Text
+  createdAt        DateTime @default(now())
+
+  interpretation Interpretation @relation(fields: [interpretationId], references: [id], onDelete: Cascade)
+
+  @@index([interpretationId])
+  @@map("follow_up_messages")
+}
+
+model AIDailyUsage {
+  id                   String   @id @default(cuid())
+  userId               String
+  date                 DateTime // data truncada (sem hora)
+  interpretationCount  Int      @default(0)
+  followUpCount        Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("ai_daily_usage")
 }
