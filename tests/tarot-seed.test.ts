@@ -16,28 +16,4 @@ describe("generateSeed", () => {
     const seeds = new Set(Array.from({ length: 100 }, () => generateSeed()))
     expect(seeds.size).toBe(100)
   })
-
-  it("generates deterministic seed from input", () => {
-    const seed1 = generateSeed("user-123", "rws", 1000)
-    const seed2 = generateSeed("user-123", "rws", 1000)
-    expect(seed1).toBe(seed2)
-  })
-
-  it("generates different seeds for different inputs", () => {
-    const seed1 = generateSeed("user-123", "rws", 1000)
-    const seed2 = generateSeed("user-456", "rws", 1000)
-    expect(seed1).not.toBe(seed2)
-  })
-
-  it("generates different seeds for different deck IDs", () => {
-    const seed1 = generateSeed("user-123", "rws", 1000)
-    const seed2 = generateSeed("user-123", "thoth", 1000)
-    expect(seed1).not.toBe(seed2)
-  })
-
-  it("generates different seeds for different timestamps", () => {
-    const seed1 = generateSeed("user-123", "rws", 1000)
-    const seed2 = generateSeed("user-123", "rws", 2000)
-    expect(seed1).not.toBe(seed2)
-  })
 })

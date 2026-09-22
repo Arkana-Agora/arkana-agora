@@ -93,5 +93,6 @@ export interface YesNoResult {
 export interface DailyLimitResult {
   allowed: boolean
   remaining: number
+  absoluteLimit: number
   tier: string
 }
