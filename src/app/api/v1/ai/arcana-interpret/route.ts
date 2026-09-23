@@ -3,6 +3,7 @@ import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
 import { getAIClient } from "@/lib/ai/client"
+import { getInterpretationModel } from "@/lib/ai/models"
 import { withRetry } from "@/lib/ai/retry"
 import { getSystemPrompt } from "@/lib/ai/prompts/system"
 import { sanitizeInput } from "@/lib/ai/prompts/user"
@@ -84,7 +85,7 @@ export async function POST(request: Request): Promise<Response> {
           const client = getAIClient()
           const aiResponse = await withRetry(() =>
             client.chat.completions.create({
-              model: "gpt-4o",
+              model: getInterpretationModel(),
               messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userPrompt },

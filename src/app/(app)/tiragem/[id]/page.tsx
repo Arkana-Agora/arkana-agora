@@ -4,6 +4,7 @@ import { use } from "react"
 import { useReading } from "@/hooks/use-readings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { ReadingAIPanel } from "@/components/ai/reading-ai-panel"
 
 export default function TiragemPage({
   params,
@@ -14,7 +15,7 @@ export default function TiragemPage({
   const { data, isLoading, error, refetch } = useReading(id)
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-4">
+    <main className="mx-auto max-w-4xl space-y-8 p-4">
       {isLoading && (
         <div className="space-y-4">
           <Skeleton className="h-8 w-48" />
@@ -33,33 +34,41 @@ export default function TiragemPage({
 
       {data && (
         <>
-          <h1 className="text-3xl font-bold">
-            {data.reading.title ?? `Tiragem ${data.reading.spreadId}`}
-          </h1>
-          <div className="text-sm text-muted-foreground">
-            <span>{data.reading.deckId}</span>
-            <span className="mx-2">·</span>
-            <span>
-              {new Date(data.reading.createdAt).toLocaleDateString("pt-BR")}
-            </span>
-            {data.reading.duration > 0 && (
-              <>
-                <span className="mx-2">·</span>
-                <span>{data.reading.duration}s</span>
-              </>
-            )}
-          </div>
-          <div className="grid gap-4">
-            {data.reading.cards.map((card) => (
-              <div key={card.id} className="rounded-lg border p-4">
-                <p className="font-medium">{card.cardId}</p>
-                <p className="text-sm text-muted-foreground">
-                  Posição {card.positionIndex + 1}
-                  {card.isReversed ? " (invertida)" : ""}
-                </p>
-              </div>
-            ))}
-          </div>
+          <header className="space-y-2">
+            <h1 className="text-3xl font-bold">
+              {data.reading.title ?? `Tiragem ${data.reading.spreadId}`}
+            </h1>
+            <div className="text-sm text-muted-foreground">
+              <span>{data.reading.deckId}</span>
+              <span className="mx-2">·</span>
+              <span>
+                {new Date(data.reading.createdAt).toLocaleDateString("pt-BR")}
+              </span>
+              {data.reading.duration > 0 && (
+                <>
+                  <span className="mx-2">·</span>
+                  <span>{data.reading.duration}s</span>
+                </>
+              )}
+            </div>
+          </header>
+
+          <section aria-label="Cartas da tiragem">
+            <h2 className="mb-3 text-lg font-semibold">Suas cartas</h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {data.reading.cards.map((card) => (
+                <div key={card.id} className="rounded-lg border p-4">
+                  <p className="font-medium">{card.cardId}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Posição {card.positionIndex + 1}
+                    {card.isReversed ? " (invertida)" : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <ReadingAIPanel readingId={data.reading.id} />
         </>
       )}
     </main>
