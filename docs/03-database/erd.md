@@ -1,10 +1,10 @@
 # Diagrama ERD — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-12
+> Versão: 1.1 | Última atualização: 2026-09-23
 
 ---
 
-> **Status:** **5 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init migration `20260813000605_init` aplicada em dev PostgreSQL). As outras **13 entidades estão planejadas** e não existem ainda no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **11 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`) — migrations aplicadas em dev PostgreSQL. As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, `HoroscopeEntry`, social, marketplace, notificações) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 

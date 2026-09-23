@@ -1,6 +1,6 @@
 # Provedores de IA — arkana-agora
 
-> **SDK**: z-ai-web-dev-sdk | **Primário**: OpenAI GPT-4o | **Porta**: 3000 (web) + 3003 (WebSocket)
+> **SDK**: openai (`openai@^7`) | **Primário**: OpenAI GPT-4o | **Porta**: 3000 (web) + 3003 (WebSocket)
 
 ## Sumário
 
@@ -39,10 +39,9 @@
                             │
                             ▼
                    ┌─────────────────┐
-                   │  z-ai-web-dev   │
-                   │     SDK         │
-                   │  (abstração)    │
-                   └─────────────────┘
+                    │   OpenAI    │
+                    │  (SDK oficial)│
+                    └─────────────┘
 ```
 
 ### Status dos Provedores
@@ -81,35 +80,21 @@
 | Confiabilidade | 5 | SLA de 99,9%, raramente indisponível |
 | Ecossistema | 5 | Melhor SDK, documentação, comunidade |
 
-### Configuração via z-ai-web-dev-sdk
+### Configuração via openai SDK
 
 ```typescript
-// src/lib/ai/providers/openai.ts
+// src/lib/ai/client.ts
 
-import { zAiSdk } from 'z-ai-web-dev-sdk'
+import OpenAI from 'openai'
 
-export const openaiProvider = zAiSdk.createProvider({
-  name: 'openai',
-  models: [
-    {
-      id: 'gpt-4o',
-      name: 'GPT-4o',
-      maxTokens: 4096,
-      supportsStreaming: true,
-      costPer1kInputTokens: 0.0025,
-      costPer1kOutputTokens: 0.01,
-    },
-    {
-      id: 'gpt-4o-mini',
-      name: 'GPT-4o-mini',
-      maxTokens: 2048,
-      supportsStreaming: true,
-      costPer1kInputTokens: 0.00015,
-      costPer1kOutputTokens: 0.0006,
-    },
-  ],
-  defaultModel: 'gpt-4o',
-})
+export function getAIClient(): AIClient {
+  const apiKey = process.env.AI_API_KEY
+  if (!apiKey) throw new Error('AI_API_KEY environment variable is required')
+  return new OpenAI({ apiKey }) as AIClient
+}
+
+// Modelos: AI_MODEL (interpretacoes) e AI_MODEL_FOLLOWUP (follow-ups)
+// src/lib/ai/models.ts → getInterpretationModel() / getFollowUpModel()
 ```
 
 ---
@@ -211,21 +196,13 @@ O provedor deve atender:
 ### Variáveis de Ambiente
 
 ```env
-# ===== AI PROVIDERS (arkana-agora) =====
+# ===== AI (openai SDK — src/lib/ai/client.ts) =====
 
-# Provedor primário
-AI_PRIMARY_PROVIDER=openai
-AI_PRIMARY_MODEL=gpt-4o
-AI_PRIMARY_API_KEY=sk-proj-abc123...
-AI_PRIMARY_BASE_URL=https://api.openai.com/v1
-
-# Provedor fallback
-AI_FALLBACK_PROVIDER=openai
-AI_FALLBACK_MODEL=gpt-4o-mini
-AI_FALLBACK_API_KEY=sk-proj-abc123...
-
-# z-ai-web-dev-sdk
-Z_AI_SDK_CONFIG_PATH=./config/ai-sdk.json
+AI_API_KEY=sk-proj-abc123...
+# Modelo para interpretacoes completas (tarot/arcano)
+AI_MODEL=gpt-4o
+# Modelo para follow-ups conversacionais (mais rapido/economico)
+AI_MODEL_FOLLOWUP=gpt-4o-mini
 
 # Configurações gerais
 AI_DEFAULT_TEMPERATURE=0.7
@@ -243,45 +220,21 @@ AI_CACHE_TTL_SECONDS=86400
 AI_CACHE_REDIS_URL=redis://localhost:6379
 ```
 
-### Configuração do SDK
+### Configuração dos modelos (env)
 
-```jsonc
-// config/ai-sdk.json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "${AI_PRIMARY_API_KEY}",
-      "baseUrl": "${AI_PRIMARY_BASE_URL}",
-      "models": {
-        "gpt-4o": {
-          "maxTokens": 4096,
-          "temperature": 0.7,
-          "topP": 0.9,
-          "presencePenalty": 0.3,
-          "frequencyPenalty": 0.3
-        },
-        "gpt-4o-mini": {
-          "maxTokens": 2048,
-          "temperature": 0.7,
-          "topP": 0.9
-        }
-      }
-    }
-  },
-  "routing": {
-    "default": "gpt-4o",
-    "rules": [
-      { "feature": "horoscope", "model": "gpt-4o-mini" },
-      { "feature": "yes_no", "model": "gpt-4o", "fallback": "gpt-4o-mini" },
-      { "feature": "reading", "model": "gpt-4o", "fallback": "gpt-4o-mini" }
-    ]
-  },
-  "timeouts": {
-    "request": 30000,
-    "stream": 60000
-  }
-}
+```env
+AI_API_KEY=...
+AI_MODEL=gpt-4o
+AI_MODEL_FOLLOWUP=gpt-4o-mini
 ```
+
+A seleção de modelo por feature é feita em `src/lib/ai/models.ts`:
+
+| Feature | Helper | Default | Razão |
+|---------|--------|---------|-------|
+| Interpretação de tiragem / arcano | `getInterpretationModel()` | `gpt-4o` | Qualidade esotérica pt-BR |
+| Follow-up conversacional | `getFollowUpModel()` | `gpt-4o-mini` | Latência e custo |
+| Horóscopo (futuro) | `getFollowUpModel()` | `gpt-4o-mini` | Tarefa simples |
 
 ---
 
@@ -442,7 +395,7 @@ arkanaagora.com.br {
     }
 
     # SSE streaming — desabilitar buffering
-    handle /api/v1/ai/reading/stream {
+    handle /api/v1/ai/interpret {
         reverse_proxy localhost:3000 {
             header_up Connection ""
             flush_interval -1

@@ -107,7 +107,7 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **TanStack Query** | Biblioteca para gerenciamento de estado de servidor (cache, sincronizacao, revalidacao) em aplicacoes React. |
 | **shadcn/ui** | Biblioteca de componentes UI reutilizaveis baseados em Radix UI e Tailwind CSS. |
 | **Framer Motion** | Biblioteca de animacao para React, usada nas transicoes de revelacao de cartas. |
-| **z-ai-web-dev-sdk** | SDK para integracao com modelos de linguagem (GPT-4o), utilizado para geracao de interpretacoes. |
+| **openai SDK** | Cliente oficial da OpenAI (GPT-4o), utilizado para geracao de interpretacoes. |
 | **GPT-4o** | Modelo de linguagem da OpenAI utilizado para gerar interpretacoes de cartas com contexto e fluencia em portugues. |
 | **Docker** | Plataforma de conteinerizacao usada para empacotar e distribuir a aplicacao de forma consistente. |
 | **CI/CD** | Pipeline de Integracao Continua e Entrega Continua, automatizando testes e deploy. |

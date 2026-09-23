@@ -63,7 +63,7 @@ Nenhuma plataforma brasileira oferece Tarot + Baralho Cigano (Lenormand 36 carta
 
 ### 2. IA Contextual com Streaming
 
-Interpretacoes geradas por GPT-4o via z-ai-web-dev-sdk com streaming SSE, permitindo leituras em tempo real e personalizadas com base no perfil do usuario, questionamento feito e posicoes das cartas.
+Interpretacoes geradas por GPT-4o via openai SDK com streaming SSE, permitindo leituras em tempo real e personalizadas com base no perfil do usuario, questionamento feito e posicoes das cartas.
 
 ### 3. Rede Social Verticalizada
 

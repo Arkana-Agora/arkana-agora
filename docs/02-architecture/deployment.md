@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-09-21
+> Versão: 1.0 | Última atualização: 2026-09-23
 
 ---
 
@@ -37,7 +37,7 @@
 | **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
 | **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
 
-Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `z-ai-web-dev-sdk` (IA). Frontend documentado: shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
+Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `openai` SDK (IA). Frontend documentado: shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
 
 ### 2.2 Stack Local
 
@@ -127,9 +127,10 @@ RESEND_API_KEY=
 # Vercel Cron (T16 — GET /api/cron/hard-delete): obrigatório em prod; sem ele o cron retorna 401
 CRON_SECRET=
 
-# IA
-AI_PRIMARY_API_KEY=dev-ai-key
-AI_FALLBACK_API_KEY=dev-ai-fallback-key
+# IA (openai SDK — src/lib/ai/client.ts + src/lib/ai/models.ts; ver .env.example)
+AI_API_KEY=dev-ai-key
+AI_MODEL=gpt-4o
+AI_MODEL_FOLLOWUP=gpt-4o-mini
 
 # Mercado Pago (sandbox)
 MP_ACCESS_TOKEN=TEST-xxxxx
@@ -241,8 +242,9 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `R2_SECRET_ACCESS_KEY` | *Access Key Secret da R2* | Production | Segredo da chave de acesso da R2 |
 | `R2_BUCKET` | *Nome do bucket da R2* | Production | Nome do bucket na R2 |
 | `R2_PUBLIC_URL` | `https://` | Production | URL pública do bucket (ex: `https://your-bucket.r2.dev` se custom domain) |
-| `AI_PRIMARY_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
-| `AI_FALLBACK_API_KEY` | *Chave de fallback de IA* | Production | Chave da API de fallback de IA |
+| `AI_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
+| `AI_MODEL` | *Modelo OpenAI* | Production | Modelo de interpretacao (default: gpt-4o) |
+| `AI_MODEL_FOLLOWUP` | *Modelo OpenAI follow-up* | Production | Modelo de follow-up (default: gpt-4o-mini) |
 | `MP_ACCESS_TOKEN` | *Token Mercado Pago* | Production | Token de acesso do Mercado Pago |
 | `MP_WEBHOOK_URL` | *URL do webhook Mercado Pago* | Production | URL de callback do webhook |
 | `SENTRY_DSN` | *DSN do Sentry* | Production | DSN do Sentry (opcional, SDK desabilitado sem DSN) |
@@ -269,7 +271,7 @@ Acesse `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-
 | Redis | **Upstash** | Pay-as-you-go | ~$5 |
 | CDN + DNS | **Cloudflare** | Pro (se necessário) | $0-20 |
 | Armazenamento | **Cloudflare R2** | Pay-as-you-go | ~$3 |
-| IA (GPT-4o) | **OpenAI** (via z-ai-sdk) | Pay-per-token | Variável |
+| IA (GPT-4o) | **OpenAI** (via openai SDK) | Pay-per-token | Variável |
 | Erros | **Sentry** | Team plan | $26 |
 | Analytics | **PostHog** | Pay-as-you-go | ~$10 |
 | **Total estimado** | | | **~$108/mês** |

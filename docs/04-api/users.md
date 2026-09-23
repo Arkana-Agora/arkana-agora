@@ -5,8 +5,10 @@
 ## Sumário
 
 - [GET /users/:id](#get-usersid)
-- [PATCH /users/me](#patch-usersme)
-- [PATCH /users/me/avatar](#patch-usersmeavatar)
+- [PATCH /users/me/profile](#patch-usersmeprofile)
+- [PATCH /users/me/privacy](#patch-usersmeprivacy)
+- [GET /users/:username/profile](#get-usersusernameprofile)
+- [Avatar (presign → upload → confirm → delete)](#avatar-presign--upload--confirm--delete)
 - [GET /users/:id/readings](#get-usersidreadings)
 - [GET /users/:id/stats](#get-usersidstats)
 - [DELETE /users/me](#delete-usersme)
@@ -14,11 +16,135 @@
 
 ---
 
-## GET /users/:id
+## PATCH /users/me/profile
+
+Atualiza o perfil do usuário autenticado.
+
+> **Implementado** em `src/app/api/v1/users/me/profile/route.ts` (Zod `updateProfileSchema` de
+> `src/lib/validators/profile.ts`, `.strict()`). Não existe rota `PATCH /users/me` (sem `/profile`).
+
+### Requisição
+
+```http
+PATCH /api/v1/users/me/profile
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "displayName": "Maria Silva Santos",
+  "username": "mariatarot",
+  "bio": "Apaixonada por tarot e cartas ciganas. Leitora desde 2018. 🌙",
+  "birthDate": "1995-03-15",
+  "birthPlace": "São Paulo, SP",
+  "location": "Rio de Janeiro, RJ",
+  "website": "https://maria.tarot"
+}
+```
+
+### Validação
+
+| Campo | Tipo | Regras |
+|-------|------|--------|
+| `displayName` | string | 2–50 caracteres (trim) |
+| `username` | string | `""` **não altera** (só aplica se truthy no route); valor novo: 3–30 chars alfanumérico+`_`, único |
+| `bio` | string \| `""` | máx 500 chars; `""` → `null` (limpa) |
+| `birthDate` | `"AAAA-MM-DD"` \| `""` | `""` → `null` e **limpa** `astrologicalSign`/`mayanKin`; data válida recalcula signo/kin |
+| `birthPlace` | string \| `""` | máx 200; `""` → `null` |
+| `location` | string \| `""` | máx 100; `""` → `null` |
+| `website` | url \| `""` | `""` → `null`; URL válida máx 200 |
+
+> **Sem `gender` no schema** (removido — nunca implementado). Campos extras → 422 (`.strict()`).
+
+### Resposta — 200 OK
+
+```json
+{
+  "message": "Perfil atualizado"
+}
+```
+
+> Body **flat** — sem wrapper `data` e sem objeto `user`.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` | Access token ausente ou inválido |
+| 409 | `USERNAME_TAKEN` | Username já em uso (colisão P2002 em `UserProfile.username`) |
+| 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) ou corpo não-JSON |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`) |
+
+---
+
+## PATCH /users/me/privacy
+
+Atualiza as configurações de privacidade do usuário autenticado.
+
+> **Implementado** em `src/app/api/v1/users/me/privacy/route.ts` (`privacySchema` de `src/lib/validators/profile.ts`).
+> Persiste/upserta `UserProfile.privacy` (JSON).
+
+### Requisição
+
+```http
+PATCH /api/v1/users/me/privacy
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "profileVisibility": "public",
+  "statsVisibility": "private",
+  "arcanaVisibility": "public",
+  "whoCanFollow": "all",
+  "whoCanComment": "following"
+}
+```
+
+### Validação
+
+| Campo | Tipo | Valores permitidos |
+|-------|------|--------------------|
+| `profileVisibility` | enum | `public`, `private` |
+| `statsVisibility` | enum | `public`, `private` |
+| `arcanaVisibility` | enum | `public`, `private` |
+| `whoCanFollow` | enum | `all`, `following`, `nobody` |
+| `whoCanComment` | enum | `all`, `following`, `nobody` |
+
+### Resposta — 200 OK
+
+```json
+{
+  "message": "Privacidade atualizada"
+}
+```
+
+---
+
+## GET /users/:username/profile
+
+Perfil público por username (implementado: `src/app/api/v1/users/[username]/profile/route.ts`).
+Respeita `privacy.profileVisibility` — perfil com `profileVisibility === "private"` oculta dados
+estatísticos/visíveis do dono para visitantes não autorizados.
+
+### Requisição
+
+```http
+GET /api/v1/users/mariatarot/profile
+```
+
+---
+
+## GET /users/:id (planejado)
+
+> **Status: não implementado.** Use `GET /users/:username/profile` (acima).
+> Seção abaixo é design de produto, não contrato em produção.
 
 Retorna o perfil público de um usuário.
 
-### Requisição
+#### Requisição
 
 ```http
 GET /api/v1/users/usr_a1b2c3d4
@@ -26,7 +152,7 @@ GET /api/v1/users/usr_a1b2c3d4
 
 > **Auth**: Não obrigatória. Se autenticada, inclui campo `isFollowing`.
 
-### Resposta — 200 OK
+#### Resposta — 200 OK
 
 ```json
 {
@@ -51,7 +177,7 @@ GET /api/v1/users/usr_a1b2c3d4
 }
 ```
 
-### Erros
+#### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
@@ -59,97 +185,90 @@ GET /api/v1/users/usr_a1b2c3d4
 
 ---
 
-## PATCH /users/me
+## Avatar (presign → upload → confirm → delete)
 
-Atualiza o perfil do usuário autenticado.
+Fluxo **Implementado** em 3 rotas (não multipart):
 
-### Requisição
+> `src/app/api/v1/users/me/avatar/presign/route.ts`
+> `src/app/api/v1/users/me/avatar/confirm/route.ts`
+> `src/app/api/v1/users/me/avatar/route.ts` (DELETE)
+
+### 1) POST /users/me/avatar/presign
+
+Gera URL pré-assinada R2 para upload direto do arquivo.
 
 ```http
-PATCH /api/v1/users/me
+POST /api/v1/users/me/avatar/presign
 Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
 
 ```json
-{
-  "name": "Maria Silva Santos",
-  "username": "mariatarot",
-  "bio": "Apaixonada por tarot e cartas ciganas. Leitora desde 2018. 🌙"
-}
+{ "contentType": "image/png" }
 ```
 
-### Validação
+`contentType` aceito: `image/jpeg`, `image/png`, `image/webp` (máx 5MB validado no confirm).
 
-| Campo | Tipo | Regras |
-|-------|------|--------|
-| `name` | string | 2–100 caracteres |
-| `username` | string | 3–30 chars, alfanumérico + `_`, único |
-| `bio` | string | Máximo 300 caracteres |
-
-### Resposta — 200 OK
+**Resposta — 200 OK**
 
 ```json
 {
-  "data": {
-    "user": {
-      "id": "usr_a1b2c3d4",
-      "name": "Maria Silva Santos",
-      "username": "mariatarot",
-      "bio": "Apaixonada por tarot e cartas ciganas. Leitora desde 2018. 🌙",
-      "avatar": "/avatars/usr_a1b2c3d4.jpg",
-      "updatedAt": "2025-01-15T11:00:00Z"
-    }
-  }
+  "uploadUrl": "https://r2.../presigned",
+  "key": "avatars/usr_a1b2c3d4/photo-123.png"
 }
 ```
 
-### Erros
+Cliente envia `PUT` do arquivo binário para `uploadUrl` com o mesmo `Content-Type`.
 
-| Status | Código | Descrição |
-|--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Dados inválidos |
-| 409 | `USERNAME_ALREADY_EXISTS` | Username já em uso |
+### 2) PATCH /users/me/avatar/confirm
 
----
-
-## PATCH /users/me/avatar
-
-Upload ou atualização do avatar.
-
-### Requisição
+Processa o arquivo no R2, gera variantes WebP (48/120/400), atualiza `User.avatar` e apaga o original.
 
 ```http
-PATCH /api/v1/users/me/avatar
+PATCH /api/v1/users/me/avatar/confirm
 Authorization: Bearer <accessToken>
-Content-Type: multipart/form-data
+Content-Type: application/json
 ```
 
-| Campo | Tipo | Regras |
-|-------|------|--------|
-| `avatar` | file | Imagem, máx 5MB, JPEG/PNG/WebP, mín 200x200px |
+```json
+{ "fileKey": "avatars/usr_a1b2c3d4/photo-123.png" }
+```
 
-### Resposta — 200 OK
+**Resposta — 200 OK**
 
 ```json
 {
-  "data": {
-    "avatar": "/avatars/usr_a1b2c3d4_1705311600.jpg",
-    "variants": {
-      "small": "/avatars/usr_a1b2c3d4_1705311600_80x80.jpg",
-      "medium": "/avatars/usr_a1b2c3d4_1705311600_200x200.jpg",
-      "large": "/avatars/usr_a1b2c3d4_1705311600_400x400.jpg"
-    }
-  }
+  "avatarUrl": "https://r2.../avatars/usr_a1b2c3d4/photo-123-400.webp",
+  "variants": [
+    "https://r2.../avatars/usr_a1b2c3d4/photo-123-48.webp",
+    "https://r2.../avatars/usr_a1b2c3d4/photo-123-120.webp",
+    "https://r2.../avatars/usr_a1b2c3d4/photo-123-400.webp"
+  ]
 }
 ```
 
-### Erros
+### 3) DELETE /users/me/avatar
+
+Remove o avatar atual (`User.avatar = null`) e apaga o objeto R2 se existir.
+
+```http
+DELETE /api/v1/users/me/avatar
+Authorization: Bearer <accessToken>
+```
+
+**Resposta — 200 OK**
+
+```json
+{ "message": "Avatar removido" }
+```
+
+### Erros (presign/confirm)
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Arquivo inválido (tipo/tamanho) |
-| 413 | `FILE_TOO_LARGE` | Arquivo excede 5MB |
+| 401 | `AUTH_TOKEN_INVALID` | Access token ausente ou inválido |
+| 422 | `VALIDATION_ERROR` | contentType inválido, fileKey ausente/path traversal, arquivo >5MB, extensão inválida |
+| 500 | `INTERNAL_ERROR` | Falha no processamento (avatar anterior mantido) |
 
 ---
 

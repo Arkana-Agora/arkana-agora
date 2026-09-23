@@ -82,7 +82,7 @@ Entregar o fluxo principal do produto: cadastro, leitura de cartas com IA e hist
 | 1.5 | 3 espalhamentos: Carta Unica, Passado/Presente/Futuro, Cruz Celta (5) | 5-6 | 1.4 |
 | 1.6 | Componente de carta com animacao de revelacao (Framer Motion) | 5 | 0.3 |
 | 1.7 | Tarot do Dia (1 carta automatica) | 6 | 1.4, 1.6 |
-| 1.8 | Integracao com z-ai-web-dev-sdk (GPT-4o) | 6 | -- |
+| 1.8 | Integracao com openai SDK (GPT-4o) | 6 | -- |
 | 1.9 | Leitura IA com streaming SSE | 7 | 1.5, 1.8 |
 | 1.10 | Historico de tiragens (local + DB) | 7 | 1.5 |
 | 1.11 | Calculo de Arcano Pessoal (numerologia pitagorica) | 7 | 1.3 |

@@ -177,7 +177,7 @@ A pagina de horoscopo deve carregar em menos de 800ms (P95). O calculo do Kin Ma
 
 | Dependencia | Versao | Proposito |
 ---|---|---|
-| z-ai-web-dev-sdk | latest | Interpretacoes IA |
+| openai | ^7.x | Interpretacoes IA |
 | node-cron | >=3.x | Agendamento de geracao diaria |
 | Zod | >=3.x | Validacao de datas |
 

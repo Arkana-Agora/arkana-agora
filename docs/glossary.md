@@ -35,7 +35,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | Upstash Redis | Serverless Redis: sessions, cache, rate limit, BullMQ queues, Pub/Sub | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | Object storage for card images, avatars, posts | `docs/02-architecture/deployment.md` §4 |
 | BullMQ | Background job queue (worker :3005) — planned | `docs/02-architecture/architecture.md`, `docs/02-architecture/scalability.md` |
-| z-ai-web-dev-sdk | SDK abstracting AI providers (OpenAI GPT-4o / GPT-4o-mini) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md` |
+| openai SDK | Official OpenAI Node client used for AI interpretations (OpenAI GPT-4o / GPT-4o-mini) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md` |
 | Model Router | Feature → model mapping with fallback chain | `docs/05-ai/providers.md` |
 | Event Bus | Inter-service event propagation (EventEmitter dev / Redis Pub/Sub prod) | `docs/02-architecture/architecture.md` §6 |
 | Kotlin/Expo — N/A | Placeholder; mobile client planned as Expo React Native | `docs/02-architecture/architecture.md` §7 |
@@ -44,7 +44,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 
 | Term | Meanings in context | How the project distinguishes |
 |---|---|---|
-| "IA / AI" | (1) The AI subsystem, (2) the AI streaming endpoint, (3) OpenAI providers | Referenced as `AI Service`, `/api/v1/ai/reading/stream`, provider names |
+| "IA / AI" | (1) The AI subsystem, (2) the AI streaming endpoint, (3) OpenAI providers | Referenced as `AI Service`, `POST /api/v1/ai/interpret` (SSE `token`/`done`/`error`; legacy design path `/api/v1/ai/reading/stream` does not exist), provider names |
 | "Tarot" | (1) The RWS deck system, (2) the tarot feature module, (3) the reading engine | Module paths: `docs/06-features/tarot*.md`, `.specs/003-tarot-engine/` |
 | "R2 / S3" | Storage documented as Cloudflare R2; env vars use the `R2_*` prefix in `security.md` | Canonical storage = **Cloudflare R2**; env vars are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`. No AWS S3 in SDD |
 | "bun vs pnpm" | Package managers in different docs | **bun** = MVP single app (deploy/Docker/CI); **pnpm** = planned monorepo (ADR-005). See `docs/02-architecture/deployment.md` §2.0 |

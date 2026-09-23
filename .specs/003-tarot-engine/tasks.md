@@ -11,68 +11,68 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 1 | Criar arquivos de dados JSON para baralho RWS (78 cartas com significados em portugues) | pending | 8 | - |
-| 2 | Criar arquivos de dados JSON para baralho Thoth (78 cartas com significados) | pending | 8 | - |
-| 3 | Criar arquivos de dados JSON para baralho Lenormand (36 cartas com significados) | pending | 4 | - |
-| 4 | Definir tipos TypeScript para Deck, TarotCard, LenormandCard, Spread | pending | 1.5 | - |
-| 5 | Criar schema Prisma para Reading e ReadingCard | pending | 1 | - |
-| 6 | Executar migracao do banco | pending | 0.5 | 5 |
+| 1 | Criar arquivos de dados JSON para baralho RWS (78 cartas com significados em portugues) | done | 8 | - |
+| 2 | Criar arquivos de dados JSON para baralho Thoth (78 cartas com significados) | done | 8 | - |
+| 3 | Criar arquivos de dados JSON para baralho Lenormand (36 cartas com significados) | done | 4 | - |
+| 4 | Definir tipos TypeScript para Deck, TarotCard, LenormandCard, Spread | done | 1.5 | - |
+| 5 | Criar schema Prisma para Reading e ReadingCard | done | 1 | - |
+| 6 | Executar migracao do banco | done | 0.5 | 5 |
 
 ### Algoritmos e Logica de Negocio
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 7 | Implementar gerador de seed CSPRNG | pending | 1 | - |
-| 8 | Implementar algoritmo de embaralhamento Fisher-Yates | pending | 1 | 7 |
-| 9 | Implementar funcao drawCards com deteccao de repeticao | pending | 2 | 8 |
-| 10 | Implementar logica de limite diario de tiragens | pending | 1.5 | 5 |
-| 11 | Implementar logica de espalhamento Sim/Nao (par/impar) | pending | 1 | 9 |
-| 12 | Implementar layouts de posicao para todos os espalhamentos | pending | 2 | 4 |
+| 7 | Implementar gerador de seed CSPRNG | done | 1 | - |
+| 8 | Implementar algoritmo de embaralhamento Fisher-Yates | done | 1 | 7 |
+| 9 | Implementar funcao drawCards com deteccao de repeticao | done | 2 | 8 |
+| 10 | Implementar logica de limite diario de tiragens | done | 1.5 | 5 |
+| 11 | Implementar logica de espalhamento Sim/Nao (par/impar) | done | 1 | 9 |
+| 12 | Implementar layouts de posicao para todos os espalhamentos | done | 2 | 4 |
 
 ### Backend - API Routes
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 13 | Implementar GET /api/v1/decks e GET /api/v1/decks/:id/cards | pending | 2 | 1-4 |
-| 14 | Implementar GET /api/v1/spreads | pending | 1.5 | 12 |
-| 15 | Implementar POST /api/v1/readings (salvar tiragem) | pending | 2.5 | 5, 9, 10 |
-| 16 | Implementar GET /api/v1/readings (listar tiragens do usuario) | pending | 1.5 | 5 |
-| 17 | Implementar GET /api/v1/readings/:id (visualizar tiragem) | pending | 1.5 | 5 |
-| 18 | Implementar GET /api/v1/readings/daily-count | pending | 1 | 10 |
-| 19 | Implementar GET /api/v1/readings/:id/og-image (geracao de imagem OG) | pending | 3 | 17, html-to-image |
+| 13 | Implementar GET /api/v1/decks e GET /api/v1/decks/:id/cards | done | 2 | 1-4 |
+| 14 | Implementar GET /api/v1/spreads | done | 1.5 | 12 |
+| 15 | Implementar POST /api/v1/readings (salvar tiragem) | done | 2.5 | 5, 9, 10 |
+| 16 | Implementar GET /api/v1/readings (listar tiragens do usuario) | done | 1.5 | 5 |
+| 17 | Implementar GET /api/v1/readings/:id (visualizar tiragem) | done | 1.5 | 5 |
+| 18 | Implementar GET /api/v1/readings/daily-count | done | 1 | 10 |
+| 19 | Implementar GET /api/v1/readings/:id/og-image (SVG→PNG via sharp) | done | 3 | 17, sharp |
 
 ### Frontend - Componentes
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 20 | Criar componente DeckSelector com grid e selecao visual | pending | 2 | 13 |
-| 21 | Criar componente SpreadSelector com filtros e info | pending | 2 | 14 |
-| 22 | Criar componente TarotCard com flip 3D (Framer Motion) | pending | 4 | 4 |
-| 23 | Criar componente CardTable com layouts de espalhamento responsivos | pending | 3.5 | 12, 22 |
-| 24 | Criar componente CardDetailPanel (drawer lateral) | pending | 3 | 22 |
-| 25 | Criar componente ReadingSession (wrapper do fluxo) | pending | 3 | 20-24 |
-| 26 | Criar componente ReadingTimer com contagem MM:SS | pending | 1.5 | 25 |
-| 27 | Criar componente ShareModal com opcoes de compartilhamento | pending | 2.5 | 19 |
-| 28 | Criar componente DailyLimitBanner com CTA de upgrade | pending | 1.5 | 10 |
+| 20 | Criar componente DeckSelector com grid e selecao visual | done | 2 | 13 |
+| 21 | Criar componente SpreadSelector com filtros e info | done | 2 | 14 |
+| 22 | Criar componente TarotCard com flip 3D (Framer Motion) | done | 4 | 4 |
+| 23 | Criar componente CardTable com layouts de espalhamento responsivos | done | 3.5 | 12, 22 |
+| 24 | Criar componente CardDetailPanel (drawer lateral) | done | 3 | 22 |
+| 25 | Criar componente ReadingSession (wrapper do fluxo) | done | 3 | 20-24 |
+| 26 | Criar componente ReadingTimer com contagem MM:SS | done | 1.5 | 25 |
+| 27 | Criar componente ShareModal com opcoes de compartilhamento | done | 2.5 | 19 |
+| 28 | Criar componente DailyLimitBanner com CTA de upgrade | done | 1.5 | 10 |
 
 ### Estado e Integracao
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 29 | Implementar ReadingStore no Zustand com persistencia em sessionStorage | pending | 3 | 9, 12 |
-| 30 | Integrar TanStack Query para listagem de tiragens historicas | pending | 1.5 | 16 |
-| 31 | Criar pagina /tirar (fluxo deck -> spread -> sessao) | pending | 2.5 | 20, 21, 25 |
-| 32 | Criar pagina /minhas-tiragens (historico com paginacao) | pending | 2 | 30 |
-| 33 | Criar pagina /tiragem/:id (visualizacao publica) | pending | 2 | 17 |
+| 29 | Implementar ReadingStore no Zustand com persistencia em sessionStorage | done | 3 | 9, 12 |
+| 30 | Integrar TanStack Query para listagem de tiragens historicas | done | 1.5 | 16 |
+| 31 | Criar pagina /tirar (fluxo deck -> spread -> sessao) | done | 2.5 | 20, 21, 25 |
+| 32 | Criar pagina /minhas-tiragens (historico com paginacao) | done | 2 | 30 |
+| 33 | Criar pagina /tiragem/:id (visualizacao publica) | done | 2 | 17 |
 
 ### Testes e Otimizacao
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|
-| 34 | Criar testes unitarios para algoritmos de sorteio e espalhamento | pending | 2 | 7-12 |
-| 35 | Criar testes de integracao para endpoints de leitura | pending | 2 | 13-18 |
-| 36 | Criar testes E2E de fluxo completo de tiragem | pending | 3 | 31 |
-| 37 | Otimizar animacoes (GPU acceleration, will-change) e verificar 60fps | pending | 2 | 22, 23 |
+| 34 | Criar testes unitarios para algoritmos de sorteio e espalhamento | done | 2 | 7-12 |
+| 35 | Criar testes de integracao para endpoints de leitura | done | 2 | 13-18 |
+| 36 | Criar testes E2E de fluxo completo de tiragem | done | 3 | 31 |
+| 37 | Otimizar animacoes (GPU acceleration, will-change) e verificar 60fps | done | 2 | 22, 23 |
 
 ---
 

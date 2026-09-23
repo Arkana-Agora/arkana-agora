@@ -153,41 +153,40 @@ Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `regis
 
 ### Resposta — 201 Created
 
+> **Nota (contrato canônico — implementado):** o body é **plano** — apenas `{ message }`,
+> **sem** objeto `user`. Cadastro **NÃO faz auto-login** (exige verificação de e-mail, RF-AUTH-005).
+> Resposta **uniforme anti-enumeração**: e-mail já cadastrado, corrida P2002 e sucesso retornam o
+> **mesmo 201** com a mesma mensagem (`tests/register.test.ts`).
+
 ```json
 {
-  "user": {
-    "id": "usr_a1b2c3d4",
-    "name": "Maria Silva",
-    "email": "maria@email.com",
-    "emailVerified": null
-  },
-  "message": "Email de verificacao enviado"
+  "message": "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado"
 }
 ```
-
-> **Nota:** a resposta **não** inclui `accessToken`/`meta` — o cadastro **NÃO faz auto-login**
-> (exige verificação de e-mail, RF-AUTH-005). `emailVerified` é `DateTime?` (S12) — `null` até
-> a verificação.
 
 ### Comportamento
 
 1. Valida o body com `registerSchema` (422 `VALIDATION_ERROR` em falha)
-2. Normaliza `email` para minúsculas; busca duplicado case-insensitive (409 `AUTH_EMAIL_ALREADY_EXISTS`)
-3. Hash da senha com **bcrypt custo 12**
-4. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase`
-5. Cria `VerificationToken` `type=EMAIL` (24h) e envia e-mail de verificação para
-   `/verify-email?token=...`
-6. Retorna **201** com `user` + `message`
+2. Valida CSRF double-submit (`validateCsrfToken`); falha → 403 `CSRF_TOKEN_INVALID`
+3. Rate limits: 3/h por e-mail + 3/h por IP → 429 `AUTH_RATE_LIMITED`
+4. Normaliza `email` para minúsculas; busca duplicado case-insensitive — **se existir, NÃO cria conta e NÃO retorna 409** (no-op anti-enumeração: mesma 201, mas o e-mail de verificação é enviado)
+5. Hash da senha com **bcrypt custo 12**
+6. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase` **e `UserProfile` aninhado** (`profile: { create: {} }` — `src/app/api/v1/auth/register/route.ts`)
+7. Cria `VerificationToken` `type=EMAIL` (24h) e envia e-mail de verificação para
+   `/verify-email?token=...` (falha de envio é logada, não fatal — token persistido)
+8. Retorna **201** `{ message }` (sem `user`; corrida P2002 de `user.create` → mesmo 201)
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 409 | `AUTH_EMAIL_ALREADY_EXISTS` | E-mail já cadastrado |
 | 403 | `CSRF_TOKEN_INVALID` | Token CSRF ausente ou divergente (double-submit: cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`) |
 | 422 | `VALIDATION_ERROR` | Dados inválidos (Zod, com `details` por campo) |
 | 429 | `AUTH_RATE_LIMITED` | Limite de cadastro atingido (3/15min por e-mail ou 3/h por IP, via `isRegisterLimited`/`isRegisterIpLimited`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha interna ao criar conta |
+
+> **Sem 409 `AUTH_EMAIL_ALREADY_EXISTS`:** e-mail duplicado responde **201 uniforme** (anti-enumeração).
+> `AUTH_EMAIL_ALREADY_EXISTS` é código legado de documentação antiga — não é emitido por esta rota.
 
 > **Divergência supersedida:** o contrato antigo desta seção (body com `birthDate`, resposta com
 > `data`/`accessToken`/`meta`, erro `AUTH_UNDER_AGE` 422, sem `passwordConfirmation`) foi
@@ -1188,7 +1187,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token inválido | Refazer login |
 | `AUTH_REFRESH_TOKEN_EXPIRED` | 401 | Refresh token expirado | Refazer login |
 | `AUTH_REFRESH_TOKEN_REVOKED` | 401 | Refresh token revogado (reuso revoga família) | Refazer login |
-| `AUTH_EMAIL_ALREADY_EXISTS` | 409 | E-mail já cadastrado | Oferecer login |
+| `AUTH_EMAIL_ALREADY_EXISTS` | 409 | **Legado — não emitido pelo register implementado** (duplicado responde 201 uniforme anti-enumeracao) | N/A (não observável no fluxo atual) |
 | `AUTH_ACCOUNT_LOCKED` | 403 | Conta bloqueada (5 falhas consecutivas; `retryAfter: 900`) | Aguardar ou contato suporte |
 | `CSRF_TOKEN_INVALID` | 403 | Token CSRF ausente/divergente (double-submit em register/login) | Recarregar a página (novo cookie CSRF) e tentar novamente |
 | `AUTH_RATE_LIMITED` | 429 | Limite de volume por IP atingido (5/15min) | Aguardar `retryAfter` |

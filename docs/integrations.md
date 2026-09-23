@@ -7,7 +7,7 @@
 
 | Integration | Type | Purpose | Provider | Contract source |
 |---|---|---|---|---|
-| OpenAI GPT-4o / GPT-4o-mini | External (AI) | AI interpretations (tarot/cards/horoscope), streaming via SSE | OpenAI (via `z-ai-web-dev-sdk`) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md`, `docs/05-ai/prompts.md` |
+| OpenAI GPT-4o / GPT-4o-mini | External (AI) | AI interpretations (tarot/cards/horoscope), streaming via SSE | OpenAI (via `openai` SDK) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md`, `docs/05-ai/prompts.md` |
 | Mercado Pago | External (payments) | Checkout (PIX/card/boleto), subscriptions (Arkana Plus), split payments, webhooks | Mercado Pago | `docs/04-api/marketplace.md`, ADR-008 |
 | Google OAuth | External (auth) | Social login via Auth.js v5 `/api/auth/*` (provider `google`) — **MVP, shipped** | Google | `docs/04-api/authentication.md` |
 | Facebook OAuth | External (auth) | Social login via Auth.js v5 `/api/auth/*` (provider `facebook`) — **Sprint 1** | Meta | `docs/04-api/authentication.md` |
@@ -26,7 +26,7 @@
 
 | Integration | Auth model | Credentials location |
 |---|---|---|
-| OpenAI | API key (`AI_PRIMARY_API_KEY`, `AI_FALLBACK_API_KEY`) | Env var, provider console |
+| OpenAI | API key (`AI_API_KEY`), models (`AI_MODEL`, `AI_MODEL_FOLLOWUP`) | Env var, provider console |
 | Mercado Pago | `MP_ACCESS_TOKEN` (access token; sandbox `TEST-` prefix in staging) | Env var, provider console |
 | Google / Facebook OAuth | Client ID + Client Secret (Auth.js v5 — `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`, ADR-010) | Env var |
 | SMTP | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Env var / secret manager |
@@ -35,7 +35,7 @@
 | Upstash | `REDIS_URL` (with token) | Env var |
 | Cloudflare R2 | R2 credentials (S3-compatible) | Env var / secret manager |
 | Vercel / Railway | Platform tokens/CLI auth | Provider console/CI secrets |
-| Sentry / PostHog | `NEXT_PUBLIC_SENTRY_DSN`, `POSTHOG_KEY` | Env var |
+| Sentry / PostHog | `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` | Env var |
 
 **Rule:** no secrets in source control. `.env`/`.env*.local` gitignored; only `.env.example` committed (`docs/07-security/security.md` §Gestão de Segredos).
 
@@ -45,7 +45,7 @@
 
 - **API**: REST + SSE, base URL `/api/v1`, JWT bearer sessions (Auth.js v5 — ADR-010; Custom JWT Layer in Sprint 1). Standard error envelope, cursor/offset pagination, per-plan rate limits. See `docs/04-api/overview.md` (OpenAPI 3.1.0 template embedded).
 - **Auth**: login layer (MVP) at `/api/auth/*` (Auth.js v5 — ADR-010): Google OAuth + magic link (`EmailProvider`, 15 min single-use). Sprint 1: `POST /api/v1/auth/register|login|magic-link|magic-link/verify|refresh|logout|forgot-password|reset-password|verify-email|verify-email/resend`, `GET /api/v1/auth/me`, Custom JWT Layer (access 15 min RS256, refresh 30 days opaque with rotation), Facebook OAuth. **Implemented (Módulo 1 Auth):** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/reset-password` (T12), `POST /api/v1/auth/refresh` (T13), `POST /api/v1/auth/logout` (T14), `POST /api/v1/auth/verify-email` (T30) and `POST /api/v1/auth/verify-email/resend` (T30) — `src/services/token-service.ts`, `src/lib/rate-limit.ts` (+ magic link 3/h per email, forgot-password 3/h per email), `src/lib/redis.ts`, `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`/`magicLinkVerifySchema`/`forgotPasswordSchema`/`resetPasswordSchema`/`verifyEmailSchema`/`verifyEmailResendSchema`). See `docs/04-api/authentication.md`.
-- **AI streaming (SSE)**: `POST /api/v1/ai/reading/stream` → `Content-Type: text/event-stream` with `{type: content|done}` payloads and `tokensUsed`. Fallback chain GPT-4o → GPT-4o-mini → generic cache → friendly error. See `docs/05-ai/architecture.md`, `docs/04-api/overview.md`.
+- **AI streaming (SSE)**: `POST /api/v1/ai/interpret` (e `/ai/follow-up`, `/ai/arcana-interpret`) → `Content-Type: text/event-stream` com flat `{type:"token",token}` / `{type:"done",cached,interpretationId}` / `{type:"error",code,message,retryable}`; cache-hit do interpret é JSON `{cached,content,interpretationId,tokensUsed:0}`. Rotas `POST /api/v1/ai/reading|reading/stream|chat` **não existem** (design legado em `docs/04-api/ai.md`). Fallback chain GPT-4o → GPT-4o-mini → generic cache → friendly error. See `docs/05-ai/architecture.md`, `docs/04-api/overview.md`.
 - **Payments**: `POST /api/v1/payments/create` → Mercado Pago checkout → webhook `POST /api/v1/webhooks/mercadopago` → order/payment status update; native split payment; PLUS subscription via recurring billing. Entities `Product`, `Order`, `Payment`, `Subscription` (`docs/03-database/entities.md`).
 - **Real-time (Socket.io :3003)**: events `feed:new_post`, `notification:new`, `presence:update`, `reading:shared`, `chat:message` [planned]. Inter-service event bus: `user:registered`, `reading:created`, `payment:completed`, `post:liked` (EventEmitter dev / Redis Pub/Sub prod). See `docs/02-architecture/architecture.md` §6.
 - **Image storage**: R2 with WebP variants (3 sizes per card); served via `assets.arkanaagora.com.br`.

@@ -39,11 +39,11 @@
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
-| 30 | Implementar Custom JWT Layer: emitir Access Token RS256 (15 min) e integrar com Auth.js callbacks | pending | 6 | 1, 4 |
-| 31 | Persistir Refresh Tokens (hash SHA-256) e implementar rotacao (familyId) | pending | 4 | 13, 4 |
-| 32 | Detectar reuso de refresh token e revogar toda a familia de tokens (revoke on theft) | pending | 3 | 31 |
-| 33 | Implementar blacklist / token revocation store (Redis) e endpoints de revogacao total (logout all devices) | pending | 3 | 31, 14 |
-| 34 | Implementar middleware de validação de access token (RS256) e refresh workflow em edge/runtime compatível | pending | 3.5 | 30, 31 |
+| 30 | Implementar Custom JWT Layer: emitir Access Token RS256 (15 min) e integrar com Auth.js callbacks | done | 6 | 1, 4 |
+| 31 | Persistir Refresh Tokens (hash SHA-256) e implementar rotacao (familyId) | done | 4 | 13, 4 |
+| 32 | Detectar reuso de refresh token e revogar toda a familia de tokens (revoke on theft) | done | 3 | 31 |
+| 33 | Implementar blacklist / token revocation store (Redis) e endpoints de revogacao total (logout all devices) | done | 3 | 31, 14 |
+| 34 | Implementar middleware de validação de access token (RS256) e refresh workflow em edge/runtime compatível | done | 3.5 | 30, 31 |
 
 ### Frontend - Componentes e Paginas
 
@@ -51,21 +51,21 @@
 |---|---|---|---|---|
 | 18 | Criar componente AuthLayout com design responsivo | done | 2 | - |
 | 19 | Criar componente LoginForm com validacao client-side | done | 3 | 7, 8, 18 |
-| 20 | Criar componente RegisterForm com indicador de forca de senha | pending | 3 | 6, 18 |
-| 21 | Criar componente MagicLinkForm com feedback visual | pending | 2 | 9, 18 |
-| 22 | Criar componente ForgotPasswordForm | pending | 1.5 | 11, 18 |
-| 23 | Criar componente ResetPasswordForm | pending | 2 | 12, 18 |
-| 24 | Criar componente AuthGuard (roteamento protegido) | pending | 2 | 13 |
+| 20 | Criar componente RegisterForm com indicador de forca de senha | done | 3 | 6, 18 |
+| 21 | Criar componente MagicLinkForm com feedback visual | done | 2 | 9, 18 |
+| 22 | Criar componente ForgotPasswordForm | done | 1.5 | 11, 18 |
+| 23 | Criar componente ResetPasswordForm | done | 2 | 12, 18 |
+| 24 | Criar componente AuthGuard (roteamento protegido) | done | 2 | 13 |
 
 ### Estado e Integracao
 
 | # | Tarefa | Status | Estimativa (h) | Dependencias |
 |---|---|---|---|---|
 | 25 | Implementar AuthStore no Zustand com persistencia (prototipo minimo em `src/stores/auth-store.ts` criado no T19 — persistencia pendente) | done | 3 | 7, 8 |
-| 26 | Configurar interceptor de token (Axios middleware) | pending | 2 | 13, 25 |
-| 27 | Implementar rate limiting (Redis) por IP/email (login, magic link, reset) | pending | 3 | infra |
-| 28 | Criar testes E2E de fluxo completo de autenticacao | pending | 4 | 19-24 |
-| 29 | Criar testes de integracao para todos os endpoints | pending | 3 | 6-17, 30-34 |
+| 26 | Configurar interceptor de token (Axios middleware) | done | 2 | 13, 25 |
+| 27 | Implementar rate limiting (Redis) por IP/email (login, magic link, reset) | done | 3 | infra |
+| 28 | Criar testes E2E de fluxo completo de autenticacao | done | 4 | 19-24 |
+| 29 | Criar testes de integracao para todos os endpoints | done | 3 | 6-17, 30-34 |
 
 ---
 

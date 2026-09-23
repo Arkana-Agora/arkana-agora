@@ -15,12 +15,12 @@ O módulo inclui configurações de privacidade granulares — o usuário pode d
 ## Funcionalidades
 
 - **Página de perfil público** com avatar, biografia, estatísticas de leituras e arcanos calculados
-- **Campos editáveis**: `displayName`, `bio`, `birthDate`, `location`, `website`, `socialLinks`
+- **Campos editáveis**: `displayName`, `bio`, `birthDate`, `birthPlace`, `location`, `website`, `username` (`updateProfileSchema` em `src/lib/validators/profile.ts` — **sem `gender`**) — `socialLinks` existe no model mas **não** é editável via PATCH
 - **Arcana Pessoal** — cálculo automático via numerologia pitagórica (nome + data de nascimento)
 - **Signo Zodiacal** — cálculo automático a partir da data de nascimento
 - **Kin Maya** — cálculo automático baseado no calendário Tzolkin (data de referência: 26/07/1954 = Kin 1 — Dragão Magnético)
 - **Horóscopo Chinês** — cálculo automático baseado no ano lunar (12 animais × 5 elementos)
-- **Configurações de privacidade**: leituras públicas/privadas, exibição no Explorar, dados visíveis no perfil
+- **Configurações de privacidade** (JSON em `UserProfile.privacy`): `profileVisibility`, `statsVisibility`, `arcanaVisibility` (`public`|`private`), `whoCanFollow`, `whoCanComment` (`all`|`following`|`nobody`) — `PATCH /api/v1/users/me/privacy`
 - **Upgrade para perfil profissional**: especialidades, preço, disponibilidade
 - **Galeria de leituras salvas** no perfil
 
@@ -61,9 +61,9 @@ Algoritmo:
 ## Fluxo Principal
 
 1. O usuário acessa a tela de edição de perfil
-2. Preenche os campos: nome de exibição, biografia, data de nascimento, localização, site, links sociais
+2. Preenche os campos: nome de exibição (`displayName`), biografia, data de nascimento, local de nascimento, localização, site, username
 3. O sistema calcula automaticamente: Arcana Pessoal, Signo Zodiacal, Kin Maya e Horóscopo Chinês
-4. O usuário configura as opções de privacidade (leituras públicas/privadas, exibição no Explorar)
+4. O usuário configura as opções de privacidade (`profileVisibility`/`statsVisibility`/`arcanaVisibility` + `whoCanFollow`/`whoCanComment`) em `/perfil/privacidade`
 5. O sistema salva as alterações e atualiza a página de perfil público
 6. Outros usuários podem visualizar o perfil público com base nas configurações de privacidade
 7. (Opcional) O usuário solicita upgrade para perfil profissional e preenche dados adicionais
@@ -88,7 +88,7 @@ Algoritmo:
 |---|---|---|
 | Autenticação | Módulo interno | Usuário deve estar autenticado |
 | Armazenamento de arquivos | Infraestrutura | Upload de avatar (Cloudflare R2) |
-| Banco de dados | Infraestrutura | Tabelas `users`, `profiles`, `privacy_settings` |
+| Banco de dados | Infraestrutura | Tabelas `User`, `UserProfile` (privacidade em coluna JSON `privacy`; **não** existe tabela `privacy_settings` — ver `prisma/schema.prisma`) |
 | Módulo de cálculos | Módulo interno | Biblioteca de cálculos esotéricos |
 
 ---

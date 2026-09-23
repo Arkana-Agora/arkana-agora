@@ -1,20 +1,34 @@
 # API de Inteligência Artificial — arkana-agora
 
-> **Módulo**: `src/app/api/v1/ai/` | **SDK**: z-ai-web-dev-sdk | **Modelo**: GPT-4o | **Autenticação**: Obrigatória
+> **Módulo**: `src/app/api/v1/ai/` | **SDK**: OpenAI client (`openai`) via `src/lib/ai/client.ts` | **Modelo**: GPT-4o | **Autenticação**: Obrigatória
 
 ## Sumário
 
+- [Status das rotas](#status-das-rotas)
 - [Visão Geral](#visão-geral)
-- [POST /ai/reading](#post-aireading)
-- [POST /ai/reading/stream](#post-aireadingstream)
-- [GET /ai/models](#get-aimodels)
-- [POST /ai/interpret](#post-aiinterpret)
-- [POST /ai/chat](#post-aichat)
+- [POST /ai/interpret](#post-aiinterpret) _(implementado)_
+- [POST /ai/follow-up](#post-aifollow-up) _(implementado)_
+- [GET /ai/usage](#get-aiusage) _(implementado)_
+- [POST /ai/arcana-interpret](#post-aiarcana-interpret) _(implementado)_
+- [POST /ai/reading](#post-aireading) _(planejado)_
+- [POST /ai/reading/stream](#post-aireadingstream) _(planejado)_
+- [GET /ai/models](#get-aimodels) _(planejado)_
+- [POST /ai/chat](#post-aichat) _(planejado)_
 - [Formato SSE](#formato-sse)
 - [Rate Limiting de IA](#rate-limiting-de-ia)
 - [Contagem de Tokens e Custos](#contagem-de-tokens-e-custos)
 
 ---
+
+## Status das rotas
+
+| Rota | Status | Arquivo |
+|------|--------|---------|
+| `POST /api/v1/ai/interpret` | **Implementado** (SSE ou JSON em cache-hit) | `src/app/api/v1/ai/interpret/route.ts` |
+| `POST /api/v1/ai/follow-up` | **Implementado** (SSE) | `src/app/api/v1/ai/follow-up/route.ts` |
+| `GET /api/v1/ai/usage` | **Implementado** | `src/app/api/v1/ai/usage/route.ts` |
+| `POST /api/v1/ai/arcana-interpret` | **Implementado** (SSE) | `src/app/api/v1/ai/arcana-interpret/route.ts` |
+| `POST /ai/reading`, `/ai/reading/stream`, `/ai/chat`, `GET /ai/models` | **Planejados — não existem no repo** | — |
 
 ## Visão Geral
 
@@ -22,7 +36,7 @@
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌─────────┐
-│  Cliente  │────>│  API Route   │────>│ Prompt Engine  │────>│ z-ai-   │
+│  Cliente  │────>│  API Route   │────>│ Prompt Engine  │────>│ openai │
 │  (SSE)   │<────│  Next.js 16  │<────│ (templates +   │<────│ web-   │
 │          │     │              │     │  contexto)     │     │ dev-   │
 └──────────┘     └──────────────┘     └────────────────┘     │ SDK    │
@@ -33,14 +47,162 @@
 
 ### Modos de Resposta
 
-| Modo | Endpoint | Formato | Uso |
-|------|----------|---------|-----|
-| Non-streaming | `POST /ai/reading` | JSON completo | APIs, webhooks, processamento em lote |
-| Streaming | `POST /ai/reading/stream` | SSE (Server-Sent Events) | Interface web, UX progressiva |
+| Modo | Endpoint | Formato | Status |
+|------|----------|---------|--------|
+| Streaming (SSE) | `POST /ai/interpret` | SSE `token`/`done`/`error` | **Implementado** |
+| Cache-hit | `POST /ai/interpret` | JSON `{ cached: true, content, interpretationId, tokensUsed: 0 }` | **Implementado** |
+| Streaming (SSE) | `POST /ai/follow-up` | SSE `token`/`done` | **Implementado** |
+| Non-streaming completo | `POST /ai/reading` | JSON completo | Planejado |
+| Streaming legado | `POST /ai/reading/stream` | SSE | Planejado (não existe) |
 
 ---
 
-## POST /ai/reading
+## POST /ai/interpret _(implementado)_
+
+Interpreta uma tiragem existente com streaming SSE.
+
+### Requisição
+
+```http
+POST /api/v1/ai/interpret
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "readingId": "rdg_x1y2z3",
+  "mode": "love",
+  "mood": "reflexivo",
+  "question": "O que as cartas dizem sobre meu relacionamento?"
+}
+```
+
+### Validação
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `readingId` | string | Sim | ID de tiragem do usuário |
+| `mode` | enum | Sim | `general`, `love`, `career`, `yesno` |
+| `mood` | string | Não | Livre (ex.: emoji/texto neutro) |
+| `question` | string | Não | Máx 200 chars (útil no modo `yesno`) |
+
+### Comportamento
+
+1. `requireAuth` → 401 se sem Bearer
+2. Busca contexto da tiragem (`getInterpretationContext`) → 404 `USER_NOT_FOUND`/`READING_NOT_FOUND`/`INTERPRETATION_NOT_FOUND`
+3. Rate limit diário (`checkAndIncrementDailyUsage`) → 429 `AI_DAILY_LIMIT_REACHED`
+4. Monta prompt + `cacheHash` (`buildInterpretationPrompt`)
+5. **Cache HIT** → responde **JSON** (não SSE): `{ cached: true, content, interpretationId, tokensUsed: 0 }`
+6. **Cache MISS** → stream SSE; **persiste a interpretação antes** de emitir `done` (`persistInterpretation`)
+
+### Resposta — 200 OK (SSE)
+
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+
+data: {"type":"token","token":"Suas cartas"}
+
+data: {"type":"token","token":" revelam..."}
+
+data: {"type":"done","cached":false,"interpretationId":"itr_abc123"}
+```
+
+Cache-hit (JSON):
+
+```json
+{
+  "cached": true,
+  "content": "Suas cartas revelam...",
+  "interpretationId": "itr_abc123",
+  "tokensUsed": 0
+}
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 400 | `INVALID_BODY` | Corpo não-JSON |
+| 404 | `READING_NOT_FOUND` / `INTERPRETATION_NOT_FOUND` / `USER_NOT_FOUND` | Dados ausentes |
+| 422 | `VALIDATION_ERROR` | Body inválido |
+| 429 | `AI_DAILY_LIMIT_REACHED` | Limite diário atingido (free) |
+| 500 | `INTERNAL_ERROR` | Falha interna |
+
+SSE error event:
+
+```
+data: {"type":"error","code":"AI_SERVICE_UNAVAILABLE","message":"...","retryable":true}
+```
+
+---
+
+## POST /ai/follow-up _(implementado)_
+
+Pergunta de acompanhamento sobre uma interpretação existente (SSE).
+
+### Requisição
+
+```http
+POST /api/v1/ai/follow-up
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "interpretationId": "itr_abc123",
+  "message": "O que significa Temperança invertida no contexto amoroso?"
+}
+```
+
+### Validação
+
+| Campo | Tipo | Obrigatório | Regras |
+|-------|------|-------------|--------|
+| `interpretationId` | string | Sim | ID da interpretação |
+| `message` | string | Sim | Mensagem (1–500 chars) |
+
+> **Sem `conversationHistory` no body** — o servidor monta o histórico via `FollowUpMessage`
+> (`interpretationId` + role). O `interpretationId` para o cliente vem do `done` do interpret
+> (ou do cache-hit JSON) — `ReadingAIPanel` em `src/components/ai/reading-ai-panel.tsx`.
+
+### Resposta — 200 OK (SSE)
+
+```
+data: {"type":"token","token":"Temperança invertida..."}
+
+data: {"type":"done"}
+```
+
+> `done` do follow-up é **flat** `{ type: "done" }` — **sem** `interpretationId`
+> (diferente do interpret).
+
+---
+
+## GET /ai/usage _(implementado)_
+
+Retorna uso diário de interpretações/follow-ups do usuário autenticado.
+
+```http
+GET /api/v1/ai/usage
+Authorization: Bearer <accessToken>
+```
+
+---
+
+## POST /ai/arcana-interpret _(implementado)_
+
+Gera interpretação da arcana pessoal (SSE; `done` inclui `cached: false`).
+
+---
+
+## POST /ai/reading _(planejado)_
+
+> **Não implementado.** Seção abaixo é design de produto. Use `POST /ai/interpret`.
 
 Leitura completa de IA (non-streaming). Retorna a interpretação completa em JSON.
 
@@ -78,7 +240,7 @@ Content-Type: application/json
 2. Busca cartas da tiragem no banco
 3. Monta prompt via Prompt Engine
 4. Verifica cache (hash das cartas + data + user)
-5. Envia para z-ai-web-dev-sdk (GPT-4o)
+5. Envia para openai SDK (GPT-4o)
 6. Recebe resposta completa
 7. Salva interpretação no banco
 8. Registra uso de tokens
@@ -141,7 +303,10 @@ Content-Type: application/json
 
 ---
 
-## POST /ai/reading/stream
+## POST /ai/reading/stream _(planejado)_
+
+> **Não implementado.** Seção abaixo é design de produto. O streaming implementado é
+> `POST /ai/interpret` (formato SSE flat `token`/`done` — ver [Formato SSE](#formato-sse)).
 
 Leitura de IA com streaming via SSE. A interpretação é enviada em partes conforme é gerada.
 
@@ -226,7 +391,9 @@ data: {"type": "error", "payload": {"code": "AI_SERVICE_UNAVAILABLE", "message":
 
 ---
 
-## GET /ai/models
+## GET /ai/models _(planejado)_
+
+> **Não implementado.** Não existe rota `GET /api/v1/ai/models` no repo.
 
 Lista modelos de IA disponíveis.
 
@@ -272,45 +439,10 @@ Authorization: Bearer <accessToken>
 
 ---
 
-## POST /ai/interpret
+## POST /ai/chat _(planejado)_
 
-Interpreta uma tiragem existente que ainda não possui interpretação de IA.
-
-### Requisição
-
-```http
-POST /api/v1/ai/interpret
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-```
-
-```json
-{
-  "readingId": "rdg_x1y2z3",
-  "mood": "geral",
-  "language": "pt-BR"
-}
-```
-
-### Validação
-
-| Campo | Tipo | Obrigatório | Regras |
-|-------|------|-------------|--------|
-| `readingId` | string | Sim | ID de tiragem sem interpretação |
-| `mood` | string | Não | Tema da interpretação |
-| `language` | string | Não | Idioma (padrão: `pt-BR`) |
-
-### Comportamento
-
-Igual a `POST /ai/reading`, mas sem `question` e `additionalContext`.
-
-### Resposta — 200 OK
-
-Mesmo formato de `POST /ai/reading`.
-
----
-
-## POST /ai/chat
+> **Não implementado.** O follow-up implementado é `POST /ai/follow-up` (ver acima),
+> com body `{ interpretationId, message }` e SSE `token`/`done`.
 
 Chat de follow-up sobre uma tiragem existente.
 
@@ -381,7 +513,29 @@ Content-Type: application/json
 
 ## Formato SSE
 
-### Estrutura de um evento
+### Implementado (`POST /ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret`)
+
+Eventos flat (sem wrapper `payload`):
+
+```jsonc
+// Token parcial (interpret / follow-up / arcana-interpret)
+{"type": "token", "token": "Suas cartas revelam..."}
+
+// Conclusão do interpret — persistência ANTES do done; interpretationId para o painel de IA
+{"type": "done", "cached": false, "interpretationId": "itr_abc123"}
+
+// Conclusão do follow-up (sem interpretationId)
+{"type": "done"}
+
+// Erro durante geração
+{"type": "error", "code": "AI_SERVICE_UNAVAILABLE", "message": "Serviço indisponível", "retryable": true}
+```
+
+Cache-hit do interpret **não** é SSE — é JSON `{ cached: true, content, interpretationId, tokensUsed: 0 }`.
+
+### Design legado (`/ai/reading/stream` — planejado, não implementado)
+
+#### Estrutura de um evento
 
 ```
 id: <evento_id>
@@ -389,7 +543,7 @@ event: message
 data: <json_serializado>
 ```
 
-### Payload por tipo
+#### Payload por tipo
 
 ```jsonc
 // Início da geração
@@ -408,7 +562,7 @@ data: <json_serializado>
 {"type": "error", "payload": {"code": "AI_SERVICE_UNAVAILABLE", "message": "Serviço indisponível"}}
 ```
 
-### Implementação no cliente (exemplo)
+#### Implementação no cliente (exemplo — rota planejada)
 
 ```typescript
 const eventSource = new EventSource('/api/v1/ai/reading/stream', {

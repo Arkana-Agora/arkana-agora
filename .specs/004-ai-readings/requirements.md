@@ -9,7 +9,7 @@
 
 ## 1. Visao Geral
 
-Este documento define os requisitos do sistema de interpretacao de tiragens por inteligencia artificial no Arkana Agora. O sistema utiliza o modelo GPT-4o (via z-ai-web-dev-sdk) para gerar interpretacoes contextuais das cartas tiradas, com suporte a streaming para experiencia em tempo real.
+Este documento define os requisitos do sistema de interpretacao de tiragens por inteligencia artificial no Arkana Agora. O sistema utiliza o modelo GPT-4o (via openai SDK) para gerar interpretacoes contextuais das cartas tiradas, com suporte a streaming para experiencia em tempo real.
 
 ---
 
@@ -95,7 +95,7 @@ Em caso de falha na API de IA (timeout, erro 5xx, quota excedida), o sistema dev
 
 | Dependencia | Versao | Proposito |
 |---|---|---|
-| z-ai-web-dev-sdk | latest | Acesso ao modelo GPT-4o |
+| openai | ^7.x | Acesso ao modelo GPT-4o |
 | OpenAI GPT-4o | - | Modelo de linguagem para geracao de texto |
 | Zod | >=3.x | Validacao de inputs e outputs |
 | Prisma | >=5.x | Persistencia de interpretacoes e chat |

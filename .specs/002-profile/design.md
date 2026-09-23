@@ -37,13 +37,13 @@
 - Upload de avatar com preview
 - Botão de remover avatar (com confirmação)
 - Validação inline de todos os campos
-- Indicador de salvamento automático ("Salvando..." / "Salvo")
+- Salvamento **explícito** (botão "Salvar") com feedback "Salvo às HH:MM" — **não** auto-save com debounce (ver `src/components/profile/profile-edit-form.tsx`, testid `profile-saved`)
 
 ### 1.5 PrivacySettings
-- Seção dentro do ProfileEditForm
-- Toggles (shadcn Switch) para cada configuração de privacidade
-- Radio group para "Quem pode me seguir" e "Quem pode comentar"
-- Alterações aplicadas em tempo real via API
+- Página dedicada `/perfil/privacidade` (`src/components/profile/privacy-settings.tsx`), não seção embutida no ProfileEditForm
+- Selects para: `profileVisibility`, `statsVisibility`, `arcanaVisibility`, `whoCanFollow`, `whoCanComment`
+- Salvamento explícito via `PATCH /api/v1/users/me/privacy` (não "tempo real" / não auto-save)
+- Feedback de sucesso: testid `privacy-saved`
 
 ### 1.6 ProProfileSection
 - Seção condicional (apenas plano Plus)
@@ -98,11 +98,11 @@
     [1] Usuario edita campo
          |
          v
-    [2] Auto-save (debounce 1s)
+    [2] Submit explicito (botao Salvar) — sem debounce/auto-save
          |
          v
     [3] PATCH /api/v1/users/me/profile
-         |  Body: { name, bio, birthDate, ... }
+         |  Body: { displayName?, bio?, birthDate?, birthPlace?, location?, website?, username? }
          |  Header: Authorization: Bearer <token>
          v
     [4] Server: valida com Zod, atualiza Prisma
@@ -124,10 +124,10 @@
          |
          v
     [3] POST /api/v1/users/me/avatar/presign
-         |  Body: { contentType, size }
+         |  Body: { contentType }
          v
     [4] Server: gera presigned URL (Cloudflare R2)
-         |  Retorna: { uploadUrl, fileKey, thumbnailUrl, avatarUrl }
+         |  Retorna: { uploadUrl, key }
          v
     [5] Cliente: faz PUT direto para o Cloudflare R2 (presigned URL)
          |
@@ -136,6 +136,7 @@
          |  Body: { fileKey }
          v
     [7] Server: processa imagem (sharp: 3 tamanhos), salva URLs no perfil
+         |  Retorna: { avatarUrl, variants: string[] }
          |
          v
     [8] Invalida cache, atualiza UI
@@ -169,9 +170,11 @@
   },
   "isFollowing": false,
   "privacy": {
-    "showBirthDate": false,
-    "showStats": true,
-    "showAstrology": true
+    "profileVisibility": "public",
+    "statsVisibility": "public",
+    "arcanaVisibility": "public",
+    "whoCanFollow": "all",
+    "whoCanComment": "all"
   }
 }
 ```
@@ -184,19 +187,23 @@
 
 ### PATCH /api/v1/users/me/profile
 **Descrição**: Atualiza campos editáveis do perfil.
+**Implementado em**: `src/app/api/v1/users/me/profile/route.ts` (schema `updateProfileSchema` em `src/lib/validators/profile.ts`, `.strict()`).
 **Headers**: `Authorization: Bearer <token>`
-**Body**: `{ name?, username?, bio?, birthDate?, gender?, location?, website? }`
-**Response 200**: `{ "message": "Perfil atualizado", "user": {...} }`
-**Response 409**: `{ "error": "USERNAME_TAKEN" }`
+**Body**: `{ displayName?, bio?, birthDate?, birthPlace?, location?, website?, username? }`
+**Sem campo `gender`** — removido do schema (nunca implementado).
+**Strings vazias limpam o valor**: `birthDate: ""` → `null` + limpa `astrologicalSign`/`mayanKin`; `bio`/`location`/`website`/`birthPlace` `""` → `null`.
+**Response 200**: `{ "message": "Perfil atualizado" }` (flat, sem `user` no body)
+**Response 409**: `{ "error": { "code": "USERNAME_TAKEN", ... }, "meta": { "requestId" } }`
+**Response 422**: `{ "error": { "code": "VALIDATION_ERROR", "details": [...] }, "meta": { "requestId" } }`
 
 ### POST /api/v1/users/me/avatar/presign
 **Descrição**: Gera URL pré-assinada para upload de avatar.
-**Response 200**: `{ "uploadUrl": "...", "fileKey": "..." }`
+**Response 200**: `{ "uploadUrl": "...", "key": "..." }`
 
 ### PATCH /api/v1/users/me/avatar/confirm
 **Descrição**: Confirma o upload e processa a imagem.
 **Body**: `{ "fileKey": "string" }`
-**Response 200**: `{ "avatarUrl": "...", "thumbnailUrl": "..." }`
+**Response 200**: `{ "avatarUrl": "...", "variants": ["..."] }`
 
 ### DELETE /api/v1/users/me/avatar
 **Descrição**: Remove o avatar do usuário.
@@ -204,7 +211,10 @@
 
 ### PATCH /api/v1/users/me/privacy
 **Descrição**: Atualiza configurações de privacidade.
-**Body**: `{ isPublic?, showBirthDate?, showStats?, showAstrology?, whoCanFollow?, whoCanComment? }`
+**Implementado em**: `src/app/api/v1/users/me/privacy/route.ts` (schema `privacySchema` em `src/lib/validators/profile.ts`).
+**Body**: `{ profileVisibility?, statsVisibility?, arcanaVisibility?, whoCanFollow?, whoCanComment? }`
+- `profileVisibility`/`statsVisibility`/`arcanaVisibility`: `["public","private"]` (não existe valor `followers`)
+- `whoCanFollow`/`whoCanComment`: `["all","following","nobody"]`
 **Response 200**: `{ "message": "Privacidade atualizada" }`
 
 ### GET /api/v1/users/check-username/:username
@@ -215,35 +225,30 @@
 
 ## 4. Database Schema
 
-### Tabela: Profile
+### Tabela: UserProfile (fonte da verdade: `prisma/schema.prisma`)
+
+> **Implementado** como `model UserProfile` (`@@map` ausente — tabela se chama `UserProfile` no banco).
+> Campos de privacidade ficam em **`privacy Json?`**, não em colunas booleanas separadas.
+> Colunas `gender`/`showBirthDate`/`showStats`/`showAstrology`/`isPublic` **não existem** no schema implementado.
+> Campos `pro*` (ProProfileSection) são **planejados** (V1), não implementados.
 
 ```prisma
-model Profile {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  username         String   @unique
-  bio              String?
-  gender           String?  // "male" | "female" | "nonbinary" | "undisclosed"
-  location         String?
-  website          String?
-  isPublic         Boolean  @default(true)
-  showBirthDate    Boolean  @default(false)
-  showStats        Boolean  @default(true)
-  showAstrology    Boolean  @default(true)
-  whoCanFollow     String   @default("all") // "all" | "following" | "nobody"
-  whoCanComment    String   @default("all")
-  proTitle         String?
-  proCertifications Json?
-  proSchedule      Json?    // [{day: "mon", slots: ["09:00-12:00", "14:00-18:00"]}]
-  proPriceMin      Int?     // em centavos
-  proPriceMax      Int?
-  proVerified      Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model UserProfile {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  username   String?
+  bio        String?
+  birthPlace String?
+  location   String?
+  website    String?
+  socialLinks Json?
+  privacy    Json?    // { profileVisibility, statsVisibility, arcanaVisibility, whoCanFollow, whoCanComment }
+  proTitle   String?  // [planejado — V1]
+  // ... proCertifications/proSchedule/proPrice*/proVerified: planejados (V1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("profiles")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 ```
 

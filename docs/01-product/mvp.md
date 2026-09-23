@@ -69,7 +69,7 @@ Este documento define o escopo do Minimum Viable Product (MVP) e as features pla
 | **Descricao** | Interpretacao de tiragem via GPT-4o com streaming SSE, considerando cartas + posicoes + pergunta |
 | **User Stories** | US-013, US-019, US-020, US-021 |
 | **Requisitos** | RF-013, RF-014, RF-015, RF-016 |
-| **Dependencias** | z-ai-web-dev-sdk integrado |
+| **Dependencias** | openai SDK integrado |
 | **Estimativa** | 4 dias |
 
 ### MV-006: Arcano Pessoal
@@ -238,7 +238,7 @@ Semana 4-5: Motor de Tiragem
   |- Limite diario (BR-TIR-001)
 
 Semana 5-6: IA + Streaming
-  |- Integracao z-ai-web-dev-sdk (US-019)
+  |- Integracao openai SDK (US-019)
   |- Leitura com streaming SSE
   |- Pergunta contextual (US-013)
   |- Fallback de leitura basica

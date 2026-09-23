@@ -315,7 +315,11 @@ function drawCards(deck: Deck, count: number, userId: string): DrawnCard[] {
 
 ### GET /api/v1/readings/:id/og-image
 **Descricao**: Gera e retorna imagem OG (1200x630) da tiragem.
+**Implementado em**: `src/app/api/v1/readings/[id]/og-image/route.ts`
+**Auth opcional**: `Authorization: Bearer` aceito; sem token, exige `isPublic` (ou owner via token) — tiragem privada sem auth → 404
 **Response 200**: `image/png`
+- Público (sem auth): `Cache-Control: public, max-age=3600, s-maxage=86400`
+- Privado (auth): `Cache-Control: private, no-store` + `Vary: Authorization`
 
 ### GET /api/v1/readings/daily-count
 **Descricao**: Retorna contagem de tiragens do dia.
@@ -364,39 +368,39 @@ model ReadingCard {
 
 ### ReadingStore
 
+> **Implementado** em `src/stores/reading-store.ts` — armazena a **sessão de tiragem**
+> (deck/spread/cartas), **não** o estado de streaming de IA.
+
 ```typescript
-interface ReadingState {
-  // Sessao atual
-  phase: 'idle' | 'selecting-deck' | 'selecting-spread' | 'ready' | 'shuffling' | 'revealing' | 'reading' | 'saving';
-  selectedDeck: Deck | null;
-  selectedSpread: Spread | null;
+// Shape real (resumo) — fonte: src/stores/reading-store.ts
+type SessionStep = 'deck' | 'spread' | 'draw' | 'reveal';
+
+interface ReadingSessionState {
+  step: SessionStep;            // fluxo deck → spread → draw → reveal
+  selectedDeckId: string | null;
+  selectedSpreadId: string | null;
   drawnCards: DrawnCard[];
-  seed: string | null;
-  timerSeconds: number;
-  isTimerRunning: boolean;
-
-  // Detalhe
-  selectedCardIndex: number | null;
-  isDetailOpen: boolean;
-
-  // Acoes
-  selectDeck: (deck: Deck) => void;
-  selectSpread: (spread: Spread) => void;
-  startReading: () => void;
-  selectCard: (index: number) => void;
-  closeDetail: () => void;
-  reshuffle: () => void;
-  saveReading: (data: SaveReadingData) => Promise<void>;
-  reset: () => void;
-
-  // Timer
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
+  // ... acoes de avanco/reset da sessao
 }
+
+// Persistencia
+// - sessionStorage, chave: 'arkana-reading-session'
+// - skipHydration / guard SSR (servidor nao le sessionStorage)
+// - partialize: persiste apenas campos seguros; map de persist:
+//   { draw: 'spread' } mapeia o passo salvo de volta para 'spread' no rehidratar
+// - limpo ao salvar a leitura ou resetar a sessao
 ```
 
-**Persistencia**: O estado da sessao ativa (deck, spread, drawnCards, seed, timerSeconds) e persistido em `sessionStorage` para recuperacao apos reload. A persistencia e limpa ao salvar ou ao navegar para fora da pagina de tiragem.
+**Nao existem no store real**: `timerSeconds`, `isTimerRunning`, `seed`, `phase` com
+`selecting-deck`/`revealing`/`saving` (o timer de UI e `src/components/tarot/reading-timer.tsx`;
+o seed e gerado/salvo no payload do `POST /api/v1/readings`, nao no Zustand).
+
+**Streaming de IA** vive em `src/components/ai/reading-ai-panel.tsx` (estado local do painel),
+**não** neste store.
+
+**Persistencia**: o estado da sessão ativa (deck, spread, drawnCards) é persistido em
+`sessionStorage` (chave `arkana-reading-session`) para recuperação apos reload. A persistência é
+limpa ao salvar ou ao resetar a sessão.
 
 ---
 

@@ -39,7 +39,7 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest), the Auth.
 | Tailwind CSS 4 | Utility-first styling | MVP | `docs/02-architecture/architecture.md` §3.1; `docs/00-overview/glossary.md` |
 | Framer Motion | Card reveal/flip animations | MVP | `docs/02-architecture/architecture.md` §3.1; `.specs/003-tarot-engine/design.md` §8 |
 | Auth.js v5 (`next-auth@5.0.0-beta.32`) | Auth: JWT strategy; Google OAuth + magic link (MVP); Facebook + credentials (Sprint 1) | MVP | ADR-010; `docs/04-api/authentication.md` |
-| z-ai-web-dev-sdk + GPT-4o | AI interpretations, SSE streaming, model router (GPT-4o / GPT-4o-mini fallback) | MVP | `docs/05-ai/architecture.md`; `docs/05-ai/prompts.md` |
+| OpenAI SDK (openai) + GPT-4o | AI interpretations, SSE streaming, model router (GPT-4o / GPT-4o-mini fallback) | MVP | `docs/05-ai/architecture.md`; `docs/05-ai/prompts.md` |
 | Mercado Pago | Payments: PIX, credit card, boleto; split payment; PLUS subscription | MVP | ADR-008; `docs/04-api/marketplace.md` |
 | PostgreSQL (Docker Postgres 16 dev → Neon prod) | Local dev DB → serverless prod DB (same engine since F1) | MVP | ADR-002; `docs/02-architecture/deployment.md` §1 |
 | Redis (Upstash) | Sessions, cache, rate limiting, WS horizontal adapter | MVP | `docs/02-architecture/scalability.md` §3 |
@@ -70,7 +70,7 @@ src/
 └── types/          # domain contracts
 ```
 
-**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming route: `POST /api/v1/ai/reading/stream` (`docs/05-ai/architecture.md`).
+**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming routes **implementados**: `POST /api/v1/ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret` (`docs/04-api/ai.md` §Status das rotas; `POST /api/v1/ai/reading/stream` é design legado — rota não existe).
 
 ### Mini-services (separate ports)
 
@@ -82,7 +82,7 @@ src/
 
 ### Layered architecture
 
-`docs/02-architecture/architecture.md` §3 defines four layers: **Presentation** (RSC + client components, Framer Motion, shadcn/ui, Tailwind 4), **Application** (API Routes as controllers, Zod validation, SSE, Auth.js v5 — ADR-010), **Domain** (`src/services/` business rules, e.g. plan limits on spreads, arcano calculation), **Infrastructure** (Prisma, z-ai-web-dev-sdk, Mercado Pago SDK, Upstash Redis, Cloudflare R2).
+`docs/02-architecture/architecture.md` §3 defines four layers: **Presentation** (RSC + client components, Framer Motion, shadcn/ui, Tailwind 4), **Application** (API Routes as controllers, Zod validation, SSE, Auth.js v5 — ADR-010), **Domain** (`src/services/` business rules, e.g. plan limits on spreads, arcano calculation), **Infrastructure** (Prisma, OpenAI SDK, Mercado Pago SDK, Upstash Redis, Cloudflare R2).
 
 ### Design patterns (documented)
 
@@ -100,7 +100,7 @@ Auth.js v5 (`next-auth@5.0.0-beta.32`, ADR-010) as the MVP login layer: magic li
 
 ### AI reading flow (SSE)
 
-`docs/05-ai/architecture.md`: `POST /api/readings` (validate → shuffle via CSPRNG/Fisher-Yates → save cards) → `POST /api/v1/ai/reading/stream` (load reading+user → Prompt Engine → Model Router → z-ai-web-dev-sdk → GPT-4o stream → SSE chunks to client → save interpretation + tokens → cache 24h). Fallback chain: GPT-4o → GPT-4o-mini → generic cached interpretation → friendly error. Client consumes SSE into a Zustand reading store (`.specs/003-tarot-engine/design.md` §7).
+`docs/05-ai/architecture.md`: `POST /api/readings` (validate → shuffle via CSPRNG/Fisher-Yates → save cards) → `POST /api/v1/ai/interpret` (load reading+user → Prompt Engine → cache lookup → OpenAI SDK `gpt-4o` stream → SSE flat `token`/`done`/`error` to client → **persist interpretation before** `done` (with `interpretationId`) → cache). Route design legado `POST /api/v1/ai/reading/stream` não existe. Fallback chain: GPT-4o → GPT-4o-mini → generic cached interpretation → friendly error. Client consumes SSE no painel `src/components/ai/reading-ai-panel.tsx`; o Zustand `src/stores/reading-store.ts` guarda a sessão de tiragem (deck/spread/cartas), **não** o stream de IA (`.specs/003-tarot-engine/design.md` §7).
 
 ### Real-time social flow
 

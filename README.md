@@ -80,7 +80,7 @@ All entries are **documented design** except what is flagged as implemented in C
 | Next.js (App Router)                       | Web framework: SSR, RSC, API Routes, SSE streaming                     | MVP                                                                             |
 | Prisma ORM                                 | Data access; PostgreSQL (Docker dev / Neon prod); migrations           | MVP                                                                             |
 | Auth.js v5 (`next-auth@5.0.0-beta.32`)     | Auth login: JWT session, Google OAuth + magic link (ADR-010)           | MVP — **implemented (login)**; credentials/Facebook/Custom JWT Layer = Sprint 1 |
-| z-ai-web-dev-sdk + GPT-4o                  | AI interpretations, SSE streaming, model router (GPT-4o-mini fallback) | MVP                                                                             |
+| OpenAI SDK (openai) + GPT-4o               | AI interpretations, SSE streaming, model router (GPT-4o-mini fallback) | MVP                                                                             |
 | Mercado Pago                               | Payments: PIX, card, boleto; split payment; Arkana Plus subscription   | MVP                                                                             |
 | Zustand                                    | Client-side state (UI, reading session, auth)                          | MVP                                                                             |
 | TanStack Query                             | Server-state cache, invalidation, mutations                            | MVP                                                                             |

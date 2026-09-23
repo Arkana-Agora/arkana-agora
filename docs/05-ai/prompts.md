@@ -1,6 +1,6 @@
 # Prompts de IA — arkana-agora
 
-> **Módulo**: `src/lib/ai/prompts/` | **Idioma**: pt-BR | **Modelo**: GPT-4o via z-ai-web-dev-sdk
+> **Módulo**: `src/lib/ai/prompts/` | **Idioma**: pt-BR | **Modelo**: GPT-4o via openai SDK
 
 ## Sumário
 

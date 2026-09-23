@@ -1,6 +1,6 @@
 # Arquitetura de IA — arkana-agora
 
-> **SDK**: z-ai-web-dev-sdk | **Modelo Principal**: GPT-4o | **Streaming**: SSE via Next.js 16
+> **SDK**: openai (`openai@^7`) | **Modelo Principal**: GPT-4o | **Streaming**: SSE via Next.js 16
 
 ## Sumário
 
@@ -49,7 +49,7 @@
 ## Fluxo de Leitura Completo
 
 ```
-Usuário          API Route        Prompt       Model      z-ai-web     GPT-4o
+Usuário          API Route        Prompt       Model      OpenAI SDK   GPT-4o
   │                │               Engine       Router     SDK           │
   │  POST /draw    │               │            │          │             │
   │───────────────>│               │            │          │             │
@@ -59,9 +59,9 @@ Usuário          API Route        Prompt       Model      z-ai-web     GPT-4o
   │<───────────────│  cartas       │            │          │             │
   │   201 Created  │               │            │          │             │
   │                │               │            │          │             │
-  │  POST /ai/     │               │            │          │             │
-  │  reading/      │               │            │          │             │
-  │  stream        │               │            │          │             │
+  │  POST /ai/      │               │            │          │             │
+  │  interpret      │               │            │          │             │
+  │  (SSE)          │               │            │          │             │
   │───────────────>│               │            │          │             │
   │                │  4. Busca     │            │          │             │
   │                │  reading +    │            │          │             │
@@ -81,11 +81,13 @@ Usuário          API Route        Prompt       Model      z-ai-web     GPT-4o
   │                │  SSE chunks   │            │          │ <───────── │
   │<─── SSE ───────│<────────────── │<───────────│<─────────│             │
   │                │               │            │          │             │
-  │                │  9. Salva     │            │          │             │
-  │                │  interpretação│            │          │             │
+  │                │  9. Salva     │ (ANTES do  │          │             │
+  │                │  interpretacao│   done)    │          │             │
   │                │  10. Registra │            │          │             │
   │                │  tokens       │            │          │             │
-  │<─── done ──────│               │            │          │             │
+  │<── done ───────│  {type:"done",│            │          │             │
+  │  {cached,      │   cached,     │            │          │             │
+  │  interpretationId} }           │            │          │             │
 ```
 
 ### Detalhamento das etapas
@@ -98,7 +100,7 @@ Usuário          API Route        Prompt       Model      z-ai-web     GPT-4o
 | 4 | Busca de dados (reading + user) | <30ms | Sim (404) |
 | 5 | Montagem do prompt | <10ms | Não |
 | 6 | Seleção de modelo | <1ms | Não |
-| 7 | Chamada ao z-ai-web-dev-sdk | 3–8s | Sim (503) |
+| 7 | Chamada ao openai SDK | 3–8s | Sim (503) |
 | 8 | Streaming da resposta | 3–8s | Sim (erro de stream) |
 | 9 | Salvamento da interpretação | <50ms | Sim (500) |
 | 10 | Registro de tokens | <20ms | Sim (falha silenciosa) |
@@ -179,7 +181,7 @@ const MODEL_ROUTES: ModelRoute[] = [
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌──────────┐
-│ GPT-4o   │────>│ z-ai-web-    │────>│ Next.js  │────>│ Cliente  │
+│ GPT-4o   │────>│ openai-sdk │────>│ Next.js  │────>│ Cliente  │
 │ (stream) │     │ dev-sdk      │     │ SSE      │     │ Zustand  │
 └──────────┘     └──────────────┘     │ (chunked)│     │ store    │
                                        └──────────┘     └──────────┘
@@ -191,8 +193,13 @@ const MODEL_ROUTES: ModelRoute[] = [
 
 ### Implementação (Server)
 
+> **Implementado**: `src/app/api/v1/ai/interpret/route.ts` (contrato SSE flat — `type: token|done|error`).
+> O snippet abaixo é **ilustrativo do design legado** (`/ai/reading/stream` — rota não existe);
+> use o route implementado como fonte de verdade.
+
 ```typescript
-// src/app/api/v1/ai/reading/stream/route.ts
+// Design legado: src/app/api/v1/ai/reading/stream/route.ts (NAO implementado)
+// Fonte da verdade: src/app/api/v1/ai/interpret/route.ts
 
 export async function POST(request: Request) {
   const { readingId, mood, question } = await request.json()
@@ -210,8 +217,8 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // 4. Chamada ao z-ai-web-dev-sdk com streaming
-        const aiResponse = await zAiSdk.chat.completions.create({
+        // 4. Chamada ao openai SDK com streaming
+        const aiResponse = await client.chat.completions.create({
           model: 'gpt-4o',
           messages: prompt.messages,
           stream: true,
@@ -276,11 +283,16 @@ export async function POST(request: Request) {
 }
 ```
 
-### Implementação (Client — Zustand)
+### Implementação (Client)
+
+> **Implementado:** o estado de streaming vive no componente `src/components/ai/reading-ai-panel.tsx`
+> (token buffer, `interpretationId` do `done`, abort/unmount guards). O Zustand
+> `src/stores/reading-store.ts` é a **sessão de tiragem** (deck/spread/cartas) — **não** contém
+> `status: streaming` nem `sections` de IA. O snippet abaixo é **ilustrativo do design legado**.
 
 ```typescript
-// src/stores/reading-store.ts
-
+// Design legado (NAO e o reading-store real)
+// Fonte da verdade do cliente de stream: src/components/ai/reading-ai-panel.tsx
 interface ReadingState {
   status: 'idle' | 'streaming' | 'done' | 'error'
   sections: Record<string, string>
@@ -291,31 +303,6 @@ interface ReadingState {
   setError: (error: any) => void
   reset: () => void
 }
-
-export const useReadingStore = create<ReadingState>((set) => ({
-  status: 'idle',
-  sections: {},
-  fullText: '',
-  tokensUsed: 0,
-
-  appendContent: (section, text) =>
-    set((state) => ({
-      status: 'streaming',
-      sections: {
-        ...state.sections,
-        [section]: (state.sections[section] || '') + text,
-      },
-      fullText: state.fullText + text,
-    })),
-
-  completeReading: (tokens) =>
-    set({ status: 'done', tokensUsed: tokens }),
-
-  setError: (error) => set({ status: 'error' }),
-
-  reset: () =>
-    set({ status: 'idle', sections: {}, fullText: '', tokensUsed: 0 }),
-}))
 ```
 
 ---

@@ -498,4 +498,35 @@ ADR-009 Gate A). Os models `Session`/`VerificationToken` são cópia fiel de
 
 ---
 
+## ADR-012: openai SDK como único cliente de IA (GPT-4o / GPT-4o-mini)
+
+> **Cópia resumida da ADR canônica.** Registro completo e imutável em
+> `docs/decisions/2026-09-23-openai-sdk-ai-provider.md`.
+
+### Status
+**Aceito** ✅ — padroniza o stack de IA do MVP; `z-ai-web-dev-sdk` (do plano original) nunca foi instalado neste repositório.
+
+### Contexto
+O plano S4 previa `z-ai-web-dev-sdk`. A implementação usou `openai@^7.21.0` com contrato `AIClient`, mas docs vivas e env template ainda mentiam sobre SDK e `AI_PRIMARY_API_KEY` (nunca lido). Modelos estavam hardcoded nos routes.
+
+### Decisão
+1. **`openai` é o único SDK de IA** — não reintroduzir `z-ai-web-dev-sdk`.
+2. **Env**: `AI_API_KEY`, `AI_MODEL` (default `gpt-4o`), `AI_MODEL_FOLLOWUP` (default `gpt-4o-mini`).
+3. **Roteamento** (`src/lib/ai/models.ts`): interpretações completas → GPT-4o (qualidade esotérica pt-BR); follow-ups → GPT-4o-mini (latência/custo).
+
+### Consequências
+**Positivas:** um SDK/lockfile/testes; modelos trocáveis por env; docs = código.
+**Negativas:** sem auto-fallback de modelo em rate-limit (roadmap); `Interpretation.modelVersion` default pode divergir se `AI_MODEL` mudar em prod.
+
+### Alternativas Consideradas
+
+| Alternativa | Por que não escolhida |
+|---|---|
+| Manter `z-ai-web-dev-sdk` como atual | Pacote inexistente; docs mentem sobre o runtime |
+| GPT-4o para tudo | Follow-ups pagam latência/custo sem ganho proporcional |
+| GPT-4o-mini para tudo | Interpretações longas de tarot perdem profundidade |
+| Multi-provider router agora | Fora do escopo MVP; `AIClient` já isola troca futura |
+
+---
+
 *Documento parte do SDD (Software Design Document) do arkana-agora.*

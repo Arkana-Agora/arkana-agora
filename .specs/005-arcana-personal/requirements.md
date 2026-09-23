@@ -136,7 +136,7 @@ O mesmo input (mesma data e mesmo nome) deve sempre produzir o mesmo Arcano Pess
 
 | Dependencia | Versao | Proposito |
 |---|---|---|
-| z-ai-web-dev-sdk | latest | Interpretacao IA do arcano (SPEC-004) |
+| openai | ^7.x | Interpretacao IA do arcano (SPEC-004) |
 | Zod | >=3.x | Validacao de data e nome |
 
 **Nota:** O calculo numerologico e puramente matematico e nao depende de bibliotecas externas.

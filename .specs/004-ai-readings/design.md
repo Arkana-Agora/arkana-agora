@@ -83,7 +83,7 @@
          |                                      |  (cartas + posicoes + mood +
          |                                      |   perfil + historico)
          |                                      v
-         |                                 [10] Chamada z-ai-web-dev-sdk
+          |                                 [10] Chamada openai SDK
          |                                      |  (GPT-4o, stream=true)
          |                                      v
     [11] SSE: token por token   <--------  [12] Faz stream dos tokens
@@ -170,51 +170,58 @@ Responda de forma concisa (2-3 paragrafos), referenciando as cartas da tiragem q
 
 ### 4.1 API Route (App Router)
 
+> **Implementado** em `src/app/api/v1/ai/interpret/route.ts`. Eventos SSE são **flat**
+> (sem wrapper `payload`); a interpretação é persistida **antes** do evento `done`.
+
 ```typescript
-// app/api/v1/ai/interpret/route.ts
+// src/app/api/v1/ai/interpret/route.ts (resumo do fluxo implementado)
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  // 1. Validar com Zod
-  // 2. Verificar autenticacao
-  // 3. Verificar rate limit
-  // 4. Buscar tiragem
-  // 5. Calcular hash e verificar cache
-  // 6. Se cache HIT: retornar JSON normal
-  // 7. Se cache MISS: iniciar stream
+  // 1. requireAuth + Zod interpretSchema { readingId, mode, mood?, question? }
+  // 2. getInterpretationContext → 404 se user/reading/interpretation ausente
+  // 3. checkAndIncrementDailyUsage → 429 AI_DAILY_LIMIT_REACHED
+  // 4. buildInterpretationPrompt → { systemPrompt, userPrompt, cacheHash }
+  // 5. lookupCachedInterpretation(cacheHash, userId)
+  //    HIT → JSON { cached: true, content, interpretationId, tokensUsed: 0 }
+  // 6. MISS → ReadableStream SSE com OpenAI client (stream: true)
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Chamada ao z-ai-web-dev-sdk com stream
-        const aiResponse = await ai.chat.completions.create({
+        const aiResponse = await client.chat.completions.create({
           model: 'gpt-4o',
           messages: [systemPrompt, userPrompt],
           stream: true,
-          max_tokens: 2000,
-          temperature: 0.8,
+          max_tokens: mode === 'yesno' ? 1500 : 4096,
+          temperature: mode === 'yesno' ? 0.4 : 0.7,
         });
 
         let fullText = '';
         for await (const chunk of aiResponse) {
           const token = chunk.choices[0]?.delta?.content || '';
-          fullText += token;
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
-          );
+          if (token) {
+            fullText += token;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'token', token })}\n\n`)
+            );
+          }
         }
 
-        // Salvar interpretacao completa e atualizar cache
-        await saveInterpretation(readingId, fullText, mode, cacheHash);
+        // Persiste ANTES do done — cliente só trata done como sucesso definitivo
+        const saved = await persistInterpretation({ readingId, userId, mode, mood, question, content: fullText, cacheHash, tokensUsed: 0 });
 
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'done', cached: false, interpretationId: saved?.id ?? null })}\n\n`
+          )
         );
         controller.close();
       } catch (error) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: true })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'error', code: 'AI_SERVICE_UNAVAILABLE', message: '...', retryable: true })}\n\n`
+          )
         );
         controller.close();
       }
@@ -226,27 +233,37 @@ export async function POST(request: Request) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }
 ```
 
-### 4.2 Cliente (EventSource)
+### 4.2 Cliente (fetch + ReadableStream)
 
 ```typescript
 // Nao usar EventSource nativo (nao suporta POST)
-// Usar fetch com ReadableStream
+// Usar fetch com ReadableStream — ReadingAIPanel: src/components/ai/reading-ai-panel.tsx
 
 async function requestInterpretation(params: InterpretRequest) {
   const response = await fetch('/api/v1/ai/interpret', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
   });
+
+  // Cache-hit → JSON plano, nao SSE
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const data = await response.json();
+    // { cached: true, content, interpretationId, tokensUsed: 0 }
+    return data;
+  }
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let fullText = '';
+  let interpretationId: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -257,14 +274,19 @@ async function requestInterpretation(params: InterpretRequest) {
 
     for (const line of lines) {
       const data = JSON.parse(line.slice(6));
-      if (data.done) break;
-      if (data.error) throw new Error('AI service error');
-      fullText += data.token;
-      onUpdate(fullText); // Atualiza UI com texto parcial
+      if (data.type === 'token') {
+        fullText += data.token;
+        onUpdate(fullText);
+      } else if (data.type === 'done') {
+        // { cached, interpretationId } — usado como chave para POST /ai/follow-up
+        interpretationId = data.interpretationId ?? null;
+      } else if (data.type === 'error') {
+        throw new Error(data.code || 'AI service error');
+      }
     }
   }
 
-  return fullText;
+  return { fullText, interpretationId };
 }
 ```
 
@@ -274,20 +296,28 @@ async function requestInterpretation(params: InterpretRequest) {
 
 ### POST /api/v1/ai/interpret
 **Descricao**: Gera interpretacao IA de uma tiragem (streaming).
+**Implementado em**: `src/app/api/v1/ai/interpret/route.ts`
 **Headers**: `Authorization: Bearer <token>`
-**Body**: `{ readingId, mode, mood?, question? }`
-**Response 200**: `text/event-stream` com tokens
-**Response 429**: `{ error: "AI_DAILY_LIMIT_REACHED" }`
+**Body**: `{ readingId, mode, mood?, question? }` — `mode` obrigatório: `general|love|career|yesno`
+**Response 200 (MISS)**: `text/event-stream` — `{type:"token",token}`* + `{type:"done",cached,interpretationId}`
+**Response 200 (HIT)**: JSON `{ cached: true, content, interpretationId, tokensUsed: 0 }` (nao stream)
+**Response 429**: `{ error: { code: "AI_DAILY_LIMIT_REACHED", ... } }`
 
 ### POST /api/v1/ai/follow-up
 **Descricao**: Envia pergunta de follow-up sobre uma interpretacao (streaming).
-**Body**: `{ interpretationId, message, conversationHistory? }`
-**Response 200**: `text/event-stream` com tokens
-**Response 429**: `{ error: "FOLLOW_UP_LIMIT_REACHED", remaining: 0 }`
+**Implementado em**: `src/app/api/v1/ai/follow-up/route.ts`
+**Body**: `{ interpretationId, message }` — **sem `conversationHistory`** (historico montado no servidor via `FollowUpMessage`)
+**Response 200**: `text/event-stream` — `{type:"token",token}`* + `{type:"done"}` (done **sem** interpretationId)
+**Response 429**: erro de limite de follow-up (ver route)
+
+> **Vinculo com o painel**: o `interpretationId` vem do `done` do interpret (ou do JSON de cache-hit);
+> `ReadingAIPanel` (`src/components/ai/reading-ai-panel.tsx`) retém o id e envia no `interpretationId`
+> de cada `POST /api/v1/ai/follow-up`.
 
 ### GET /api/v1/ai/usage
 **Descricao**: Retorna uso diario da IA.
-**Response 200**: `{ interpretations: 3, followUps: 5, dailyLimit: 10, followUpLimit: 10, resetsAt: "2025-01-02T03:00:00Z" }`
+**Implementado em**: `src/app/api/v1/ai/usage/route.ts`
+**Response 200**: `{ interpretations: 3, followUps: 5, dailyLimit: 10, followUpLimit: 10, resetsAt: "..." }` (shape exato: ver route)
 
 ---
 

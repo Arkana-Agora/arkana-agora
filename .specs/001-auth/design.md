@@ -164,9 +164,11 @@
 | passwordConfirmation | string | Sim | Identico a password |
 | acceptTerms | boolean | Sim | Deve ser true |
 
-**Response 201**: `{ user: { id, name, email, emailVerified }, message: "Email de verificacao enviado" }`
-**Response 409**: `{ error: "EMAIL_ALREADY_EXISTS" }`
-**Response 422**: `{ errors: { campo: ["mensagem"] } }`
+**Response 201** (anti-enumeração): `{ message: "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado" }` — **flat, sem `user`**; mesmo shape para e-mail novo, já cadastrado e corrida P2002 (`tests/register.test.ts`).
+**Sem 409**: e-mail duplicado **não** retorna 409 — no-op com 201 uniforme (o `user.create` é pulado; envio de e-mail de verificação é best-effort).
+**Response 422**: `{ error: { code: "VALIDATION_ERROR", message, details: [{ field, message }] }, meta: { requestId } }`
+
+**Comportamento**: cria `User` com `profile: { create: {} }` (aninha `UserProfile` vazio no mesmo `user.create` — `src/app/api/v1/auth/register/route.ts`).
 
 ### POST /api/v1/auth/login
 **Descricao**: Autentica usuario com email e senha.

@@ -1,6 +1,6 @@
 # Estratégia de Migrações — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-09-01
+> Versão: 1.1 | Última atualização: 2026-09-23
 
 ---
 
@@ -13,9 +13,17 @@ prisma/
 ├── schema.prisma          # Schema fonte de verdade (datasource postgresql)
 └── migrations/
     ├── 20260813000605_init/
-    │   └── migration.sql   # Migration inicial — APLICADA (Sprint 0 / F1)
+    │   └── migration.sql   # User, UserProfile, Subscription, Session, VerificationToken — APLICADA (Sprint 0 / F1)
     ├── 20260902015420_add_token_version/
     │   └── migration.sql   # tokenVersion no User — APLICADA (Módulo 1 Auth, T5)
+    ├── 20260921160000_add_username_birthplace_privacy/
+    │   └── migration.sql   # username/birthPlace/privacy no UserProfile — APLICADA (Sprint 1 / Profile)
+    ├── 20260921230000_add_reading_reading_card/
+    │   └── migration.sql   # Reading + ReadingCard — APLICADA (Sprint 1 / Tarot)
+    ├── 20260922034000_add_ai_interpretations/
+    │   └── migration.sql   # Interpretation, FollowUpMessage, AIDailyUsage — APLICADA (Sprint 1 / AI)
+    ├── 20260923183900_add_arcana_calculations/
+    │   └── migration.sql   # ArcanaCalculation (arcana_calculations) + drift de índices — APLICADA (Sprint 1 / task 23)
     └── migration_lock.toml  # provider = postgresql
 ```
 
@@ -102,7 +110,7 @@ Antes de aplicar qualquer migration em produção, seguir obrigatoriamente:
 
 ---
 
-## 5. Próximas Migrations Planeadas
+## 5. Migrations — status (aplicadas e planejadas)
 
 ### Sprint 0 — Autenticação (MVP) — ✅ APLICADA (Sprint 0 / F1, 2026-08-13)
 
@@ -164,9 +172,17 @@ CREATE UNIQUE INDEX "UserProfile_userId_key" ON "UserProfile"("userId");
 ALTER TABLE "UserProfile" ADD CONSTRAINT "UserProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
-### Sprint 1 — Leituras e Cartas
+### Sprint 1 — Profile / Leitura / AI / Arcano — ✅ APLICADAS (2026-09-23 em dev)
 
-**Migration**: `20250711010000_add_reading_tables`
+**Migrations**: `20260921160000_add_username_birthplace_privacy` (UserProfile: username, birthPlace, privacy — T007), `20260921230000_add_reading_reading_card` (Reading + ReadingCard — T037), `20260922034000_add_ai_interpretations` (Interpretation, FollowUpMessage, AIDailyUsage), `20260923183900_add_arcana_calculations` (`ArcanaCalculation` → tabela `arcana_calculations`, FK `userId` → `User` com `ON DELETE CASCADE`, índice `(userId, createdAt)`; a mesma migration corrigiu drift de índices faltantes: `follow_up_messages("interpretationId")`, `reading_cards("readingId")` e removeu `interpretations_cacheHash_idx`).
+
+Geradas com atomic chain da skill `prisma` e todas aplicadas em dev PostgreSQL em 2026-09-23 (a de arcano foi a última; as três anteriores estavam pendentes de aplicação). SQL real versionado em `prisma/migrations/<nome>/migration.sql`. A persistência do histórico de cálculos é gravada de forma não-bloqueante em `GET /api/v1/arcana/calculate` e retorna `reductionDate`/`reductionName`.
+
+### Sprint 1 — Leituras e Cartas (rascunho de planejamento — superado)
+
+> **Nota (2026-09-23):** seção histórica de planejamento. As migrations reais aplicadas estão na subsection acima; `ArcanaCalculation` foi criada por `20260923183900_add_arcana_calculations` (tabela `arcana_calculations`), não pelo bloco ilustrativo abaixo. Decks continuam em JSON — `TarotDeck`/`Card`/`Spread`/`DailyCard` **não** foram criados.
+
+**Migration (planejada, nunca gerada)**: `20250711010000_add_reading_tables`
 
 Entidades: `TarotDeck`, `Card`, `Spread`, `Reading`, `ArcanaCalculation`, `DailyCard`
 

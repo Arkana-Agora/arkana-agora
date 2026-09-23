@@ -76,14 +76,14 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 | **ID** | UC-002 |
 | **Nome** | Leitura via IA com Streaming |
 | **Ator Primario** | Sistema |
-| **Ator Secundario** | GPT-4o (z-ai-web-dev-sdk) |
+| **Ator Secundario** | GPT-4o (openai SDK) |
 | **Versao** | MVP |
 
 ### Pre-condicoes
 
 - Uma tiragem foi realizada (UC-001, passo 13)
 - O usuario possui cota de leitura IA disponivel
-- O servico z-ai-web-dev-sdk esta disponivel
+- O servico openai SDK esta disponivel
 
 ### Fluxo Principal
 

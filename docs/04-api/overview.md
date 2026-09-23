@@ -86,7 +86,7 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > `POST /api/v1/auth/verify-email/resend`, `DELETE /api/v1/auth/account`,
 > `POST /api/v1/auth/restore-account`)
 > retornam o
-> body **plano (flat)** — `{ user, message }`, `{ accessToken, user }`, `{ message }`,
+> body **plano (flat)** — `{ message }`, `{ accessToken, user }`, `{ message }`,
 > `{ accessToken, user }`, `{ message }`, `{ message }`, `{ accessToken, expiresIn, user }`,
 > `{ message }`, `{ message }`, `{ message }`, `{ message }` e `{ message }`
 > respectivamente — **sem**
@@ -101,14 +101,18 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 ```
 Content-Type: text/event-stream
 
-id: evt_001
-event: message
-data: {"type": "content", "payload": {"text": "A carta do..."}}
+data: {"type": "token", "token": "A carta do..."}
 
-data: {"type": "content", "payload": {"text": "Hermitano sugere..."}}
+data: {"type": "token", "token": "Hermitano sugere..."}
 
-data: {"type": "done", "payload": {"tokensUsed": 1523}}
+data: {"type": "done", "cached": false, "interpretationId": "itr_abc123"}
 ```
+
+> **Implementado:** `POST /api/v1/ai/interpret` (SSE flat: `token`/`done`/`error`) e
+> `POST /api/v1/ai/follow-up`. Cache-hit do interpret responde **JSON** `{ cached: true, content, interpretationId, tokensUsed: 0 }`
+> (não stream). O evento `done` carrega `interpretationId` para o painel de IA reter o vínculo
+> (`src/components/ai/reading-ai-panel.tsx`). Rotas planejadas `POST /ai/reading`,
+> `/ai/reading/stream`, `/ai/chat`, `GET /ai/models` **não estão implementadas**.
 
 ---
 
@@ -249,7 +253,7 @@ HTTP 429 Too Many Requests
 | Auth | `AUTH_MAGIC_LINK_RATE_LIMIT` | Máximo 3 magic links/hora por e-mail |
 | Auth | `AUTH_FORGOT_RATE_LIMIT` | Máximo 3 pedidos de recuperação de senha/hora por e-mail |
 | Auth | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa |
-| Auth | `AUTH_EMAIL_ALREADY_EXISTS` | E-mail já cadastrado |
+| Auth | `AUTH_EMAIL_ALREADY_EXISTS` | **Legado/não emitido pelo register implementado** (register responde 201 uniforme anti-enumeração) |
 | Auth | `AUTH_RESTORE_WINDOW_EXPIRED` | Posse provada, mas janela de restauração expirada |
 | Validação | `VALIDATION_ERROR` | Erro nos dados de entrada |
 | Validação | `INVALID_FORMAT` | Formato inválido para um campo |

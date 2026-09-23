@@ -21,7 +21,7 @@ The provider model is **fully managed SaaS/serverless** — no self-hosted serve
 | Object storage (card images, uploads) | Cloudflare R2 | planejado |
 | CDN / DNS / WAF | Cloudflare | planejado |
 | Reverse proxy / TLS (local + container) | Caddy (ports 80/443) | planejado |
-| AI models | OpenAI GPT-4o / GPT-4o-mini via `z-ai-web-dev-sdk` | planejado |
+| AI models | OpenAI GPT-4o / GPT-4o-mini via `openai` SDK | planejado |
 | Payments | Mercado Pago (PIX, card, boleto, subscriptions) | planejado |
 | Error tracking | Sentry (@sentry/nextjs) | implementado (F4 — disabled sem DSN; captura em produção requer DSN) |
 | Product analytics | PostHog | planejado |
@@ -50,7 +50,7 @@ Next.js :3000   AI Service :3004 (SSE)   Socket.io :3003
    Cloudflare R2 (assets) + CDN
 ```
 
-- **AI streaming** uses **SSE** (not WebSocket) — ADR-004 (aceito). Route: `POST /api/v1/ai/reading/stream`.
+- **AI streaming** uses **SSE** (not WebSocket) — ADR-004 (aceito). Routes implementados: `POST /api/v1/ai/interpret` (+ `/ai/follow-up`, `/ai/arcana-interpret`). `POST /api/v1/ai/reading/stream` é design legado (rota não existe — ver `docs/04-api/ai.md` §Status das rotas).
 - **Real-time social** (feed, notifications, presence) uses **Socket.io** on a separate mini-service (port 3003) — ADR-007 (aceito).
 - **Inter-service events** use an Event Bus: custom EventEmitter in dev, **Redis Pub/Sub in production** (planejado).
 - **Background jobs** (daily horoscopes, emails, image processing) via **BullMQ** on Redis (planejado, futuro).
@@ -91,7 +91,7 @@ assets.arkanaagora.com.br → Cloudflare R2 (images)
 | Object storage | Cloudflare R2 | — | planejado | Card images (WebP, 3 variants), user uploads; served via `assets.arkanaagora.com.br` |
 | CDN / DNS / WAF | Cloudflare | — | planejado | Static cache (TTL 1h HTML, 30d assets), SSL Full (Strict), WAF rules, Page Rules bypass for `/api/*` |
 | Reverse proxy / TLS | Caddy | 80/443 | planejado | Local + Docker stack; SSE flush config (`flush_interval -1`); WS upgrade for :3003 |
-| AI models | OpenAI GPT-4o (primary), GPT-4o-mini (fallback) via `z-ai-web-dev-sdk` | — | planejado | Model Router per feature; fallback chain: primary → mini → generic cache → friendly error |
+| AI models | OpenAI GPT-4o (primary), GPT-4o-mini (follow-up) via `openai` SDK | — | planejado | Model Router per feature; fallback chain: primary → mini → generic cache → friendly error |
 | Payments | Mercado Pago | — | planejado | Checkout, subscriptions (Arkana Plus), webhooks (`POST /api/v1/webhooks/mercadopago`), split payments |
 | Error tracking | Sentry (@sentry/nextjs@10.71.0) | — | implementado (F4 — disabled sem DSN) | Client + server errors (`instrumentation*.ts`, `global-error.tsx`), source maps (`withSentryConfig`), release tracking per deploy; captura efetiva requer `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` |
 | Analytics | PostHog | — | planejado | Product events, funnels, cohorts; Vercel Analytics for Web Vitals |

@@ -70,22 +70,22 @@ Semana  1───3───5──────8──────13────
 |-------|--------|
 | **Data alvo** | Semana 8 |
 | **Sprint** | Sprint 1 |
-| **Status** | Planejamento |
+| **Status** | Implementado (parcial) — escopo Sprint 1 entregue; pendências: Facebook OAuth (1d), Account model (1e), onboarding page (2), tabelas Card/TarotDeck (não usadas — decks em JSON), CI/deploy remoto |
 
 ### Critérios de Conclusão
 
-- [ ] Usuário se cadastra via Google ou email com sucesso
-- [ ] Perfil criado com signo e arcano pessoal calculados automaticamente
-- [ ] Tiragem de 3 cartas com animação de virar
-- [ ] Interpretação IA gerada com streaming SSE (texto aparecendo em tempo real)
-- [ ] Tarot do dia exibido na home do usuário logado
-- [ ] Arcano Pessoal calculado via método de Pitágoras com resultado detalhado
-- [ ] Histórico de tiragens acessível e paginado
-- [ ] PWA instalável no celular (testado em iOS e Android)
-- [ ] Landing page completa com SEO (hero, features, pricing, FAQ)
-- [ ] PostHog trackeando eventos: `signup`, `reading_created`, `ai_interpretation`
-- [ ] Zero bugs críticos em produção
-- [ ] Lighthouse score > 80 em Performance, Accessibility, Best Practices
+- [x] Usuário se cadastra via Google ou email com sucesso
+- [x] Perfil criado com signo e arcano pessoal calculados automaticamente
+- [x] Tiragem de 3 cartas com animação de virar
+- [x] Interpretação IA gerada com streaming SSE (texto aparecendo em tempo real)
+- [x] Tarot do dia exibido na home do usuário logado (`/dashboard`)
+- [x] Arcano Pessoal calculado via método de Pitágoras com resultado detalhado
+- [x] Histórico de tiragens acessível e paginado
+- [x] PWA instalável no celular (testado em iOS e Android) — **implementado (manifest/SW/offline); validação em devices reais pendente**
+- [x] Landing page completa com SEO (hero, features, pricing, FAQ)
+- [x] PostHog trackeando eventos: `signup`, `reading_created`, `ai_interpretation` — **implementado com consent banner; exige `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` e `NEXT_PUBLIC_POSTHOG_HOST`**
+- [ ] Zero bugs críticos em produção — **validação local; produção/CI pendente de push + secrets**
+- [ ] Lighthouse score > 80 em Performance, Accessibility, Best Practices — **não medido nesta execução**
 
 ### Métricas a Acompanhar
 
@@ -253,7 +253,7 @@ Semana  1───3───5──────8──────13────
 | Marco | Nome | Semana | Sprint | Status |
 |-------|------|--------|--------|--------|
 | M0 | Chão Tá Preparado | 3 | Sprint 0 | Em fechamento (F1–F4 entregues; pendências remotas/produção) |
-| M1 | MVP Funcional | 8 | Sprint 1 | Planejamento |
+| M1 | MVP Funcional | 8 | Sprint 1 | Implementado (parcial — ver status em M1) |
 | M2 | Comunidade Ativa | 13 | Sprint 2 | Planejamento |
 | M3 | Monetização Ativa | 18 | Sprint 3 | Planejamento |
 | M4 | Escala e Evolução | 26 | V2 | Roadmap |

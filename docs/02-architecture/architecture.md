@@ -31,7 +31,7 @@ O **arkana-agora** é uma plataforma brasileira de Tarot, Cartas Ciganas (Lenorm
 │   Next.js App   │ │  AI Service  │ │  Socket.io       │
 │   (port 3000)   │ │  (SSE stream)│ │  (port 3003)     │
 │                 │ │  GPT-4o      │ │  Real-time       │
-│  - Pages/SSR    │ │  z-ai-sdk    │ │  - Feed updates  │
+│  - Pages/SSR    │ │  openai-sdk │ │  - Feed updates  │
 │  - API Routes   │ │              │ │  - Notifications │
 │  - Server Comps │ │              │ │  - Presence      │
 └────────┬────────┘ └──────┬───────┘ └────────┬─────────┘
@@ -93,7 +93,7 @@ src/
 ├── lib/
 │   ├── prisma.ts           # Cliente Prisma singleton
 │   ├── auth.ts             # Configuração Auth.js v5 (ADR-010)
-│   ├── ai.ts               # Cliente z-ai-web-dev-sdk
+│   ├── ai.ts               # Cliente OpenAI (src/lib/ai/client.ts; openai SDK)
 │   └── validators/         # Zod schemas
 ├── services/               # Lógica de negócio
 │   ├── reading.service.ts
@@ -208,7 +208,7 @@ export class ReadingService {
 **Responsabilidade**: Acesso a dados, integrações externas, serviços técnicos.
 
 - **Prisma ORM** para acesso ao banco de dados
-- **z-ai-web-dev-sdk** para integração com GPT-4o
+- **openai SDK** para integração com GPT-4o
 - **Mercado Pago SDK** para pagamentos
 - **Upstash Redis** para cache e sessões
 - **Cloudflare R2** para armazenamento de imagens
@@ -417,7 +417,7 @@ export class InMemoryCache {
 
 - **Protocolo**: `text/event-stream`
 - **Uso**: Streaming de interpretações de IA em tempo real
-- **Rota**: `POST /api/v1/ai/reading/stream`
+- **Rota implementada**: `POST /api/v1/ai/interpret` (SSE flat `token`/`done` com `interpretationId`) — `POST /api/v1/ai/reading/stream` é design legado, não existe no repo
 - **Formato**:
 
 ```

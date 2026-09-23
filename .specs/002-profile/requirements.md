@@ -28,14 +28,15 @@ O sistema deve exibir uma pagina de perfil publico acessivel via URL `/perfil/[u
 
 ### RF-PROF-002: Edicao de Campos Editaveis
 O usuario deve poder editar os seguintes campos do proprio perfil:
-- Nome de exibicao
-- Username (com verificacao de disponibilidade em tempo real, debounce de 500ms)
+- Nome de exibicao (`displayName`)
+- Username (verificacao de disponibilidade em `/users/check-username/:username`)
 - Bio
-- Data de nascimento (formato DD/MM/AAAA)
-- Genero (opcional): Masculino, Feminino, Nao-binario, Prefiro nao informar
+- Data de nascimento (formato `AAAA-MM-DD` no body da API; `""` limpa e recalcula signo/kin)
+- Local de nascimento (`birthPlace`, opcional)
 - Localizacao (texto livre, ate 100 caracteres)
-- Site pessoal (URL, validacao de formato)
-- As alteracoes devem ser salvas automaticamente com debounce de 1 segundo (auto-save) ou manualmente via botao "Salvar alteracoes"
+- Site pessoal (URL, validacao de formato; `""` limpa)
+- **Sem campo genero** — removido do schema implementado (`updateProfileSchema` em `src/lib/validators/profile.ts`; nunca foi implementado)
+- As alteracoes sao salvas **manualmente** via botao "Salvar" com feedback "Salvo às HH:MM" (auto-save com debounce **nao implementado**)
 
 ### RF-PROF-003: Upload de Avatar com Resize
 O sistema deve permitir o upload de uma foto de perfil com processamento automatico:
@@ -56,15 +57,14 @@ Com base na data de nascimento fornecida pelo usuario, o sistema deve calcular a
 - Exibidos na pagina de perfil com icones tematicos
 
 ### RF-PROF-005: Configuracoes de Privacidade
-O usuario deve poder configurar a visibilidade dos dados do seu perfil:
-- **Perfil publico**: toggle on/off (desativado = perfil visivel apenas para o usuario e seguidores)
-- **Mostrar email**: nunca exibido publicamente (sempre desativado por seguranca)
-- **Mostrar data de nascimento**: on/off
-- **Mostrar estatisticas**: on/off
-- **Mostrar signo e arcano pessoal**: on/off
-- **Quem pode me seguir**: todos / apenas pessoas que eu sigo / ninguem
-- **Quem pode comentar meus posts**: todos / apenas seguidores / ninguem
-- As configuracoes de privacidade devem ser aplicadas imediatamente
+O usuario deve poder configurar a visibilidade dos dados do seu perfil (`UserProfile.privacy` JSON):
+- **`profileVisibility`**: `public` | `private` (perfil)
+- **`statsVisibility`**: `public` | `private` (estatisticas)
+- **`arcanaVisibility`**: `public` | `private` (arcana/signo/kin)
+- **`whoCanFollow`**: `all` | `following` | `nobody`
+- **`whoCanComment`**: `all` | `following` | `nobody`
+- Email nunca e exibido publicamente (fora do schema de privacidade)
+- As configuracoes de privacidade sao salvas via `PATCH /api/v1/users/me/privacy` com botao explicito (nao "tempo real")
 
 ### RF-PROF-006: Perfil Profissional (Upgrade)
 Usuarios com plano Plus devem ter acesso a funcionalidades adicionais de perfil profissional:
