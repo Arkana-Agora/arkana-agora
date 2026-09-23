@@ -9,36 +9,53 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { DailyTarot } from "@/components/tarot/daily-tarot"
+import Link from "next/link"
 
 export default async function DashboardPage() {
   const session = await auth()
+  const displayName = session?.user?.name ?? session?.user?.email
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <div className="absolute top-4 right-4">
+    <main className="mx-auto max-w-4xl space-y-8 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Olá, {displayName}</h1>
+          <p className="text-muted-foreground">
+            Sessão autenticada — bem-vindo de volta.
+          </p>
+        </div>
         <ThemeToggle />
       </div>
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Dashboard</CardTitle>
-          <CardDescription>
-            Olá, {session?.user?.name ?? session?.user?.email} — sessão
-            autenticada.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            action={async () => {
-              "use server"
-              await signOut({ redirectTo: "/login" })
-            }}
-          >
-            <Button type="submit" variant="outline">
-              Sair
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <DailyTarot />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Conta</CardTitle>
+            <CardDescription>Gerencie sua sessão e perfil.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/perfil">Meu perfil</Link>
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <Button variant="outline" asChild>
+              <Link href="/tirar">Tirar cartas</Link>
+            </Button>
+            <form
+              action={async () => {
+                "use server"
+                await signOut({ redirectTo: "/login" })
+              }}
+            >
+              <Button type="submit" variant="outline">
+                Sair
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   )
 }
