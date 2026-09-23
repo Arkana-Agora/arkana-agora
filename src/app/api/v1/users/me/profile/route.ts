@@ -128,14 +128,24 @@ export async function PATCH(request: Request): Promise<Response> {
       userUpdates.birthDate = bd
       userUpdates.astrologicalSign = calculateZodiacSign(bd)
       userUpdates.mayanKin = calculateKinMaya(bd)?.toString()
+      userUpdates.personalArcana = null
+    } else if (data.birthDate === "") {
+      userUpdates.birthDate = null
+      userUpdates.astrologicalSign = null
+      userUpdates.mayanKin = null
+      userUpdates.personalArcana = null
     }
-    if (data.birthPlace !== undefined) userUpdates.birthPlace = data.birthPlace
+    if (data.birthPlace !== undefined)
+      userUpdates.birthPlace = data.birthPlace || null
 
     const profileUpdates: Record<string, unknown> = {}
-    if (data.bio !== undefined) profileUpdates.bio = data.bio
-    if (data.location !== undefined) profileUpdates.location = data.location
-    if (data.website !== undefined) profileUpdates.website = data.website
-    if (data.username) profileUpdates.username = data.username
+    if (data.bio !== undefined) profileUpdates.bio = data.bio || null
+    if (data.location !== undefined)
+      profileUpdates.location = data.location || null
+    if (data.website !== undefined)
+      profileUpdates.website = data.website || null
+    if (data.username !== undefined)
+      profileUpdates.username = data.username || null
 
     const hasUserUpdates = Object.keys(userUpdates).length > 0
     const hasProfileUpdates = Object.keys(profileUpdates).length > 0
@@ -149,9 +159,10 @@ export async function PATCH(request: Request): Promise<Response> {
           })
         }
         if (hasProfileUpdates) {
-          await tx.userProfile.update({
+          await tx.userProfile.upsert({
             where: { userId: auth.userId },
-            data: profileUpdates,
+            create: { userId: auth.userId, ...profileUpdates },
+            update: profileUpdates,
           })
         }
       })

@@ -1,6 +1,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
@@ -60,6 +61,33 @@ export async function deleteObject(key: string): Promise<void> {
   const command = new DeleteObjectCommand({
     Bucket: getR2Bucket(),
     Key: key,
+  })
+  await getR2Client().send(command)
+}
+
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: getR2Bucket(),
+    Key: key,
+  })
+  const response = await getR2Client().send(command)
+  if (!response.Body) {
+    throw new Error(`R2 object has no body: ${key}`)
+  }
+  const bytes = await response.Body.transformToByteArray()
+  return Buffer.from(bytes)
+}
+
+export async function putObjectBuffer(
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<void> {
+  const command = new PutObjectCommand({
+    Bucket: getR2Bucket(),
+    Key: key,
+    Body: body,
+    ContentType: contentType,
   })
   await getR2Client().send(command)
 }

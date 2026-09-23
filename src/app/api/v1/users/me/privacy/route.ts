@@ -50,9 +50,10 @@ export async function PATCH(request: Request): Promise<Response> {
     const currentPrivacy = (profile?.privacy as Record<string, unknown>) ?? {}
     const updatedPrivacy = { ...currentPrivacy, ...parsed.data }
 
-    await prisma.userProfile.update({
+    await prisma.userProfile.upsert({
       where: { userId: auth.userId },
-      data: { privacy: updatedPrivacy },
+      create: { userId: auth.userId, privacy: updatedPrivacy },
+      update: { privacy: updatedPrivacy },
     })
 
     logger.info({ reqId, userId: auth.userId }, "[privacy] config atualizada")

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const prismaMock = vi.hoisted(() => ({
-  userProfile: { findUnique: vi.fn(), update: vi.fn() },
+  userProfile: { findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn() },
   user: { findUnique: vi.fn(), update: vi.fn() },
-  $transaction: vi.fn((fns: unknown[]) =>
-    Promise.all(Array.isArray(fns) ? fns : [fns]),
-  ),
+  $transaction: vi.fn(async (fn: unknown) => {
+    if (typeof fn === "function")
+      return (fn as (tx: unknown) => unknown)(prismaMock)
+    if (Array.isArray(fn)) return Promise.all(fn)
+    return fn
+  }),
 }))
 
 const tokenServiceMock = vi.hoisted(() => ({
@@ -68,6 +71,7 @@ describe("PATCH /api/v1/users/me/profile", () => {
   beforeEach(() => {
     prismaMock.userProfile.findUnique.mockReset()
     prismaMock.userProfile.update.mockReset()
+    prismaMock.userProfile.upsert.mockReset()
     prismaMock.user.update.mockReset()
     tokenServiceMock.verifyAccessToken.mockReset()
   })
@@ -84,11 +88,7 @@ describe("PATCH /api/v1/users/me/profile", () => {
 
   it("updates profile fields", async () => {
     tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
-    prismaMock.userProfile.findUnique.mockResolvedValue({
-      userId: "u1",
-      username: "maria",
-    })
-    prismaMock.userProfile.update.mockResolvedValue({})
+    prismaMock.userProfile.upsert.mockResolvedValue({})
     prismaMock.user.update.mockResolvedValue({})
 
     const req = new Request("http://localhost/api/v1/users/me/profile", {
@@ -102,6 +102,58 @@ describe("PATCH /api/v1/users/me/profile", () => {
     const res = await PATCH(req)
 
     expect(res.status).toBe(200)
+    expect(prismaMock.userProfile.upsert).toHaveBeenCalledWith({
+      where: { userId: "u1" },
+      create: { userId: "u1", bio: "Nova bio" },
+      update: { bio: "Nova bio" },
+    })
+  })
+
+  it("creates profile row when missing via upsert", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    prismaMock.userProfile.upsert.mockResolvedValue({})
+    prismaMock.user.update.mockResolvedValue({})
+
+    const req = new Request("http://localhost/api/v1/users/me/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ location: "SP" }),
+      headers: {
+        Authorization: "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+    })
+    const res = await PATCH(req)
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.userProfile.upsert).toHaveBeenCalled()
+    expect(prismaMock.userProfile.update).not.toHaveBeenCalled()
+  })
+
+  it("clears birthDate with empty string", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    prismaMock.userProfile.upsert.mockResolvedValue({})
+    prismaMock.user.update.mockResolvedValue({})
+
+    const req = new Request("http://localhost/api/v1/users/me/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ birthDate: "" }),
+      headers: {
+        Authorization: "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+    })
+    const res = await PATCH(req)
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: {
+        birthDate: null,
+        astrologicalSign: null,
+        mayanKin: null,
+        personalArcana: null,
+      },
+    })
   })
 
   it("rejects invalid username format", async () => {

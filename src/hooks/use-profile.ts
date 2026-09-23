@@ -49,7 +49,6 @@ export interface UpdateProfileData {
   bio?: string
   birthDate?: string
   birthPlace?: string
-  gender?: string
   location?: string
   website?: string
   username?: string

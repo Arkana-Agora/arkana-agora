@@ -26,6 +26,7 @@ export function ProfileEditForm() {
   const { data: profile, isLoading } = useMyProfile()
   const updateProfile = useUpdateProfile()
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const {
     register,
@@ -60,17 +61,34 @@ export function ProfileEditForm() {
   }, [profile, reset])
 
   const onSubmit = async (data: EditProfileFormData) => {
-    const cleaned: Record<string, string> = {}
-    if (data.displayName !== undefined) cleaned.displayName = data.displayName
-    if (data.bio !== undefined) cleaned.bio = data.bio
-    if (data.birthDate !== undefined) cleaned.birthDate = data.birthDate
-    if (data.birthPlace !== undefined) cleaned.birthPlace = data.birthPlace
-    if (data.location !== undefined) cleaned.location = data.location
-    if (data.website !== undefined) cleaned.website = data.website
-    if (data.username !== undefined) cleaned.username = data.username
+    setSubmitError(null)
+    const payload: Record<string, string> = {}
+    if (data.displayName?.trim()) payload.displayName = data.displayName.trim()
+    if (data.bio !== undefined) payload.bio = data.bio
+    if (data.birthDate !== undefined) payload.birthDate = data.birthDate
+    if (data.birthPlace !== undefined) payload.birthPlace = data.birthPlace
+    if (data.location !== undefined) payload.location = data.location
+    if (data.website !== undefined) payload.website = data.website
+    if (data.username !== undefined) payload.username = data.username
 
-    await updateProfile.mutateAsync(cleaned)
-    setLastSavedAt(new Date())
+    try {
+      await updateProfile.mutateAsync(payload)
+      setLastSavedAt(new Date())
+    } catch (err) {
+      const apiMessage = (
+        err as {
+          response?: { data?: { error?: { message?: string; code?: string } } }
+        }
+      )?.response?.data?.error
+      if (apiMessage?.code === "USERNAME_TAKEN") {
+        setSubmitError("Username já está em uso.")
+      } else {
+        setSubmitError(
+          apiMessage?.message ??
+            "Não foi possível salvar o perfil. Tente novamente.",
+        )
+      }
+    }
   }
 
   if (isLoading) {
@@ -140,6 +158,12 @@ export function ProfileEditForm() {
       <Button type="submit" disabled={updateProfile.isPending || !isDirty}>
         {updateProfile.isPending ? "Salvando..." : "Salvar"}
       </Button>
+
+      {submitError && (
+        <p className="text-sm text-destructive" role="alert">
+          {submitError}
+        </p>
+      )}
 
       {lastSavedAt && (
         <p className="text-xs text-muted-foreground">

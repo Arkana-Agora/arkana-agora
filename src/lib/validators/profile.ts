@@ -17,14 +17,17 @@ export const updateProfileSchema = z
       .optional(),
     bio: z.string().trim().max(500, "Maximo 500 caracteres").optional(),
     birthDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato AAAA-MM-DD")
+      .union([
+        z.literal(""),
+        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato AAAA-MM-DD"),
+      ])
       .optional(),
     birthPlace: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
-    gender: z.enum(["male", "female", "nonbinary", "undisclosed"]).optional(),
     location: z.string().trim().max(100, "Maximo 100 caracteres").optional(),
-    website: z.string().trim().url("URL invalida").max(200).optional(),
-    username: usernameSchema.optional(),
+    website: z
+      .union([z.literal(""), z.string().trim().url("URL invalida").max(200)])
+      .optional(),
+    username: z.union([z.literal(""), usernameSchema]).optional(),
   })
   .strict()
 

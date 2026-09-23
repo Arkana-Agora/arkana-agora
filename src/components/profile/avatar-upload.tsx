@@ -24,19 +24,22 @@ export function AvatarUpload({
 }: AvatarUploadProps) {
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmedUrl, setConfirmedUrl] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const uploadSeqRef = useRef(0)
+  const uploadBusyRef = useRef(false)
+  const blobUrlRef = useRef<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   const presign = useAvatarPresign()
   const confirm = useAvatarConfirm()
   const deleteAvatar = useAvatarDelete()
 
-  const isUploading = presign.isPending || confirm.isPending
-
   useEffect(() => {
     return () => {
-      if (preview) URL.revokeObjectURL(preview)
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current)
     }
-  }, [preview])
+  }, [])
 
   const validate = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type))
@@ -47,18 +50,29 @@ export function AvatarUpload({
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (uploadBusyRef.current) return
       const err = validate(file)
       if (err) {
         setError(err)
         return
       }
 
+      const uploadId = ++uploadSeqRef.current
       setError(null)
+      uploadBusyRef.current = true
+      setIsUploading(true)
+
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
+      }
       const objectUrl = URL.createObjectURL(file)
+      blobUrlRef.current = objectUrl
       setPreview(objectUrl)
 
       try {
         const { uploadUrl, key } = await presign.mutateAsync(file.type)
+        if (uploadId !== uploadSeqRef.current) return
 
         const uploadRes = await fetch(uploadUrl, {
           method: "PUT",
@@ -67,34 +81,61 @@ export function AvatarUpload({
         })
 
         if (!uploadRes.ok) throw new Error("Falha no upload")
+        if (uploadId !== uploadSeqRef.current) return
 
-        await confirm.mutateAsync(key)
-        URL.revokeObjectURL(objectUrl)
+        const result = await confirm.mutateAsync(key)
+        if (uploadId !== uploadSeqRef.current) return
+
+        const nextUrl =
+          (result as { avatarUrl?: string } | undefined)?.avatarUrl ??
+          currentAvatarUrl ??
+          null
+        setConfirmedUrl(nextUrl)
         setPreview(null)
+        blobUrlRef.current = null
+        URL.revokeObjectURL(objectUrl)
       } catch {
+        if (uploadId !== uploadSeqRef.current) return
         setError("Falha no upload. Tente novamente.")
         URL.revokeObjectURL(objectUrl)
-        setPreview(currentAvatarUrl ?? null)
+        if (blobUrlRef.current === objectUrl) blobUrlRef.current = null
+        setPreview(confirmedUrl ?? currentAvatarUrl ?? null)
+      } finally {
+        uploadBusyRef.current = false
+        setIsUploading(false)
       }
     },
-    [presign, confirm, currentAvatarUrl],
+    [presign, confirm, currentAvatarUrl, confirmedUrl],
   )
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
+      if (uploadBusyRef.current) return
       const file = e.dataTransfer.files[0]
-      if (file) handleFile(file)
+      if (file) void handleFile(file)
     },
     [handleFile],
   )
 
   const handleDelete = useCallback(async () => {
-    await deleteAvatar.mutateAsync()
-    setPreview(null)
+    if (uploadBusyRef.current) return
+    uploadSeqRef.current += 1
+    setError(null)
+    try {
+      await deleteAvatar.mutateAsync()
+      setConfirmedUrl(null)
+      setPreview(null)
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
+      }
+    } catch {
+      setError("Não foi possível remover o avatar. Tente novamente.")
+    }
   }, [deleteAvatar])
 
-  const displayUrl = preview ?? currentAvatarUrl
+  const displayUrl = preview ?? confirmedUrl ?? currentAvatarUrl
 
   return (
     <div className="flex items-center gap-4">
@@ -109,8 +150,11 @@ export function AvatarUpload({
         <div
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
-          className="border-2 border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground hover:border-primary/50 transition-colors cursor-pointer"
-          onClick={() => inputRef.current?.click()}
+          className="border-2 border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground hover:border-primary/50 transition-colors cursor-pointer disabled:opacity-50"
+          onClick={() => {
+            if (!isUploading) inputRef.current?.click()
+          }}
+          aria-disabled={isUploading}
         >
           {isUploading ? "Enviando..." : "Arraste ou clique para enviar"}
         </div>
@@ -120,24 +164,30 @@ export function AvatarUpload({
           type="file"
           accept="image/jpeg,image/png,image/webp"
           className="hidden"
+          disabled={isUploading}
           onChange={(e) => {
             const file = e.target.files?.[0]
-            if (file) handleFile(file)
+            e.target.value = ""
+            if (file) void handleFile(file)
           }}
         />
 
-        {currentAvatarUrl && (
+        {(confirmedUrl ?? currentAvatarUrl) && (
           <Button
             variant="destructive"
             size="sm"
-            onClick={handleDelete}
-            disabled={deleteAvatar.isPending}
+            onClick={() => void handleDelete()}
+            disabled={deleteAvatar.isPending || isUploading}
           >
             Remover avatar
           </Button>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   )

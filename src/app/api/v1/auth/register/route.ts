@@ -127,6 +127,7 @@ export async function POST(request: Request): Promise<Response> {
             plan: "FREE",
             provider: "EMAIL",
             providerId: normalizedEmail,
+            profile: { create: {} },
           },
         }),
         prisma.verificationToken.create({
