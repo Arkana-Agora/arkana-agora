@@ -1,7 +1,10 @@
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { calculatePersonalArcana } from "@/lib/arcana/calculate"
+import {
+  calculatePersonalArcana,
+  explainPersonalArcana,
+} from "@/lib/arcana/calculate"
 import { getArcanaByNumber } from "@/data/arcana"
 import { prisma } from "@/lib/prisma"
 
@@ -45,12 +48,40 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const arcanaData = getArcanaByNumber(arcanaNumber)
+    const explanation = explainPersonalArcana(user.birthDate, user.name)
+
+    try {
+      await prisma.arcanaCalculation.create({
+        data: {
+          userId: auth.userId,
+          birthDate: user.birthDate,
+          fullName: user.name,
+          reductionDate: explanation.reductionDate,
+          reductionName: explanation.reductionName,
+          arcanaNumber,
+          arcanaName: arcanaData?.name ?? String(arcanaNumber),
+          description: arcanaData
+            ? `${arcanaData.upright} | Reverso: ${arcanaData.reversed}`.slice(
+                0,
+                2000,
+              )
+            : "",
+        },
+      })
+    } catch (historyErr) {
+      logger.warn(
+        { reqId, err: historyErr },
+        "[arcana/calculate] falha ao persistir historico",
+      )
+    }
 
     return Response.json({
       arcana: arcanaNumber,
       arcanaData,
       name: user.name,
       birthDate: user.birthDate,
+      reductionDate: explanation.reductionDate,
+      reductionName: explanation.reductionName,
       meta: { requestId: reqId },
     })
   } catch (err) {

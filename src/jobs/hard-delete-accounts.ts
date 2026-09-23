@@ -114,6 +114,7 @@ async function anonymizeAccount(
     await tx.session.deleteMany({ where: { userId } })
     await tx.userProfile.deleteMany({ where: { userId } })
     await tx.subscription.deleteMany({ where: { userId } })
+    await tx.arcanaCalculation.deleteMany({ where: { userId } })
     await tx.verificationToken.deleteMany({ where: { identifier: email } })
     return true
   })

@@ -52,6 +52,7 @@ model User {
   readings     Reading[]
   interpretations Interpretation[]
   aiDailyUsage   AIDailyUsage[]
+  arcanaCalculations ArcanaCalculation[]
 
   @@unique([provider, providerId])
 }
@@ -226,4 +227,22 @@ model AIDailyUsage {
 
   @@unique([userId, date])
   @@map("ai_daily_usage")
+}
+
+model ArcanaCalculation {
+  id            String   @id @default(uuid())
+  userId        String
+  birthDate     DateTime
+  fullName      String
+  reductionDate String
+  reductionName String
+  arcanaNumber  Int
+  arcanaName    String
+  description   String   @db.VarChar(2000)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("arcana_calculations")
 }

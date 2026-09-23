@@ -6,6 +6,9 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    arcanaCalculation: {
+      create: vi.fn(),
+    },
   },
 }))
 
@@ -16,6 +19,7 @@ vi.mock("@/services/token-service", () => ({
 import { prisma } from "@/lib/prisma"
 
 const mockUserFindUnique = vi.mocked(prisma.user.findUnique)
+const mockArcanaCreate = vi.mocked(prisma.arcanaCalculation.create)
 
 function makeRequest() {
   return new Request("http://localhost:3000/api/v1/arcana/calculate", {
@@ -67,6 +71,21 @@ describe("GET /api/v1/arcana/calculate", () => {
     expect(body.name).toBe("Luna")
     expect(body.arcanaData).toBeDefined()
     expect(body.arcanaData.name).toBeDefined()
+    expect(body.reductionDate).toBeDefined()
+    expect(body.reductionName).toBeDefined()
+    expect(mockArcanaCreate).toHaveBeenCalledTimes(1)
+    expect(mockArcanaCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "user-1",
+        fullName: "Luna",
+        birthDate: new Date("1995-03-15"),
+        arcanaNumber: expect.any(Number),
+        arcanaName: expect.any(String),
+        reductionDate: expect.any(String),
+        reductionName: expect.any(String),
+        description: expect.any(String),
+      }),
+    })
   })
 
   it("returns cached personalArcana when available", async () => {

@@ -16,6 +16,7 @@ const prismaMock = vi.hoisted(() => ({
   session: { deleteMany: vi.fn() },
   userProfile: { deleteMany: vi.fn() },
   subscription: { deleteMany: vi.fn() },
+  arcanaCalculation: { deleteMany: vi.fn() },
   verificationToken: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
 }))
@@ -37,6 +38,7 @@ const txClient = {
   session: prismaMock.session,
   userProfile: prismaMock.userProfile,
   subscription: prismaMock.subscription,
+  arcanaCalculation: prismaMock.arcanaCalculation,
   verificationToken: prismaMock.verificationToken,
 }
 
@@ -50,6 +52,7 @@ beforeEach(() => {
   prismaMock.session.deleteMany.mockResolvedValue({ count: 0 })
   prismaMock.userProfile.deleteMany.mockResolvedValue({ count: 0 })
   prismaMock.subscription.deleteMany.mockResolvedValue({ count: 0 })
+  prismaMock.arcanaCalculation.deleteMany.mockResolvedValue({ count: 0 })
   prismaMock.verificationToken.deleteMany.mockResolvedValue({ count: 0 })
   mirrorTokenVersionMock.mockResolvedValue(undefined)
   sendAccountDeletedFinalEmailMock.mockResolvedValue({ data: { id: "em_1" } })
@@ -146,6 +149,9 @@ describe("job hard-delete-accounts (T16)", () => {
     expect(prismaMock.subscription.deleteMany).toHaveBeenCalledWith({
       where: { userId: "usr_1" },
     })
+    expect(prismaMock.arcanaCalculation.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
     expect(prismaMock.verificationToken.deleteMany).toHaveBeenCalledWith({
       where: { identifier: "maria@email.com" },
     })
@@ -207,6 +213,7 @@ describe("job hard-delete-accounts (T16)", () => {
     expect(prismaMock.session.deleteMany).not.toHaveBeenCalled()
     expect(prismaMock.userProfile.deleteMany).not.toHaveBeenCalled()
     expect(prismaMock.subscription.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.arcanaCalculation.deleteMany).not.toHaveBeenCalled()
     expect(prismaMock.verificationToken.deleteMany).not.toHaveBeenCalled()
     expect(mirrorTokenVersionMock).not.toHaveBeenCalled()
     expect(sendAccountDeletedFinalEmailMock).not.toHaveBeenCalled()

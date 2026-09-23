@@ -8,7 +8,9 @@ import {
   calculateArcanaByDate,
   calculateArcanaByName,
   calculatePersonalArcana,
+  explainPersonalArcana,
 } from "@/lib/arcana/calculate"
+import { explainReduction } from "@/lib/arcana/reduce"
 import { ARCANA_MAP, getArcanaByNumber } from "@/data/arcana"
 
 describe("PYTHAGOREAN_TABLE", () => {
@@ -217,6 +219,37 @@ describe("calculatePersonalArcana", () => {
     )
     expect(combined).toBeGreaterThanOrEqual(1)
     expect(combined).toBeLessThanOrEqual(22)
+  })
+})
+
+describe("explainReduction", () => {
+  it("returns the number alone when already 1-22", () => {
+    expect(explainReduction(9)).toBe("9")
+    expect(explainReduction(22)).toBe("22")
+  })
+
+  it("shows digit-sum steps for values above 22", () => {
+    expect(explainReduction(45)).toBe("45 → 9")
+    expect(explainReduction(999)).toBe("999 → 27 → 9")
+  })
+
+  it("maps 0 to 22 with a visible step", () => {
+    expect(explainReduction(0)).toBe("0 → 22")
+  })
+})
+
+describe("explainPersonalArcana", () => {
+  it("matches calculatePersonalArcana and includes reduction traces", () => {
+    const birthDate = new Date(1990, 5, 15)
+    const name = "Maria"
+    const explained = explainPersonalArcana(birthDate, name)
+    expect(explained.arcanaNumber).toBe(
+      calculatePersonalArcana(birthDate, name),
+    )
+    expect(explained.reductionDate).toContain("19900615")
+    expect(explained.reductionName).toContain("Maria")
+    expect(explained.reductionDate).toContain("→")
+    expect(explained.reductionName).toContain("→")
   })
 })
 
