@@ -57,29 +57,30 @@ YYYYMMDDHHMMSS_descriptive_name
 ### 3.1 Desenvolvimento (Local)
 
 ```bash
-# Subir banco de dev (Docker Postgres 16 — ver docker-compose.yml)
-docker compose up -d postgres
+# Prisma Postgres (default local, 2026-09-23) — prisma@^7 pin; CLI lê DIRECT_URL de prisma.config.ts
+.\node_modules\.bin\prisma migrate dev --name descriptive_name
 
-# Aplicar/generar migrations versionadas (dev)
-bunx prisma migrate dev --name descriptive_name
+# Fallback offline: Docker Postgres 16 (sem DIRECT_URL em .env)
+docker compose up -d postgres
+.\node_modules\.bin\prisma migrate dev --name descriptive_name
 
 # Aplicar migrations já existentes (sem criar nova — usado pelo compose/CI)
-bunx prisma migrate deploy
+.\node_modules\.bin\prisma migrate deploy
 
 # Resetar banco de desenvolvimento (CUIDADO — apaga dados)
-bunx prisma migrate reset
+.\node_modules\.bin\prisma migrate reset
 ```
 
-**Racional**: desde a F1 (Sprint 0) o banco de dev é **PostgreSQL** (Docker Postgres 16, mesma engine da produção/Neon), então o dev usa **migrations versionadas** (`migrate dev`) como única forma de sincronizar o schema — o SQL gerado em dev é portável para produção. `db push` **não** é mais usado (não gera migration files e deixaria dev fora de sync com prod). O serviço `migrate` do `docker-compose.yml` aplica migrations pendentes com `bunx prisma migrate deploy` (one-shot).
+**Racional**: dev usa **PostgreSQL** — Prisma Postgres (Vercel Marketplace) como default local, Docker Postgres 16 como fallback offline — mesma engine da produção/Neon, então o dev usa **migrations versionadas** (`migrate dev`) como única forma de sincronizar o schema — o SQL gerado em dev é portável para produção. `db push` **não** é usado (não gera migration files e deixaria dev fora de sync com prod). O serviço `migrate` do `docker-compose.yml` aplica migrations pendentes com `bunx prisma migrate deploy` (one-shot). **CLI pinado em `prisma@^7`** — `prisma@8` RC não tem `generate`/`migrate` (ver `docs/solutions/ci-cd/prisma-v8-cli-regression.md`).
 
 ### 3.2 Staging
 
 ```bash
 # Aplicar migrações pendentes (sem interação)
-bunx prisma migrate deploy
+.\node_modules\.bin\prisma migrate deploy
 
 # Verificar status das migrações
-bunx prisma migrate status
+.\node_modules\.bin\prisma migrate status
 ```
 
 **Banco**: Neon PostgreSQL (branch de staging). Migrações aplicadas automaticamente no deploy de preview.
@@ -88,7 +89,7 @@ bunx prisma migrate status
 
 ```bash
 # Aplicar migrações (com backup prévio!)
-bunx prisma migrate deploy
+.\node_modules\.bin\prisma migrate deploy
 ```
 
 **Banco**: Neon PostgreSQL (produção). Migrações aplicadas no pipeline CI/CD como step antes do deploy.

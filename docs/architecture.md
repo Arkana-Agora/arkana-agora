@@ -32,7 +32,7 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest), the Auth.
 | Technology | Role | Status | Source of truth |
 |---|---|---|---|
 | Next.js (App Router) | Web framework: SSR, RSC, API Routes, SSE streaming | MVP | ADR-001; `docs/02-architecture/architecture.md` §2.1 |
-| Prisma ORM | Data access; PostgreSQL (Docker Postgres 16 dev / Neon prod); migrations | MVP | ADR-002; `docs/03-database/*` |
+| Prisma ORM | Data access; PostgreSQL (Prisma Postgres local via pooled `DATABASE_URL` + direct `DIRECT_URL`; Docker Postgres 16 offline fallback; Neon prod); migrations; CLI pinned `prisma@^7` | MVP | ADR-002; `docs/03-database/*`; `docs/solutions/ci-cd/prisma-v8-cli-regression.md` |
 | Zustand | Client-side state (UI, reading session, auth) | MVP | ADR-003; `.specs/003-tarot-engine/design.md` §7 |
 | TanStack Query | Server-state cache, invalidation, mutations | MVP | ADR-003 |
 | shadcn/ui (radix-nova preset — formerly "New York") | Design system (Radix-based, copied into repo) | MVP | ADR-006; `docs/02-architecture/architecture.md` §3.1 |

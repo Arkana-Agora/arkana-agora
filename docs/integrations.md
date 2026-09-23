@@ -13,6 +13,8 @@
 | Facebook OAuth | External (auth) | Social login via Auth.js v5 `/api/auth/*` (provider `facebook`) — **Sprint 1** | Meta | `docs/04-api/authentication.md` |
 | SMTP / email | External | Magic-link login (15 min TTL) via Auth.js `EmailProvider` (nodemailer); password reset (1h TTL) + verification REST routes (Sprint 1) via Resend (`src/lib/email/email.ts`) | SMTP (unspecified) + Resend | `docs/04-api/authentication.md`, `docs/07-security/security.md`, `docs/06-features/authentication.md` |
 | Neon PostgreSQL | External (data) | Serverless production database (staging branch + prod) | Neon | `docs/02-architecture/deployment.md`, `docs/03-database/*` |
+| Prisma Postgres | External (data) | **Local development database** (Vercel Marketplace; pooled `DATABASE_URL` + direct `DIRECT_URL`; linked via `prisma postgres link`) | Prisma / Vercel | `docs/environments.md`, `docs/solutions/ci-cd/prisma-v8-cli-regression.md` |
+| Prisma Platform | External (tooling) | CLI project link (`prisma@^7` — `platform status`, `postgres link`); local build/gen stays on Prisma 7 | Prisma | `docs/solutions/ci-cd/prisma-v8-cli-regression.md` |
 | Upstash Redis | External (data) | Sessions, rate limiting, cache (AI interpretation 24h TTL), BullMQ queues, Pub/Sub event bus | Upstash | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | External (storage) | Card images (WebP, 3 variants), avatars, post images | Cloudflare | `docs/02-architecture/deployment.md` §4 |
 | Cloudflare CDN/DNS/WAF | External (edge) | Caching, SSL Full (Strict), WAF, DNS + domains | Cloudflare | `docs/02-architecture/deployment.md` §4.3 |
@@ -32,6 +34,7 @@
 | SMTP | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Env var / secret manager |
 | Resend | `RESEND_API_KEY` | Env var / secret manager (`src/lib/email/email.ts`) |
 | Neon | `DATABASE_URL` (staging/prod: connection string with password) | Env var / secret manager |
+| Prisma Postgres (dev) | `DATABASE_URL` (pooled `pooled.db.prisma.io`) + `DIRECT_URL` (direct `db.prisma.io` — CLI/migrate only) | `.env` (Prisma Platform link) |
 | Upstash | `REDIS_URL` (with token) | Env var |
 | Cloudflare R2 | R2 credentials (S3-compatible) | Env var / secret manager |
 | Vercel / Railway | Platform tokens/CLI auth | Provider console/CI secrets |

@@ -87,6 +87,11 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - Fix: derived status, time-boxed DB check, APP_VERSION from `src/lib/version.ts`, Pino logging
     - **Status**: Fully resolved, Redis as optional service, Pino logging active
 
+12. **`docs/solutions/ci-cd/prisma-v8-cli-regression.md`** (2026-09-23, Resolved)
+    - `prisma@8` RC CLI removes `generate`/`migrate` → `npm run build` fails `CLI.UNKNOWN_COMMAND`; leftover Windows `node_modules/.bin/prisma.exe` can keep pointing at missing `dist/prisma.js`
+    - Fix: pin `prisma@^7`, delete corrupt shims, keep pooled `DATABASE_URL` vs direct `DIRECT_URL` split for Prisma Postgres
+    - **Status**: Solved; pin must stay until v8 restores classic verbs (or Platform-only migration)
+
 ## Pattern Coverage
 
 | Pattern Category | Files Created | Status |
@@ -94,9 +99,9 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 | Security | 4 | 3 Current, 1 Pending (account lifecycle) |
 | Backend | 2 | 1 Current, 1 Pending (admin health) |
 | Observability | 1 | 1 Current (partially) |
-| CI/CD | 3 | 1 Current, 2 Resolved |
+| CI/CD | 4 | 1 Current, 3 Resolved |
 | Operations | 1 | 1 Resolved |
-| **Total** | **11** | **6 Current, 2 Pending, 3 Resolved** |
+| **Total** | **12** | **6 Current, 2 Pending, 4 Resolved** |
 
 ## Related Changes
 

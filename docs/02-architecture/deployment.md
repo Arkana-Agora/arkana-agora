@@ -8,7 +8,7 @@
 
 | Ambiente | Propósito | URL | Banco de Dados |
 |----------|-----------|-----|----------------|
-| **Development** | Desenvolvimento local | `http://localhost:3000` | Docker Postgres 16 (`arkana`, localhost:5432) |
+| **Development** | Desenvolvimento local | `http://localhost:3000` | **Prisma Postgres** (pooled `DATABASE_URL` + direct `DIRECT_URL`); Docker Postgres 16 offline fallback |
 | **Staging** | Testes e QA | `staging.arkanaagora.com.br` | Neon PostgreSQL (staging) |
 | **Production** | Produção | `arkanaagora.com.br` | Neon PostgreSQL (prod) |
 
@@ -68,14 +68,14 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
 # Instalar dependências
 bun install
 
-# Subir banco de dev (Docker Postgres 16 + Redis)
+# Subir fallback offline (Docker Postgres 16 + Redis) — opcional se usando Prisma Postgres
 docker compose up -d postgres redis
 
-# Rodar migrações (dev: gera/aplica migrations versionadas)
-bunx prisma migrate dev
+# Rodar migrações (Prisma Postgres — CLI usa DIRECT_URL de prisma.config.ts; pin prisma@^7)
+.\node_modules\.bin\prisma migrate dev
 
 # Gerar tipos Prisma
-bunx prisma generate
+.\node_modules\.bin\prisma generate
 
 # Popular dados iniciais (baralhos, spreads)
 bun run seed
@@ -103,8 +103,11 @@ bun run dev:all
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_WS_URL=ws://localhost:3003
 
-# Banco (dev) — Docker Postgres 16 via docker compose (db/user/pass: arkana)
-DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
+# Banco (dev) — Prisma Postgres via Vercel Marketplace (pooled p/ runtime, direct p/ CLI)
+DATABASE_URL=postgres://user:pass@pooled.db.prisma.io:5432/postgres?sslmode=require
+DIRECT_URL=postgres://user:pass@db.prisma.io:5432/postgres?sslmode=require
+# Fallback offline: Docker Postgres 16 (db/user/pass: arkana) — deixe DIRECT_URL vazio
+# DATABASE_URL=postgresql://arkana:arkana@localhost:5432/arkana
 
 # Auth (Auth.js v5 — ADR-010; não usar NEXTAUTH_*/GOOGLE_CLIENT_*)
 # AUTH_URL: origem canônica da aplicação (impede host-header poisoning do magic link em prod — HTTPS obrigatório)
@@ -235,7 +238,9 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `SMTP_SECURE` | `true` | Production | TLS habilitado |
 | `SMTP_USER` | *Usuário SMTP* | Production | Usuário do SMTP |
 | `SMTP_PASS` | *Senha do SMTP* | Production | Senha do SMTP |
-| `DATABASE_URL` | *URL do Neon PostgreSQL* | Production | Ex: `postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/dbname` |
+**Prisma CLI**: pinado em **`prisma@^7`** (`package.json`); `prisma@8` RC remove `generate`/`migrate` e quebra `npm run build`. URL do datasource vive em `prisma.config.ts` (não em `schema.prisma`). CLI local: `.\node_modules\.bin\prisma` (evitar `npx prisma@latest`). `prisma postgres link` sobrescreve `DATABASE_URL` com o host **direct** — após re-link, restaurar o host **pooled** em `DATABASE_URL` e manter `DIRECT_URL` no host direct (`docs/solutions/ci-cd/prisma-v8-cli-regression.md`).
+
+| `DATABASE_URL` | *Prisma Postgres (dev) / Neon (staging/prod)* | Todas | Dev: pooled `pooled.db.prisma.io`; prod: Neon `postgresql://user:pass@ep-xxx…/dbname` |
 | `REDIS_URL` | *URL do Redis Upstash* | Production | Ex: `redis://default:pass@xxx.upstash.io:6379` |
 | `R2_ACCOUNT_ID` | *ID da conta Cloudflare R2* | Production | Conta ID da R2 |
 | `R2_ACCESS_KEY_ID` | *Access Key ID da R2* | Production | Chave de acesso da R2 |
@@ -617,3 +622,4 @@ railway up --rollback
 - **2026-08-24:** §5.1 standalone prerequisite note rewritten — `output: "standalone"` agora é condicional (`if (!process.env.VERCEL)`). Primeiro deploy na Vercel falhava com `ENOENT .next/next-server.js.nft.json` em `onBuildComplete` (Next 16.3 + adapter + standalone, upstream #96646). Docker/CI preservam o standalone.
 - **2026-08-24 (F4 sync):** §2.3 Logger note atualizada — `src/lib/logger.ts` (Pino) já está implementado; a health route loga via `logger.error({ err }, "[health] ...")` e o stopgap restante conhecido é o `console.log("[auth:magic-link] ...")` em `src/auth/auth.config.ts:88` (ver `docs/solutions/patterns/observability/logger-migration-stopgap.md`).
 - **2026-09-01 (T3 email):** §2.4 adicionada `RESEND_API_KEY` (provedor Resend transacional — `src/lib/email/email.ts`, helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`), alinhada ao `.env.example`; guard de dev `AUTH_EMAIL_SKIP_SEND=true` exige `NODE_ENV=development`. O magic link do Auth.js continua via nodemailer/SMTP (`SMTP_*`).
+- **2026-09-23 (Prisma Postgres local):** dev DB alinhado a **Prisma Postgres** (Vercel Marketplace) — §1 tabela, §2.3 comandos (`.\node_modules\.bin\prisma generate` / `migrate dev`), §2.4 `DATABASE_URL` = pooled + `DIRECT_URL` = direct (Docker 16 como fallback offline). CLI pinado em `prisma@^7` (v8 RC sem `generate`/`migrate` quebra `npm run build`). URL do datasource em `prisma.config.ts`. Runtime com `@prisma/adapter-pg` (`src/lib/prisma.ts`). Ver `docs/solutions/ci-cd/prisma-v8-cli-regression.md`.
