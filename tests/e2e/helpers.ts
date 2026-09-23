@@ -86,6 +86,66 @@ export async function login(
   return response
 }
 
+export interface AttachedSession {
+  accessToken: string
+  cookies: string
+}
+
+export async function attachSession(
+  request: APIRequestContext,
+  email: string,
+  password: string = TEST_PASSWORD,
+): Promise<AttachedSession> {
+  const response = await login(request, email, password)
+  if (response.status() !== 200) {
+    throw new Error(
+      `attachSession failed for ${email}: ${response.status()} ${await response.text()}`,
+    )
+  }
+  const body = (await response.json()) as {
+    accessToken: string
+    user?: { id?: string }
+  }
+
+  const setCookie = response.headers()["set-cookie"] ?? ""
+  const refreshMatch = setCookie.match(/refreshToken=([^;]+)/)
+  const csrfMatch = setCookie.match(/csrf-token=([^;]+)/)
+  const parts: string[] = []
+  if (refreshMatch) parts.push(`refreshToken=${refreshMatch[1]}`)
+  if (csrfMatch) parts.push(`csrf-token=${csrfMatch[1]}`)
+
+  return { accessToken: body.accessToken, cookies: parts.join("; ") }
+}
+
+export async function ensureProfile(
+  userId: string,
+  overrides: {
+    username?: string
+    bio?: string | null
+    privacy?: Record<string, unknown>
+  } = {},
+): Promise<void> {
+  const data: Record<string, unknown> = {}
+  if (overrides.username !== undefined) data.username = overrides.username
+  if (overrides.bio !== undefined) data.bio = overrides.bio
+  if (overrides.privacy !== undefined) data.privacy = overrides.privacy
+
+  await prisma.userProfile.upsert({
+    where: { userId },
+    create: {
+      userId,
+      username: overrides.username ?? `user_${userId.slice(-8)}`,
+      bio: overrides.bio ?? null,
+      privacy: (overrides.privacy as object | undefined) ?? {},
+    },
+    update: data,
+  })
+}
+
+export async function getUserByEmail(email: string) {
+  return prisma.user.findFirst({ where: { email } })
+}
+
 declare global {
   var __e2ePrisma: PrismaClient | undefined
 }
