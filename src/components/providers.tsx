@@ -1,11 +1,27 @@
 "use client"
 
-import type { ReactNode } from "react"
-import { SessionProvider } from "next-auth/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useState } from "react"
+import { SessionProvider } from "next-auth/react"
+import type { ReactNode } from "react"
+import { useEffect, useState } from "react"
 
+import { AnalyticsConsentBanner } from "@/components/analytics/consent-banner"
+import { ErrorBoundary } from "@/components/error-boundary"
+import { MobileNav } from "@/components/layout/mobile-nav"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "sonner"
+
+function ServiceWorkerRegistration() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("SW registration failed:", err)
+      })
+    }
+  }, [])
+
+  return null
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -22,6 +38,16 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   )
 
+  useEffect(() => {
+    const consent = localStorage.getItem("analytics-consent")
+    if (consent === "true") {
+      // Dynamic import to avoid SSR issues
+      import("@/lib/analytics").then(({ initAnalytics }) => {
+        initAnalytics()
+      })
+    }
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
@@ -31,7 +57,11 @@ export function Providers({ children }: { children: ReactNode }) {
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <ServiceWorkerRegistration />
+          <ErrorBoundary>{children}</ErrorBoundary>
+          <MobileNav />
+          <AnalyticsConsentBanner />
+          <Toaster position="bottom-right" richColors />
         </ThemeProvider>
       </SessionProvider>
     </QueryClientProvider>

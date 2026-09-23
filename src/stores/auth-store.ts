@@ -819,6 +819,18 @@ export const useAuthStore = create<AuthState>()(
               // melhor esforco: Auth.js pode falhar; encerra o estado local abaixo
             }
             set({ user: null, isAuthenticated: false, isLoading: false })
+            try {
+              if (typeof caches !== "undefined") {
+                const keys = await caches.keys()
+                await Promise.all(
+                  keys
+                    .filter((name) => name.startsWith("arkana-agora-"))
+                    .map((name) => caches.delete(name)),
+                )
+              }
+            } catch {
+              // melhor esforco: cache local pode nao estar disponivel
+            }
           }
         },
 
