@@ -4,7 +4,7 @@ import { updateProfileSchema } from "@/lib/validators/profile"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { calculateZodiacSign } from "@/lib/calculations/zodiac"
 import { calculateKinMaya } from "@/lib/calculations/kin-maya"
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library"
+import { Prisma } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -175,7 +175,7 @@ export async function PATCH(request: Request): Promise<Response> {
     return Response.json({ message: "Perfil atualizado" })
   } catch (error) {
     if (
-      error instanceof PrismaClientKnownRequestError &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
       return Response.json(
