@@ -25,7 +25,7 @@ Entidade principal de autenticação e identidade do usuário.
 | `birthDate` | `DateTime?` | nullable | Data de nascimento |
 | `astrologicalSign` | `String?` | nullable | Signo do zodíaco ocidental |
 | `mayanKin` | `String?` | nullable | Kin maia (Tzolkin) |
-| `personalArcana` | `Int?` | nullable | Número do arcano pessoal |
+| `personalArcana` | `Int?` | nullable | Número do arcano pessoal (range **1–22**, `0` não é emitido pelo cálculo). Escrito por **três** caminhos: (1) `GET /api/v1/arcana/calculate` — best-effort, só quando `null`; **self-heal CAS** no read: se cache `observed` ≠ `recomputed`, executa `updateMany({ where: { id, personalArcana: observed }, data: { personalArcana: recomputed } })` para curar stale cache; (2) `PATCH /api/v1/users/me/profile` — recalculado quando `birthDate` chega com data válida; **null-out explícito** se `name` vazio (`personalArcana: null` no update); (3) `birthDate: ""` — único caminho de reset completo (zera `birthDate`, `astrologicalSign`, `mayanKin`, `personalArcana`). Enrichment OAuth (Google) invalida `personalArcana` **apenas quando** nome muda **E** `birthDate` presente. |
 | `provider` | `AuthProvider` | NOT NULL | Provedor de autenticação |
 | `providerId` | `String` | NOT NULL, **UQ comp.** with provider | ID do provedor OAuth (convenção: EMAIL → email normalizado lowercase, GOOGLE/FACEBOOK → OAuth subject ID) |
 | `emailVerified` | `DateTime?` | nullable | Data de verificação do e-mail |
@@ -182,7 +182,16 @@ Baralho completo disponível na plataforma.
 
 Cálculo do arcano pessoal do usuário baseado em data de nascimento e nome.
 
-> **Status**: ✅ **implementada** — tabela `arcana_calculations` (migration `20260923183900_add_arcana_calculations`); histórico gravado de forma não-bloqueante em `GET /api/v1/arcana/calculate`.
+> **Status**: ✅ **implementada** — tabela `arcana_calculations` (migration `20260923183900_add_arcana_calculations`).
+> `GET /api/v1/arcana/calculate` grava **duas** coisas de forma **não-bloqueante** (falha de escrita
+> só gera `logger.warn`, nunca quebra a resposta 200):
+>
+> 1. **`User.personalArcana`** — só quando ainda estava `null` (fix 2026-09-25); se já existe cache,
+>    a rota **não sobrescreve** (o número persistido é a fonte de verdade da resposta). **Self-heal CAS**:
+>    se o valor cacheado (`observed`) difere do recalculado (`recomputed`), executa
+>    `updateMany({ where: { id, personalArcana: observed }, data: { personalArcana: recomputed } })`
+>    para curar cache stale no read — o CAS garante atomicidade.
+> 2. **Histórico** em `arcana_calculations` — gravado a cada chamada.
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -192,7 +201,7 @@ Cálculo do arcano pessoal do usuário baseado em data de nascimento e nome.
 | `fullName` | `String` | NOT NULL | Nome completo usado na redução |
 | `reductionDate` | `String` | NOT NULL | Passo a passo da redução numerológica da data |
 | `reductionName` | `String` | NOT NULL | Passo a passo da redução do nome |
-| `arcanaNumber` | `Int` | NOT NULL, min 0, max 22 | Número do arcano (0=O Louco, 1-21) |
+| `arcanaNumber` | `Int` | NOT NULL, **min 1, max 22** | Número do arcano. O cálculo emite **1–22** (`reduceToArcana` normaliza `0 → 22`); `0` não é emitido; `22` = "O Louco" (número mestre) |
 | `arcanaName` | `String` | NOT NULL | Nome do arcano |
 | `description` | `String` | NOT NULL, max 2000 chars | Descrição interpretativa do arcano |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data do cálculo |

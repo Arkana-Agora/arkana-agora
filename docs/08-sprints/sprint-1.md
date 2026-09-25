@@ -40,9 +40,9 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 - [ ] 1d. Facebook OAuth — Sprint 1 (ADR-010 §10) — **adiado (fora do escopo implementado)**
 - [ ] 1e. Model `Account` + backfill dos pares `provider`/`providerId` (multi-provedor, ADR-010 §5) — **adiado (fora do escopo)**
 - [ ] 2. Tela de onboarding pós-cadastro (nome, data de nascimento) — **adiado (fora do escopo)**
-- [x] 3. Tela de perfil: editar dados pessoais, upload de avatar — **`/perfil/editar`, ProfileEditForm, AvatarUpload**
+- [x] 3. Tela de perfil: editar dados pessoais, upload de avatar — **`/perfil/editar`, ProfileEditForm, AvatarUpload** — **2026-09-24:** `/perfil` deixou de ser redirect e virou página real "Meu perfil" (`OwnProfile`); `/perfil/:username` permanece perfil público
 - [x] 4. Cálculo automático de signo zodiacal baseado na data de nascimento — **ProfileAstrology + profile route auto-calc**
-- [x] 5. Cálculo automático de Arcano Pessoal no perfil — **`personalArcana` em UserProfile + SPEC-005**
+- [x] 5. Cálculo automático de Arcano Pessoal no perfil — **`personalArcana` em `User`** (não `UserProfile`) + SPEC-005; recalculado no `PATCH /api/v1/users/me/profile` e persistido (best-effort) por `GET /api/v1/arcana/calculate`
 
 ### Motor de Tiragem
 - [x] 6. Motor de seleção aleatória de cartas (seed-based para reprodutibilidade) — **`src/lib/tarot/{seed,shuffle,draw}.ts`**
@@ -59,7 +59,7 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 - [x] 15. Rate limiting por usuário para chamadas de IA — **`src/lib/ai/rate-limit.ts`**
 
 ### Cálculos Esotéricos
-- [x] 16. Cálculo de Arcano Pessoal (método de Pitágoras) — **`src/lib/arcana` + `/api/v1/arcana/calculate`**
+- [x] 16. Cálculo de Arcano Pessoal (método de Pitágoras) — **`src/lib/arcana` + `/api/v1/arcana/calculate`; `/meu-arcano` pré-preenche a partir do arcano salvo; cálculo TZ-independente (getters UTC)**
 - [x] 17. Tabela numerológica completa integrada (1 a 22) — **PYTHAGOREAN_TABLE + ARCANA_MAP**
 - [x] 18. Tarot do dia (cálculo determinístico data + id) — **`src/lib/tarot/daily.ts` + DailyTarot**
 - [x] 19. Algoritmo de signo zodiacal com datas precisas — **profile-astrology calc**
@@ -76,7 +76,7 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 - [x] 26. Service worker para cache de assets e dados — **T107**
 - [x] 27. Offline fallback page para funcionalidades básicas — **T108**
 - [x] 28. Responsive design mobile-first em todas as telas — **shadcn + Tailwind**
-- [x] 29. Navegação mobile (bottom tabs): Home, Tirar, Histórico, Perfil — **T110 MobileNav**
+- [x] 29. Navegação mobile (bottom tabs): Home, Tirar, Histórico, Perfil — **T110 MobileNav** — **2026-09-24:** adicionado `AppHeader` desktop (5 itens, active-state prefix via `isAppNavActive` de `src/lib/navigation.ts`) + `BackLink` compartilhado; MobileNav permanece mobile-only (4 itens, exact-match)
 
 ### UX e Qualidade
 - [x] 30. Loading states e skeleton screens em todas as telas — **T111 Skeleton + skeletons nas páginas**

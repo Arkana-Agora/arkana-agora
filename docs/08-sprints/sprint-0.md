@@ -45,7 +45,7 @@ Preparar a infraestrutura técnica necessária para o desenvolvimento acelerado 
 
 ### Autenticação
 - [x] 9. Setup Auth.js v5 (Google OAuth, magic link, JWT strategy) — **entregue (F2A)** — `next-auth@5.0.0-beta.32` pinado (ADR-010, supersede a cláusula v4 do ADR-009); `src/auth/auth.config.ts` (edge: Google condicional a `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` + `EmailProvider` magic link), adapter mínimo `src/auth/prisma-adapter.ts` (VerificationToken/User; sem model `Account`), `src/auth/auth.ts` (node, JWT strategy), handler `src/app/api/auth/[...nextauth]`; `providerId` EMAIL = e-mail minúsculo (H-2, ver `prisma/schema.prisma` header)
-- [x] 10. Configurar middleware de proteção de rotas — **entregue (F2A)** — `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*`, validando via `getToken({ secret: AUTH_SECRET })`; **F2B** adicionou defesa em profundidade: guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` + `redirect("/login")` sem sessão)
+- [x] 10. Configurar middleware de proteção de rotas — **entregue (F2A)** — `src/proxy.ts` (Next 16) com matcher `/dashboard/:path*` (F2A; **SPRINT-1 2026-09-24** estendeu o matcher para `/perfil/:path*`, `/tirar`, `/tiragem/:path*`, `/minhas-tiragens`, `/meu-arcano/:path*` + `?callbackUrl=`), validando via `getToken({ secret: AUTH_SECRET })`; **F2B** adicionou defesa em profundidade: guard de auth no layout do route group `src/app/(app)/layout.tsx` (server component: `auth()` + `redirect("/login")` sem sessão)
 - [x] 11. Páginas de login/callback funcionais — **entregue (F2A)** — `src/app/(auth)/login` (Google + magic link) e `src/app/(app)/dashboard` (sessão + sign out); callbacks nos caminhos fixos do Auth.js (`/api/auth/callback/*`)
 
 ### Design System

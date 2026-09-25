@@ -233,6 +233,7 @@ src/
   - `calculateKinMaya(birthDate: Date): number`; ciclo de 260 dias
 - [x] T021 [SPEC-002#21] Auto-calculate astrological fields on profile update
   - No PATCH /profile: se birthDate mudou, recalcular astrologicalSign, mayanKin, personalArcana e salvar no User
+  - **Verificado em 2026-09-25**: o item era o comportamento desejado mas **não estava implementado** — o route zerava `personalArcana` em vez de recalculá-lo. Corrigido em `src/app/api/v1/users/me/profile/route.ts`: `calculatePersonalArcana(bd, currentUser.name)` com o `name` lido dentro da transação; `null` por nome vazio preserva o valor anterior; `birthDate: ""` continua zerando tudo. Coberto por `tests/me-profile.test.ts`.
 - [x] T022 [SPEC-002#24] Create integration tests em `tests/me-profile.test.ts`, `tests/public-profile.test.ts`, `tests/integration/{avatar,privacy}.test.ts`
   - Cobrir todos os endpoints de profile; mocks de Prisma + R2
 
@@ -535,20 +536,25 @@ Previous review hardening (Phase 4 backend):
   - Redução pitagórica: soma dígitos até 1-22; `reduceToArcana(n: number): number`
 - [x] T093 [SPEC-005#2] Implement `calculateArcanaByDate` em `src/lib/arcana/calculate.ts`
   - `calculateArcanaByDate(birthDate: Date): number`; usa reduceToArcana com soma dos dígitos da data
+  - **2026-09-25**: passou a usar getters **UTC** (`getUTCFullYear`/`getUTCMonth`/`getUTCDate`) em vez de getters locais — eliminava divergência dev (BRT) / prod (UTC) que fazia o arcano **persistido** no banco não bater com o exibido na tela. Mesmo ajuste em T095 (`calculatePersonalArcana`) e em `explainPersonalArcana`.
 - [x] T094 [SPEC-005#4] Implement `calculateArcanaByName` em `src/lib/arcana/calculate.ts`
   - `calculateArcanaByName(name: string): number`; usa PYTHAGOREAN_TABLE; normaliza acentos
 - [x] T095 [SPEC-005#5] Implement `calculatePersonalArcana` em `src/lib/arcana/calculate.ts`
   - `calculatePersonalArcana(birthDate: Date, name: string): number`; combina data + nome
+  - **2026-09-25**: getters **UTC** na parte de data (ver nota em T093). Retorna `number | null` — `null` quando `birthDate` ou `name` ausentes; o `PATCH /users/me/profile` (T021) passa a usar esse retorno para **preservar** o valor anterior em vez de zerar.
 - [x] T096 [SPEC-005#6] Create `ARCANA_MAP` em `src/data/arcana.ts`
   - 22 arcanos (0-21): nome, imagem, significado upright/reversed, elemento, planeta
   - Master numbers: 11 (A Força), 22 (O Louco), 33 "A Coroa" (extra-pitagórico, culminação)
   - Tipo `PersonalArcanaResult`: { dateArcana, nameArcana, combinedArcana, isMasterNumber }
 - [x] T097 [SPEC-005#8] Implement `GET /api/v1/arcana/calculate` em `src/app/api/v1/arcana/calculate/route.ts`
   - Bearer; calcula arcano pessoal; retorna `{arcana, arcanaData, name, birthDate}`
+  - **2026-09-25**: a rota passou a persistir `User.personalArcana` (best-effort, só quando `null`, nunca sobrescreve cache) — sem isso o arcano não chegava ao perfil público. Retorna também `reductionDate`/`reductionName`.
 - [x] T098 [SPEC-005#9] Implement `POST /api/v1/ai/arcana-interpret` em `src/app/api/v1/ai/arcana-interpret/route.ts`
   - Bearer; SSE streaming; interpretação IA do arcano pessoal
+  - **2026-09-25**: `arcanaNumber` passou de `max(21)` para `max(22)` — 22 ("O Louco") era rejeitado com 422.
 - [x] T099 [SPEC-005#10] Create `ArcanaCalculator` em `src/components/arcana/arcana-calculator.tsx`
   - Formulário (nome + data); resultado client-side; animação de revelação
+  - **2026-09-25**: props opcionais `initialName`/`initialBirthDate` (pré-prefill via padrão React "adjusting state when a prop changes" — o usuário pode limpar o campo).
 - [x] T100 [SPEC-005#11] Create `ArcanaDetailCard` em `src/components/arcana/arcana-detail-card.tsx`
   - Card expandido com detalhes do arcano; imagem, significado, elemento
 - [x] T101 [SPEC-005#12] Create `ArcanaAIInterpretation` em `src/components/arcana/arcana-ai-interpretation.tsx`
@@ -556,8 +562,10 @@ Previous review hardening (Phase 4 backend):
 - [x] T102 [SPEC-005#13] Create `/meu-arcano` page em `src/app/(app)/meu-arcano/page.tsx`
   - ArcanaCalculator + ArcanaDetailCard + ArcanaAIInterpretation
   - Loading: skeleton; Error: retry + toast; Empty: formulário de cálculo sempre visível
+  - **2026-09-25**: fetch de mount em `GET /api/v1/arcana/calculate` (Bearer) pré-preenche nome+data e exibe o arcano salvo; guard `hasUserCalculated` (ref) impede sobrescrita de um cálculo manual.
 - [x] T103 [SPEC-005#14] Create `/meu-arcano/:arcana` page em `src/app/(app)/meu-arcano/[arcana]/page.tsx`
   - Detalhe de qualquer arcano; usa ArcanaDetailCard
+  - **2026-09-25**: copy de arcano inválido corrigida de "Valores validos: 0-21" para "**1-22**" (o range real é 1-22; 22 = "O Louco").
 - [x] T104 [SPEC-005#15-16] Create arcana unit tests em `tests/arcana.test.ts`
   - 100 testes redução pitagórica (datas conhecidas); testes tabela pitagórica (acentos)
 - [x] T105 [SPEC-005#17-18] Create arcana integration + E2E tests em `tests/integration/arcana.test.ts` e `tests/e2e/arcana.spec.ts`
@@ -877,7 +885,7 @@ Previous review hardening (Phase 4 backend):
 - 2026-09-23 — **Sprint 1 gap-fix pass (docs-drift + wiring)** — **Completed**:
   - **G2** `/tirar` rewire → ReadingSession (deck→spread→reveal→POST /readings)
   - **G3** AI SSE panel reading-ai-panel.tsx mounted em `/tiragem/[id]`
-  - **G4** páginas `/perfil`, `/perfil/editar`, `/perfil/privacidade`; redirect via User.profile.username
+  - **G4** páginas `/perfil`, `/perfil/editar`, `/perfil/privacidade`; redirect via User.profile.username — **SUPERSEDED 2026-09-24 (batch 5):** `/perfil` não redireciona mais; virou página real "Meu perfil" (OwnProfile) — o redirect causava loop no botão voltar (ver Execution Log batch 5)
   - **G5** home logada `/dashboard` (DailyTarot + CTAs); mobile-nav Home → /dashboard
   - **G14** reading-store: flippedCards: number[] (serializável) + createdReadingId + partialize
   - **T050** og-image: SVG 1200×630 → PNG via sharp (stub HTML removido)
@@ -887,3 +895,70 @@ Previous review hardening (Phase 4 backend):
   - **T068 desvio:** OpenAI SDK (openai@^7.21.0) em vez de z-ai-web-dev-sdk
   - **Docs sync:** mojibake Phase 4 removido; Master Checklist Phase 4/7 [x]; paths T022/T031/T119 corrigidos; sprint-1.md + milestones.md M1 + .specs/001-005/tasks.md sincronizados
   - Verificação: npx tsc --noEmit ✅; npx vitest run **973 passed / 1 skipped**; npx playwright test (limitação: exige DB/dev server — reportar em Step 6); lint nos arquivos alterados ✅
+- 2026-09-23 — **SPRINT-1 bugfix batch 3** (PostHog console noise: dev gate + dead-clicks disable + observability sample + 7 tests) — **Completed**:
+  - `src/lib/analytics.ts`: skip init em development (`NODE_ENV === 'development'`); `capture_dead_clicks: false` (mantidos `disable_session_recording: true`, `autocapture: false` do batch 2)
+  - `tests/analytics.test.ts`: +7 testes (development gate, config flags, missing key, consent capture, `setAnalyticsConsent(false)` reset)
+  - `docs/02-architecture/observability.md` §4.1: sample atualizado
+  - Escopo: hardening unplanned sobre o arquivo da T115 (já `[x]`); nenhum checkbox novo no Master Checklist
+  - Verificação: `npx tsc --noEmit` exit 0; `npx eslint .` exit 0; `npx vitest run` (single-fork) **1003 passed / 1 skipped** exit 0; targeted `tests/analytics.test.ts` **7 passed**
+- 2026-09-24 — **SPRINT-1 auth/consent/runtime fixes batch** (refresh single-flight `src/lib/auth-refresh.ts`, api interceptor retry sem overwrite de sessão, auth-store: register 201 message-only + refreshSession outcomes (network mantém user) + logout/delete limpam caches, login callbackUrl safe same-origin + Suspense useSearchParams, Dashboard LogoutButton, proxy matcher estendido, consent banner hydrate/sem reload/dismiss sem persistir, decks/spreads envelope parse, metadataBase + Image sizes; testes novos auth-refresh/consent-banner; **eslint 0, tsc 0, vitest 1023 passed / 1 skipped**) — **Completed**:
+  - Desvios: `GET /auth/me` **não existe** — docs corrigidos para `GET /api/v1/users/me/profile`; contrato register **201 message-only** confirmado; `refreshSession` network error mantém o user; dismiss do consent banner não persiste decisão
+  - Escopo: hardening unplanned de auth/consent/session sobre tarefas já `[x]` (T004, T061, T067, T114, T115, T119); nenhum checkbox novo no Master Checklist
+  - Detalhes: `docs/work-plans/20260921120000-sprint1-completion-work-plan.md` (Execution Log 2026-09-24)
+- 2026-09-24 — **SPRINT-1 batch 4 — Step-4 review fixes (todos os achados: critical + important + informational)** — **Completed**:
+  - **Consentimento de analytics**: revogação = `resetUser()` (`posthog.reset()`, apaga a chave do SDK) e **depois** re-assert `opt_out_capturing`; concessão = `initAnalytics()` + `opt_in_capturing({ captureEventName: false })`; `resetUser()` re-asserta opt-out quando o consentimento está revogado; `ANALYTICS_CONSENT_STORAGE_KEY` exportado
+  - **Open-redirect**: fonte única `isSafeCallbackPath()` em `src/hooks/use-safe-callback-url.ts` (usado por `AuthSessionBridge` + `consumeStoredCallbackUrl`/magic-link); `safeCallbackPath` local do LoginFormCard **deletado** (sem um segundo validador)
+  - **Login**: redirect no mount somente após `refreshSession()` (guarda); `loginWithGoogle(callbackUrl?)` param opcional; auth-refresh com kind `server_error` (5xx não-destrutivo) + generation guard monotônico; `refreshTokens()` morto removido do `src/lib/api.ts`
+  - **auth-store**: `logout()`/`deleteAccount()` ligados a `resetAuthApiSessionCache()` + `resetUser()`; `isAuthUserPayload` valida `role` via `VALID_ROLES`
+  - **Proxy matcher**: ADICIONADO `/tiragem/:path*` (página de detalhe da tiragem estava fora do guard); removido `/meu-arcano` duplicado (mantido `/meu-arcano/:path*`)
+  - **use-readings**: Zod real `deckSchema`/`spreadSchema`/`spreadPositionSchema` (`gridX`/`gridY` required) + casts `satisfies`
+  - **Rotas auth**: `equalizeNoopTiming()` no branch de e-mail existente (anti-enumeração); `maskEmail()` em logs PII; **novos rate limiters por IP**: forgot-password **5/60min** (`MAX_PASSWORD_RESET_IP_ATTEMPTS`) e verify-email resend **5/60min** (`MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS`), check+record do IP **antes** do lookup do usuário
+  - **Misc**: checagem https em `auth.config` via `URL.protocol`; consent-banner; dynamic-import catch em providers; `metadataBaseFromEnv`
+  - **Testes novos**: `tests/safe-callback-url.test.ts` (29), `tests/auth-helpers.test.ts` (5), `tests/components/logout-button.test.tsx` (4); `tests/analytics.test.ts` → 11; e2e helpers importam o nome CSRF de `src/lib/csrf-cookie-name.ts`
+  - **Step 4 review**: 3/3 reviewers **APPROVED** (security-sentinel, nextjs-reviewer, kieran-typescript); **Step 5 docs maintenance** em andamento
+  - **Verificação (pré-doc-edits)**: `eslint` 0 erros; `tsc` 0 erros; `vitest` **1079 passed / 1 skipped** (103 arquivos); Playwright não executado (exige DB/dev server — limitação conhecida)
+  - **Deferred (não feito, com motivo)**: flip de `trustHost` (exige autorização de ADR); canonical `.com` vs `.com.br` (apenas nota); novos templates de e-mail (fora de escopo); rate limiter backed por Redis (TODO documentado — limitação pré-existente na gaps doc)
+  - Escopo: fixes de review sobre tarefas já `[x]` (T003, T004, T061, T115); **nenhum checkbox novo** — Master Checklist já estava com zero itens `- [ ]` antes deste batch (verificado)
+  - Detalhes: `docs/work-plans/20260921120000-sprint1-completion-work-plan.md` (Execution Log 2026-09-24 — batch 4)
+- 2026-09-24 — **SPRINT-1 batch 5 — navigation flow + profile PATCH 500 fix** — **Completed**:
+  - **PATCH /api/v1/users/me/profile 500 fix**: `birthPlace` (campo de `UserProfile`) estava sendo enviado para `tx.user.update()`; movido para o branch `userProfile.upsert`. Builders tipados (`Prisma.UserUpdateInput`, `Partial<Prisma.UserProfileUncheckedCreateInput>`). Log: `[profile:me] erro ao atualizar` PrismaClientValidationError "Unknown argument birthPlace"
+  - **`/perfil` sem redirect**: era redirect para `/perfil/:username` ou `/perfil/editar` (causava loop no botão voltar — "editar perfil volta para /perfil que redireciona para editar perfil"). Agora é página real "Meu perfil" (server page; componente client `OwnProfile`; ProfileHeader/ProfileStats/ProfileAstrology + links Editar/Privacidade/público). **SUPERSEDE a nota G4 do Execution Log 2026-09-23** ("redirect via User.profile.username")
+  - **`BackLink`** (novo componente compartilhado `src/components/layout/back-link.tsx`); back links adicionados/padronizados em perfil/editar, perfil/privacidade, minhas-tiragens→/dashboard, tiragem/[id]→/minhas-tiragens, meu-arcano→/dashboard, meu-arcano/[arcana]→/meu-arcano
+  - **`AppHeader` desktop** (novo, 5 itens incl. Meu Arcano) montado em `(app)/layout.tsx`; wrapper `pb-16 md:pb-0` para o MobileNav fixo não sobrepor. Mobile bottom nav inalterado (4 itens, active exact-match)
+  - **Rota `/tiragem`** → redirect `/minhas-tiragens` (remove o 404 visto em /tiragem nos logs de dev)
+  - **`isAppNavActive`** (novo, puro, em `src/lib/navigation.ts`; prefix matching; Histórico destaca `/tiragem/*`)
+  - **ProfileHeader** com prop `headingLevel`; privacy JSON parseado via `privacySchema.passthrough().safeParse` em perfil/page.tsx e perfil/[username]/page.tsx (substitui `as PrivacySettings` inseguro)
+  - **Testes**: +14 (me-profile: birthPlace routing/clearing/combined-tx; app-header static + casos isAppNavActive)
+  - **Verificação**: `eslint` 0 erros; `tsc` 0 erros; `vitest` **1095 passed / 1 skipped**; Playwright não executado (exige DB/dev server — limitação conhecida)
+  - **Escopo**: hardening unplanned sobre tarefas já `[x]` (T012, T029, T063, T064, T102, T103, T110); **nenhum checkbox novo** no Master Checklist
+  - **Pendente (fora de escopo deste batch)**: (1) alinhar active-state do MobileNav (exact) com AppHeader (prefix) e unificar itens (mobile 4 vs desktop 5); (2) ProfileStats exibe zeros fixos (seguidores/seguindo não implementados) — stats reais pendentes (readingsCount etc); (3) normalização birthDate round-trip (ISO datetime vs YYYY-MM-DD no formulário) — pre-existente; (4) back/sair do fluxo ReadingSession (/tirar) permanece in-flow Voltar/Cancelar (interações por click) — avaliação pendente
+  - Detalhes: `docs/work-plans/20260921120000-sprint1-completion-work-plan.md` (Execution Log 2026-09-24 — batch 5)
+- 2026-09-25 — **SPRINT-1 batch não planejado: "Meu Arcano Pessoal" não salvo / Google não popula perfil** — **Completed**:
+  - **T021** `PATCH /api/v1/users/me/profile` **recalcula** `personalArcana` via `calculatePersonalArcana(bd, currentUser.name)` (nome lido **dentro** da transação) em vez de zerar; `birthDate: ""` continua zerando tudo; retorno `null` (nome vazio) **preserva** o valor anterior
+  - **T097** `GET /api/v1/arcana/calculate` passa a **persistir `User.personalArcana`** (best-effort com `logger.warn`, só quando `null`, nunca sobrescreve cache) — sem isso o arcano não chegava ao perfil público
+  - **T102** `/meu-arcano` busca `/arcana/calculate` no mount (Bearer) → pré-preenche `initialName`/`initialBirthDate` + exibe o arcano salvo; guard `hasUserCalculated` (ref) impede sobrescrever cálculo manual
+  - **T099** `ArcanaCalculator` ganha props opcionais `initialName`/`initialBirthDate` (padrão React *"adjusting state when a prop changes"*; usuário pode limpar o campo)
+  - **T098** `POST /ai/arcana-interpret`: `arcanaNumber` `max(21)` → `max(22)` (22 = "O Louco" era rejeitado com 422)
+  - **T093/T095** `src/lib/arcana/calculate.ts`: getters **UTC** — elimina divergência dev (BRT) / prod (UTC) na persistência
+  - **T103** copy de `/meu-arcano/:arcana` "0-21" → "1-22"
+  - **Não taskeado**: `src/auth/auth.config.ts` ganha `events.signIn` (enriquecimento **não destrutivo** de `name`/`displayName` ← `profile.name` e `avatar` ← `profile.picture`, só quando vazios, em `try/catch` + `warn`) — nenhum T0xx lista esse arquivo
+  - **Desvios / decisões**: (1) o **cálculo manual da página permanece client-side** por decisão de escopo — `/arcana/calculate` só pré-preenche/exibe no mount; mandá-lo ao backend exigiria POST e mudaria o contrato; (2) o prefill **NÃO re-usa `useMyProfile`** por **mismatch de schema de astrologia** — o hook espera `astrology: {sunSign, personalArcana, kinMaya}` aninhado + `avatarUrl`, e `GET /users/me/profile` retorna **flat** (`astrologicalSign`/`mayanKin`/`personalArcana` + `avatar`), o que estouraria o `parse()` do Zod; (3) **`birthDate` via Google NÃO implementado — limitação OAuth** (escopo `openid email profile` não retorna data de nascimento; exigiria Google People API `contacts.readonly` + novo ADR/consentimento); (4) **gap de teste: `events.signIn` coberto apenas por curso manual**, sem teste automatizado
+  - **Master Checklist: nenhum item alterado** — o checklist já estava com **zero** `- [ ]` antes do batch (verificado); T012, T021, T022, T093-T095, T097-T099, T102, T103, T105 já eram `[x]`
+  - **Verificação (fresh, re-executada no plan-sync)**: `tsc --noEmit` ✅ exit 0; `eslint` nos 8 arquivos ✅ exit 0; `vitest run` (suíte completa) ✅ **104 arquivos passed / 1 skipped — 1111 passed / 1 skipped** exit 0; Playwright não executado (exige DB/dev server — limitação conhecida)
+  - **Drift apontado**: `tests/arcana.test.ts` **não** foi alterado neste batch (apesar de listado no registro do work-plan) — a troca para UTC **não** ganhou teste novo; T104 segue `[x]` por conclusão anterior
+  - **Pendente**: teste automatizado para `events.signIn`; alinhar o schema de `useMyProfile` com o retorno flat de `/users/me/profile`; normalização round-trip de `birthDate` (ISO datetime vs `YYYY-MM-DD`) — o prefill de `/meu-arcano` a contorna **parcialmente** via `toDateInputValue`, mas a pendência do batch 5 (item 3) continua aberta para o `ProfileEditForm`
+
+- 2026-09-25 — **SPRINT-1 review-fix batch: Meu Arcano / Google batch fixes (self-heal CAS, null-out, prefill via useMyProfile, dirty invariant, enrichment validation, arcana 1-22, security headers, drift fixes)** — **Completed**:
+  - **Self-heal CAS em `GET /arcana/calculate`**: serve valor canônico cacheado mas executa `updateMany({ where: { id, personalArcana: observed }, data: { personalArcana: recomputed } })` para curar cache stale no read (CAS garante atomicidade). Coberto por `tests/integration/arcana-calculate.test.ts`.
+  - **PATCH `/me/profile` null-out semantics**: quando `calculatePersonalArcana` retorna `null` (nome vazio), `personalArcana` é **explicitamente nulado** (`personalArcana: null` no `tx.user.update`) — **não preserva** o valor anterior. `birthDate: ""` continua sendo o único reset completo.
+  - **Prefill via `useMyProfile()`**: `/meu-arcano` **não chama mais** `GET /arcana/calculate` no mount; o pré-fill vem do hook `useMyProfile()` (TanStack Query, cacheado) que expõe `name`/`birthDate` do perfil. `GET /arcana/calculate` agora só para callers explícitos/manuais (botão "Calcular").
+  - **Dirty invariant em `ArcanaCalculator`**: usa **state** (`nameDirty`/`birthDateDirty` booleans) em vez de `ref` para rastrear edição do usuário — satisfaz `react-hooks/exhaustive-deps` e evita anti-pattern de mutar refs no render. `hasUserCalculated` permanece `ref` (race condition do fetch assíncrono).
+  - **Enrichment service validation** (`src/services/enrichment-service.ts`): `oauthNameSchema` (strip control/zero-width, trim, 1-120), `oauthPictureSchema` (https + allowlist), `oauthGoogleProfileSchema` (strict compose); invalida `personalArcana` **apenas quando** nome do Google muda **E** `birthDate` presente.
+  - **Arcana range 1-22 enforced end-to-end**: `POST /ai/arcana-interpret` schema `min(1).max(22)`; guard em `/meu-arcano/[arcana]` (404 se fora de 1-22); `getArcanaByNumber(22)` retorna entry 22 com `roman: "XXII"` (não short-circuit para índice 0).
+  - **Security headers em `next.config.ts`**: HSTS (`max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. **F-04 rate-limit deferred (Low)**; **CSP documentado pendente** (auditoria de inline scripts/styles necessária).
+  - **Drift fixes**: `_skipSessionLookup` → `_retry` em `src/lib/api.ts` (nome reflete propósito real: "esta request é retry pós-refresh"); "edge config" drift removido de `src/auth/auth.config.ts` (runtime Node.js, não edge); `authCallbacks` export **NÃO é dead code** — usado por `tests/auth.test.ts` (mantém export).
+  - **Master Checklist: nenhum item alterado** — checklist já com zero `- [ ]` antes do batch.
+  - **Verificação**: `tsc --noEmit` ✅; `eslint` ✅; `vitest run` ✅ (arcana, profile, auth, enrichment tests passing); Prisma migrate status ✅ up to date.
+  - **Docs updated**: `docs/04-api/users.md`, `docs/06-features/profile.md`, `docs/04-api/ai.md`, `docs/modules/auth.md`, `docs/03-database/entities.md`, `docs/03-database/migrations.md`, `docs/work-plans/20260921120000-sprint1-completion-work-plan.md`, `docs/solutions/patterns/` (TZ determinism + derived-field invalidation patterns).
+  - Notas inline datadas desta rodada: T021, T093, T095, T097, T098, T099, T102, T103
+  - Detalhes: `docs/work-plans/20260921120000-sprint1-completion-work-plan.md` (Execution Log 2026-09-25 — "Fix bugs Meu Arcano / sincronização Google (não planejado)")

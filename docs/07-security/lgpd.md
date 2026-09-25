@@ -49,11 +49,22 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | **Análise** | Métricas de uso e performance | `_ga`, `_gid` (Google Analytics) | Sim (padrão: recusado) |
 | **Marketing** | Publicidade e recomendações | `_fbp`, anúncios personalizados | Sim (padrão: recusado) |
 
-### Cookie Banner
-- Exibido na primeira visita ao site
-- Três opções: "Aceitar todos", "Rejeitar não necessários", "Personalizar"
-- Preferência salva em cookie `cookie_consent` (validade: 1 ano)
-- Acesso à personalização a qualquer momento via rodapé
+### Cookie Banner / Consentimento de Analytics (implementado)
+
+> **Implementado** — `src/components/analytics/consent-banner.tsx` (diálogo `AnalyticsConsentBanner`,
+> montado por `src/components/providers.tsx` em toda a árvore de app) + gate de consentimento em
+> `src/lib/analytics.ts`. Cobre **apenas** PostHog/analytics. Um banner genérico de cookies com
+> três opções ("Aceitar todos"/"Rejeitar não necessários"/"Personalizar") e cookie `cookie_consent`
+> **não existe no código** — as categorias da tabela acima (Funcionais, Marketing etc.) ainda são
+> alvo, não estado atual.
+
+- **Abertura**: exibido na primeira visita (sem decisão armazenada); caso contrário, colapsa para o botão flutuante **"Preferências de Analytics"** (ícone de escudo, canto inferior direito)
+- **Hidratação**: ao reabrir, o switch é hidratado do valor persistido em `localStorage["analytics-consent"]` (`"true"`/`"false"`) — sem recarregar a página
+- **Duas ações**: "Rejeitar" e "Salvar preferências" → `applyConsent(value)` → `setAnalyticsConsent()` → despacha evento custom `arkana-consent` → fecha o diálogo — **sem `window.location.reload()`**; consentimento concedido re-inicializa o PostHog no lugar
+- **Dispensa sem persistir**: Escape, clique no backdrop ou botão de fechar apenas fecha o diálogo e **não grava** nenhuma decisão (na próxima visita o diálogo reabre)
+- **Persistência**: única fonte é `localStorage["analytics-consent"]`; o banner deve sempre passar por `setAnalyticsConsent()` — nunca `localStorage.setItem` cru da chave de consentimento
+- **Gate**: `initAnalytics()` e todo `track*`/`setUserProperties` são no-op sem `localStorage["analytics-consent"] === "true"`; revogação chama `resetUser()` (`posthog.reset()`, que **apaga** a chave de consentimento `__ph_opt_in_out_*` persistida pelo SDK) **e depois** `posthog.opt_out_capturing()` (re-afirma o opt-out — a ordem importa); concessão chama `initAnalytics()` (se necessário) + `opt_in_capturing({ captureEventName: false })`
+- **Reabertura a qualquer momento**: botão "Preferências de Analytics" (bottom-right)
 
 ---
 

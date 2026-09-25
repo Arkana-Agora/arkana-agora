@@ -53,6 +53,10 @@ const isValid = await bcrypt.compare(inputPassword, hashedPassword);
 | Armazenamento | Memória do cliente | Cookie httpOnly, Secure, SameSite=Strict + tabela `Session` (hash) |
 | Rotação | Não | Sim (a cada uso, o anterior é invalidado, mantendo o `familyId`) |
 
+> **Par de chaves (obrigatório):** `JWT_PRIVATE_KEY` e `JWT_PUBLIC_KEY` devem existir **juntos** e pertencer ao **mesmo par** (256 bytes SPKI/PKCS#8, multiline PEM). Com `JWT_PUBLIC_KEY` ausente, TODOS os access tokens — inclusive os recém-emitidos — eram rejeitados como 401 (bug corrigido em 2026-09-24: `verifyAccessToken` agora separa erro de config da rejeição de token). Sinais: toda chamada autenticada responde `401 AUTH_TOKEN_INVALID` com refresh 200 em loop. Pós-fix: chave ausente/malformada → 500 `AUTH_CONFIG_INVALID_PUBLIC_KEY`; assinatura inválida continua sendo 401. Runbook: `docs/runbooks/jwt-public-key-missing-all-401.md`. Na rotação (90 dias), troque **ambas** as chaves no mesmo deploy.
+
+> **Geração do par (dev):** `node -e "const{generateKeyPairSync}=require('node:crypto');const{publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});process.stdout.write(privateKey.export({type:'pkcs8',format:'pem'})+publicKey.export({type:'spki',format:'pem'}))"` — cole ambos em `.env.local` como blocos PEM multiline (sem aspas duplas de agrupamento, ou mantendo o formato já usado no arquivo).
+
 ```typescript
 // Payload do access token (implementado em src/services/token-service.ts)
 interface JWTPayload {
@@ -104,9 +108,10 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 
 ### Rate Limiting
 
-> **Status:** o rate limiting de login, magic link e forgot-password está **implementado** em
-> `src/lib/rate-limit.ts` (em memória, por instância). O restante da tabela abaixo é o
-> **estado-alvo** (planejado).
+> **Status:** o rate limiting de login, register, magic-link, forgot-password,
+> restore-account e verify-email/resend está **implementado** em `src/lib/rate-limit.ts`
+> (em memória, por instância). As linhas genéricas `GET/POST /api/v1/*` e
+> `POST /api/v1/readings` da tabela abaixo são o **estado-alvo** (planejado).
 
 | Endpoint | Limite | Janela | Usuários Autenticados |
 |---|---|---|---|
@@ -116,19 +121,25 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 | `POST /api/v1/auth/magic-link` (por IP) | 3 req | 1 hora | Não se aplica |
 | `POST /api/v1/auth/register` | 3 req (email: 15min; IP: 1h) | — | Não se aplica |
 | `POST /api/v1/auth/forgot-password` | 3 req | 1 hora | Não se aplica |
+| `POST /api/v1/auth/forgot-password` (por IP) | 5 req | 1 hora | Não se aplica |
+| `POST /api/v1/auth/verify-email/resend` (por email) | 1 req | 1 min | Não se aplica |
+| `POST /api/v1/auth/verify-email/resend` (por IP) | 5 req | 1 hora | Não se aplica |
 | `GET /api/v1/*` | 100 req | 1 min | 300 req / 1 min |
 | `POST /api/v1/*` | 50 req | 1 min | 150 req / 1 min |
 | `POST /api/v1/readings` | 3/dia | dia | 10/dia |
 
-**Implementado (login + magic-link + forgot-password):**
+**Implementado (login, register, magic-link, forgot-password, restore-account, verify-email/resend):**
 - **Lockout de conta**: 5 falhas consecutivas → 403 `AUTH_ACCOUNT_LOCKED` com `retryAfter: 900` (15 min). Resetado em login bem-sucedido.
 - **Limite de volume por IP**: 5 tentativas/15min → 429 `AUTH_RATE_LIMITED` com `retryAfter`.
 - **Magic link por email**: 3/hora por email → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkLimited`/`recordMagicLinkRequest`).
 - **Magic link por IP**: 3/hora por IP → 429 `AUTH_MAGIC_LINK_RATE_LIMIT` com `retryAfter` (1h window, `src/lib/rate-limit.ts` `isMagicLinkIpLimited`/`recordMagicLinkIpAttempt`; mesmo código do limite por email — não há `AUTH_MAGIC_LINK_IP_RATE_LIMIT`). Ajustado de 20/h para 3/h no review T21 (decisão de produto).
 - **Forgot-password por email**: 3/hora por email → 429 `AUTH_FORGOT_RATE_LIMIT` (1h window, `src/lib/rate-limit.ts` `isPasswordResetLimited`/`recordPasswordResetRequest`, env `MAX_PASSWORD_RESET_PER_EMAIL`). A contagem é registrada antes da verificação de existência do usuário (anti-spam).
+- **Forgot-password por IP**: 5/hora por IP → 429 `AUTH_FORGOT_RATE_LIMIT` com `retryAfter` (60min window, `src/lib/rate-limit.ts` `isPasswordResetIpLimited`/`recordPasswordResetIpAttempt`, env `MAX_PASSWORD_RESET_IP_ATTEMPTS`). A checagem e o registro do IP ocorrem **antes** da leitura do usuário (anti-enumeração: resposta idêntica p/ e-mail inexistente).
+- **Verify-email resend por IP**: 5/hora por IP → 429 `AUTH_RATE_LIMITED` com `retryAfter` (60min window, `src/lib/rate-limit.ts` `isVerifyEmailResendIpLimited`/`recordVerifyEmailResendIpAttempt`, env `MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS`), registrado **antes** do `findFirst` do usuário. **A contagem por e-mail também é registrada antes do lookup** (`recordVerifyEmailResend`) — gravá-la só no caminho de sucesso faria o 429 disparar apenas para contas reais/non-verificadas, transformando o próprio rate limit em oráculo de enumeração (padrão: `docs/solutions/patterns/security/rate-limit-before-user-lookup.md`).
+- **Confiabilidade do IP por IP**: os limites por IP leem o primeiro hop de `x-forwarded-for` (hops são appendados pelo proxy/edge — Caddy/Vercel); o store é **em memória e por instância** (best-effort; um atacante que rotaciona IPs ou instancia réplicas dilui a contagem — limitação conhecida, XFF spoofing mitigado apenas atrás do proxy confiável).
 - **Todos os 429** (login, register, magic-link, forgot-password, restore-account, verify-email/resend) também setam o header **`Retry-After`** (segundos), além do `retryAfter` no body.
 - **Audit de reset de senha** (design §7.6): pedidos de recuperação de senha são logados com **IP** (`x-forwarded-for`) e **user agent** em `[auth:forgot-password]` (`src/app/api/v1/auth/forgot-password/route.ts`).
-- **`POST /api/v1/auth/reset-password` (T12)** — rate limit 3/h por email via `src/lib/rate-limit.ts` (T27 implementado). Não confundir com o limite de **emissão** de tokens (forgot-password 3/h por email), que já existia.
+- **`POST /api/v1/auth/reset-password` (T12)** — **não possui rate limit próprio**: a rota não usa `src/lib/rate-limit.ts`; a tentativa é protegida pelo token `PASSWORD_RESET` single-use (1h). O limite 3/h por e-mail **e** 5/h por IP é da **emissão** de tokens (`POST /api/v1/auth/forgot-password`).
 - `resetRateLimiter()` limpa o store (usado em testes).
 
 ### CORS (Cross-Origin Resource Sharing)
@@ -211,9 +222,13 @@ const cleanInput = DOMPurify.sanitize(userInput, {
 | Medida | Configuração | Justificativa |
 |---|---|---|
 | TLS | Versão 1.3 (mínimo 1.2) | Criptografia em trânsito |
-| HSTS | `max-age=31536000; includeSubDomains; preload` | Força HTTPS |
-| CSP | Restrito ao domínio próprio | Prevenção de XSS |
+| HSTS | `max-age=63072000; includeSubDomains; preload` | Força HTTPS (2 anos) |
+| X-Content-Type-Options | `nosniff` | Previne MIME type sniffing |
+| Referrer-Policy | `strict-origin-when-cross-origin` | Controla informação de referrer |
+| CSP | **Pendente** — requer auditoria de inline scripts/styles (Next.js App Router + shadcn/ui + Framer Motion) antes de enforçar | Prevenção de XSS |
 | Certificate | Let's Encrypt (auto-renewal) | Certificado válido e atualizado |
+
+> **Implementação (fix 2026-09-25):** headers de resposta adicionados via `async headers()` em `next.config.ts` — split por `Accept: text/html` (com `Cache-Control: private, no-store`) vs rotas `/api/*`. **F-04 rate-limit via middleware/edge deferido (Low)**. CSP documentado como pendente; auditoria necessária antes de aplicar.
 
 ---
 

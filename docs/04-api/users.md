@@ -4,6 +4,7 @@
 
 ## Sumário
 
+- [GET /users/me/profile](#get-usersmeprofile)
 - [GET /users/:id](#get-usersid)
 - [PATCH /users/me/profile](#patch-usersmeprofile)
 - [PATCH /users/me/privacy](#patch-usersmeprivacy)
@@ -13,6 +14,37 @@
 - [GET /users/:id/stats](#get-usersidstats)
 - [DELETE /users/me](#delete-usersme)
 - [GET /users/search](#get-userssearch)
+
+---
+
+## GET /users/me/profile
+
+Perfil do usuário autenticado (Bearer). Substitui o inexistente `GET /api/v1/auth/me`.
+
+> **Implementado** em `src/app/api/v1/users/me/profile/route.ts` (`GET`, `requireAuth`).
+
+### Requisição
+
+```http
+GET /api/v1/users/me/profile
+Authorization: Bearer <accessToken>
+```
+
+### Resposta — 200 OK
+
+Body **flat** (sem wrapper `data`): campos de `User` (`id`, `name`, `displayName`, `avatar`,
+`email`, `plan`, `birthDate`, `astrologicalSign`, `mayanKin`, `personalArcana`) mesclados com os
+campos de `UserProfile` quando existirem (`username`, `bio`, `birthPlace`, `location`, `website`,
+`socialLinks`, `privacy`). Detalhe do shape em `docs/04-api/authentication.md`
+(`GET /auth/me` → use este endpoint).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_*` | Access token ausente, inválido ou revogado |
+| 404 | `USER_NOT_FOUND` | Usuário não encontrado |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`) |
 
 ---
 
@@ -50,12 +82,38 @@ Content-Type: application/json
 | `displayName` | string | 2–50 caracteres (trim) |
 | `username` | string | `""` **não altera** (só aplica se truthy no route); valor novo: 3–30 chars alfanumérico+`_`, único |
 | `bio` | string \| `""` | máx 500 chars; `""` → `null` (limpa) |
-| `birthDate` | `"AAAA-MM-DD"` \| `""` | `""` → `null` e **limpa** `astrologicalSign`/`mayanKin`; data válida recalcula signo/kin |
+| `birthDate` | `"AAAA-MM-DD"` \| `""` | `""` → `null` e **limpa** `astrologicalSign`/`mayanKin`/**`personalArcana`**; data válida recalcula signo/kin **e `personalArcana`** |
 | `birthPlace` | string \| `""` | máx 200; `""` → `null` |
 | `location` | string \| `""` | máx 100; `""` → `null` |
 | `website` | url \| `""` | `""` → `null`; URL válida máx 200 |
 
 > **Sem `gender` no schema** (removido — nunca implementado). Campos extras → 422 (`.strict()`).
+
+> **Recálculo de `personalArcana` no PATCH (fix 2026-09-25):** enviar `birthDate` com data válida
+> **recalcula** `User.personalArcana` via `calculatePersonalArcana(birthDate, user.name)` de
+> `src/lib/arcana/calculate.ts` — antes o campo era apenas zerado. O `name` do usuário é lido
+> **dentro da transação** (`tx.user.findUnique({ select: { name: true } })`), logo o arcano reflete
+> o nome persistido no momento do write. Invariantes:
+>
+> - `calculatePersonalArcana` retorna `null` quando `birthDate` ou `name` estão vazios → nesse caso o
+>   campo **é explicitamente nulado** (`personalArcana: null` no `tx.user.update`), **não preservado**.
+>   O route **zera** o arcano quando o cálculo falha por nome vazio.
+> - `birthDate: ""` é o **único** caminho de **reset**: zera `birthDate`, `astrologicalSign`,
+>   `mayanKin` **e** `personalArcana`. Enviar uma data válida **nunca** zera o arcano (exceto se
+>   `name` estiver vazio, caso em que o arcano é nulado).
+> - O cálculo é **TZ-independente** — `src/lib/arcana/calculate.ts` usa `getUTCFullYear`/`getUTCMonth`/
+>   `getUTCDate` (consistente com `calculateZodiacSign` em `src/lib/calculations/zodiac.ts`), então
+>   dev (BRT, UTC-3) e prod (UTC) produzem o mesmo número para a mesma data.
+> - Coberto por `tests/me-profile.test.ts` (casos *"recalculates personalArcana when birthDate is
+>   provided"* e *"clears birthDate with empty string"*) e `tests/arcana.test.ts` (determinismo +
+>   redução `AAAAMMDD`; note que os testes de soma de dígitos quebram sob getters locais em TZ
+>   negativo, o que fixa de fato o uso de UTC).
+
+> **Roteamento `birthPlace` (fix 2026-09-24):** `birthPlace` pertence a **`UserProfile`**, não a
+> `User`. O route roteia `birthPlace`/`bio`/`location`/`website`/`username` para
+> `userProfile.upsert` e os demais campos para `user.update`, dentro de `prisma.$transaction`
+> (builders tipados `Prisma.UserUpdateInput` / `Partial<Prisma.UserProfileUncheckedCreateInput>`).
+> Enviar `birthPlace` a `tx.user.update()` causava **500** (campo inexistente em `User`).
 
 ### Resposta — 200 OK
 

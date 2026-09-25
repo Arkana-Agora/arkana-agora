@@ -4,7 +4,7 @@
 
 ## Problem
 
-Local `npm run build` (script `prisma generate && next build`) failed after a Prisma install landed `prisma@8.0.0-rc.15` while `@prisma/client` stayed at `7.10.0`.
+Local `npm run build` failed in its `prisma generate` step after a Prisma install landed `prisma@8.0.0-rc.15` while `@prisma/client` stayed at `7.10.0`. Script at incident time: `prisma generate && next build`; the current script also passes `node --max-old-space-size=4096` (heap flag added 2026-09-23 — see `docs/solutions/ci-cd/turbopack-postcss-oom.md`).
 
 ## Symptoms
 

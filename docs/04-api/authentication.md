@@ -33,7 +33,7 @@
 - [POST /auth/reset-password](#post-authreset-password)
 - [POST /auth/verify-email](#post-authverify-email)
 - [POST /auth/verify-email/resend](#post-authverify-emailresend)
-- [GET /auth/me](#get-authme)
+- [GET /auth/me (não existe)](#get-authme-não-existe)
 - [DELETE /auth/account](#delete-authaccount)
 - [POST /auth/restore-account](#post-authrestore-account)
 - [GET /cron/hard-delete](#get-cronhard-delete)
@@ -84,6 +84,33 @@ O wrapper `src/app/api/auth/[...nextauth]/route.ts` (`finalizeAuthResponse`) ent
 > `AUTH_GOOGLE_ID`+`AUTH_GOOGLE_SECRET`); magic link via `EmailProvider` (`maxAge: 15*60`).
 > **Fora de escopo**: Facebook OAuth (C7); re-implementação do fluxo OAuth em `/api/v1/auth/*`.
 
+#### Enriquecimento de perfil Google (`events.signIn` — fix 2026-09-25)
+
+`src/auth/auth.config.ts` registra um `events.signIn` que roda **após** o login Google bem-sucedido
+(`account.provider === "google"`). Sem ele, contas OAuth ficavam sem nome e sem avatar (o adapter
+mínimo não copia `profile.name`/`profile.picture`), o que também bloqueava o cálculo do Arcano
+Pessoal — `calculatePersonalArcana` exige `User.name` **e** `User.birthDate`.
+
+| Campo de `User` | Origem | Condição |
+|---|---|---|
+| `name` | `profile.name` (trim) | só se vazio |
+| `displayName` | mesmo valor de `name` (trim) | só se vazio |
+| `avatar` | `profile.picture` (trim) | só se vazio |
+
+Invariantes:
+
+- **Não destrutivo** — nunca sobrescreve `name`/`displayName`/`avatar` que o usuário já preencheu/editou;
+  o `update` é pulado quando nada precisa mudar.
+- **Falha não derruba o login** — todo o handler é `try/catch`; erro gera `logger.warn` e **não**
+  lança (o `events` roda após a autenticação; um `throw` abortaria a criação da sessão).
+- `profile.name`/`profile.picture` em branco caem no valor atual (nunca grava `""`).
+
+> ⚠️ **Limitação: `birthDate` NÃO vem do Google.** O escopo `openid email profile` não inclui data de
+> nascimento no `id_token`; `events.signIn` **não** popula `User.birthDate` nem os campos derivados
+> (`astrologicalSign`, `mayanKin`, `personalArcana`). O usuário precisa informar a data manualmente em
+> `/perfil/editar`. Usar a **Google People API** exigiria escopo `contacts.readonly` + consentimento
+> adicional e está **fora do escopo do MVP** (precisaria de novo ADR).
+
 ### Tipos de sessão
 
 | Tipo | Duração | Uso |
@@ -133,9 +160,14 @@ x-csrf-token: <csrf_token>
 
 > **CSRF (double-submit):** a rota valida o token CSRF via `validateCsrfToken`
 > (`src/lib/csrf`) — cookie `csrf-token` (dev) / `__Host-csrf-token` (produção) vs header
-> `x-csrf-token`; falha → **403 `CSRF_TOKEN_INVALID`**. O cookie é definido pela página
-> `src/app/(auth)/register/page.tsx` (Server Component, `httpOnly: false`,
-> `sameSite: strict`, 24h). Este é o padrão que o login passou a seguir (2026-09-18).
+> `x-csrf-token`; falha → **403 `CSRF_TOKEN_INVALID`**. Nome e geração do token vêm de
+> `csrfCookieName()`/`generateCsrfToken()` (`src/lib/csrf-cookie-name.ts`, fonte única
+> client/server) e a comparação usa `timingSafeEqual` sobre buffers UTF-8 (checagem de
+> byte-length). O cookie é definido **client-side**
+> por `ensureCsrfCookie()` (`src/lib/csrf-client.ts`) em `register()`/`login()` do store
+> imediatamente antes do POST (`httpOnly: false`, `sameSite: strict`, 24h; mount `useEffect`
+> dos forms removido por ser redundante) — não em Server Component (`cookies().set()` ilegal
+> no App Router).
 
 ### Validação
 
@@ -168,13 +200,13 @@ Schemas compartilhados em `src/lib/validators/auth.ts` (`passwordSchema`, `regis
 
 1. Valida o body com `registerSchema` (422 `VALIDATION_ERROR` em falha)
 2. Valida CSRF double-submit (`validateCsrfToken`); falha → 403 `CSRF_TOKEN_INVALID`
-3. Rate limits: 3/h por e-mail + 3/h por IP → 429 `AUTH_RATE_LIMITED`
-4. Normaliza `email` para minúsculas; busca duplicado case-insensitive — **se existir, NÃO cria conta e NÃO retorna 409** (no-op anti-enumeração: mesma 201, mas o e-mail de verificação é enviado)
+3. Rate limits: 3/15min por e-mail + 3/h por IP → 429 `AUTH_RATE_LIMITED`
+4. Normaliza `email` para minúsculas; busca duplicado case-insensitive — **se existir, NÃO cria conta e NÃO retorna 409** (no-op anti-enumeração via `respondAsDuplicate()`: mesma 201, envia o e-mail de verificação, **registra os contadores de rate limit** e aplica o piso de timing `equalizeNoopTiming()` 240–400ms para igualar o tempo do caminho com bcrypt+transação)
 5. Hash da senha com **bcrypt custo 12**
 6. Cria `User` com `role=USER`, `plan=FREE`, `provider=EMAIL`, `providerId=email-lowercase` **e `UserProfile` aninhado** (`profile: { create: {} }` — `src/app/api/v1/auth/register/route.ts`)
 7. Cria `VerificationToken` `type=EMAIL` (24h) e envia e-mail de verificação para
    `/verify-email?token=...` (falha de envio é logada, não fatal — token persistido)
-8. Retorna **201** `{ message }` (sem `user`; corrida P2002 de `user.create` → mesmo 201)
+8. Retorna **201** `{ message }` (sem `user`; corrida P2002 de `user.create` → mesmo 201 via `respondAsDuplicate()`: dispara o e-mail de verificação e registra os contadores, mantendo a resposta uniforme)
 
 ### Erros
 
@@ -219,13 +251,16 @@ x-csrf-token: <csrf_token>
 }
 ```
 
-> **CSRF (double-submit, implementado 2026-09-18):** a rota valida o token CSRF via
+> **CSRF (double-submit, implementado 2026-09-18; cookie client-side 2026-09-23):** a rota valida o token CSRF via
 > `validateCsrfToken` (`src/lib/csrf`) logo após a validação do body — o cookie
 > `csrf-token` (dev) / `__Host-csrf-token` (produção) deve casar com o header
-> `x-csrf-token`. Falha → **403 `CSRF_TOKEN_INVALID`**, antes de qualquer efeito
-> colateral (lockout, rate limit, bcrypt, DB). O cookie é definido pela página
-> `src/app/(auth)/login/page.tsx` (Server Component, `httpOnly: false`,
-> `sameSite: strict`, 24h) — mesmo padrão do register.
+> `x-csrf-token` (nome do cookie centralizado em `src/lib/csrf-cookie-name.ts`;
+> comparação via `timingSafeEqual` sobre buffers UTF-8 — checagem de byte-length).
+> Falha → **403 `CSRF_TOKEN_INVALID`**, antes de qualquer efeito
+> colateral (lockout, rate limit, bcrypt, DB). O cookie é definido **client-side** por
+> `ensureCsrfCookie()` (`src/lib/csrf-client.ts`) em `login()` do store imediatamente
+> antes do POST (mount `useEffect` do form removido por ser redundante;
+> `httpOnly: false`, `sameSite: strict`, 24h) — não em Server Component.
 
 ### Validação
 
@@ -480,6 +515,16 @@ Renova o access token usando o refresh token do cookie httpOnly.
 > `mintAuthJsSessionCookie`, fail-fast se `AUTH_SECRET` ausente) para os guards do `/dashboard`
 > reconhecerem a renovação. O contrato abaixo reflete o comportamento implementado.
 
+> **Comportamento do cliente (implementado):** o refresh é **cookie-based** — o token nunca vai em
+> body/query, apenas no cookie httpOnly — e o cliente **single-flight** as chamadas concorrentes:
+> `refreshAccessTokenOnce()` (`src/lib/auth-refresh.ts`) deduplica N chamadas paralelas em **uma**
+> requisição `POST /auth/refresh` via promise `refreshInFlight` (`tests/auth-refresh.test.ts`).
+> No retry de **401** do interceptor (`src/lib/api.ts`): marca `_retry`, aguarda o refresh
+> compartilhado (nunca dispara um segundo), reenvia a requisição original com o access token
+> **recém-emitido** e a flag `_retry` — o request interceptor **não** relê a sessão via
+> `getSession()` (corrige a corrida de token stale: reler poderia devolver o token antigo
+> pré-refresh e anular o retry).
+
 ### Requisição
 
 ```http
@@ -578,8 +623,10 @@ Cookie: refreshToken=<rt_token>
    - `AUTH_TOKEN_*` → 401
    - código desconhecido → 500 `INTERNAL_ERROR` (não vaza o código)
 3. Lê o body opcional `{ allDevices }` (não-booleano/ausente → `false`)
-4. **Default (single device):** chama `revokeRefreshSession(rawToken)` com o refresh do cookie
-   (idempotente — sessão inexistente/já revogada não falha)
+4. **Default (single device):** **com Bearer presente e válido**, lê o refresh do cookie e chama
+   `revokeRefreshSession(rawToken)` — revoga a refresh session no servidor (idempotente — sessão
+   inexistente/já revogada não falha). Se o cookie de refresh estiver **ausente**, nenhuma
+   revogação server-side ocorre neste modo (a resposta 200 e a limpeza de cookies seguem iguais)
 5. **`allDevices=true`:** chama `revokeAllSessions(userId)` — revoga **todas** as `Session` do
    usuário **pareado com bump de `tokenVersion`** (contrato de segurança architecture-review:
    invalida todos os access tokens emitidos)
@@ -634,7 +681,8 @@ Content-Type: application/json
 > eliminá-la (residual documentado).
 >
 > **Sem gate de `emailVerified`** — qualquer e-mail cadastrado ativo pode receber reset (verificado
-> ou não) — e **sem limite por IP** (apenas 3/h por e-mail).
+> ou não) — **limite por e-mail** 3/h (`MAX_PASSWORD_RESET_PER_EMAIL`) **e limite por IP**
+> 5/h (`MAX_PASSWORD_RESET_IP_ATTEMPTS`, 60min, `isPasswordResetIpLimited`).
 
 ### Validação
 
@@ -647,7 +695,7 @@ Content-Type: application/json
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON |
-| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail atingido (janela de 1h; `MAX_PASSWORD_RESET_PER_EMAIL`; `retryAfter` no body + header `Retry-After`) |
+| 429 | `AUTH_FORGOT_RATE_LIMIT` | Limite de 3 pedidos/hora por e-mail **ou** 5/h por IP atingido (60min; `MAX_PASSWORD_RESET_PER_EMAIL`/`MAX_PASSWORD_RESET_IP_ATTEMPTS`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha DB/SMTP desconhecida (inclui `meta.requestId`, C13) |
 
 A contagem é registrada **antes** da verificação de existência do usuário, então pedidos de
@@ -668,8 +716,10 @@ Redefine a senha usando token de recuperação.
 > password, passwordConfirmation }`, `.strict()` — rejeita campos extras), hash bcrypt **custo
 > 12**, invalida **todas** as sessões do usuário via `revokeAllSessions(userId)` de
 > `src/services/token-service.ts` (bump de `tokenVersion` + espelho Redis) e loga evento de
-> segurança com código `AUTH_PASSWORD_RESET` (IP/userAgent). **Rate limit** nesta rota: 3/h
-> por email (via `src/lib/rate-limit.ts`, T27 implementado).
+> segurança com código `AUTH_PASSWORD_RESET` (IP/userAgent). **Sem rate limit próprio**: a rota
+> não aplica `src/lib/rate-limit.ts` — a tentativa é protegida pelo token `PASSWORD_RESET`
+> single-use (1h); a limitação 3/h por e-mail + 5/h por IP está na **emissão**
+> (`POST /auth/forgot-password`).
 
 ### Requisição
 
@@ -815,7 +865,12 @@ Reenvia o e-mail de verificação (RF-AUTH-005).
 > contrário: `deleteMany` dos tokens `EMAIL` anteriores do mesmo `identifier`+tipo e criação de
 > novo token 24h (`randomBytes(32).hex`), envio via `sendVerificationEmail` (falha de envio é
 > logada, **não** fatal — token permanece persistido, precedente do register T6). **Rate limit**
-> nesta rota: 1/min por e-mail (via `src/lib/rate-limit.ts`, T27 implementado).
+> nesta rota: 1/min por e-mail **e** 5/h por IP (60min; `isVerifyEmailResendLimited` /
+> `isVerifyEmailResendIpLimited` + `MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS`, via
+> `src/lib/rate-limit.ts`, T27 implementado). A checagem **e** o registro do IP ocorrem
+> **antes** da leitura do usuário, e o registro por e-mail também é feito **antes** do
+> `findFirst` — consumir a cota independente de a conta existir é o que impede o próprio
+> 429 de virar oráculo de enumeração (padrão: `docs/solutions/patterns/security/rate-limit-before-user-lookup.md`).
 
 ### Requisição
 
@@ -857,57 +912,44 @@ Schema compartilhado em `src/lib/validators/auth.ts` (`verifyEmailResendSchema`)
 | Status | Código | Descrição |
 |--------|--------|-----------|
 | 422 | `VALIDATION_ERROR` | E-mail inválido, campo extra ou corpo não-JSON (Zod, com `details` por campo) |
-| 429 | `AUTH_RATE_LIMITED` | Limite de reenvio atingido (1/min por e-mail, via `isVerifyEmailResendLimited`; `retryAfter` no body + header `Retry-After`) |
+| 429 | `AUTH_RATE_LIMITED` | Limite de reenvio atingido (1/min por e-mail, via `isVerifyEmailResendLimited`, **ou** 5/h por IP, via `isVerifyEmailResendIpLimited`; `retryAfter` no body + header `Retry-After`) |
 | 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`, C13) |
 
 ---
 
-## GET /auth/me
+## GET /auth/me (não existe)
 
-Retorna o perfil do usuário autenticado.
+> **Status: rota NÃO implementada — não existe.** `GET /api/v1/auth/me` nunca foi criada
+> (`src/app/api/v1/auth/` não possui diretório `me`) e está marcada como **deprecated** no plano
+> do módulo 1 (`docs/plans/20260901165326-modulo1-auth-plan.md`). Chamá-la retorna **404**.
+> A seção antiga que documentava este caminho (com resposta `data.user`) foi removida por
+> documentar um endpoint inexistente.
 
-### Requisição
+**Use `GET /api/v1/users/me/profile`** para ler o perfil do usuário autenticado — implementado em
+`src/app/api/v1/users/me/profile/route.ts` (auth obrigatória via Bearer/`requireAuth`); contrato
+completo em [`docs/04-api/users.md`](users.md).
+
+### Requisição (endpoint real)
 
 ```http
-GET /api/v1/auth/me
+GET /api/v1/users/me/profile
 Authorization: Bearer <accessToken>
 ```
 
 ### Resposta — 200 OK
 
-```json
-{
-  "data": {
-    "user": {
-      "id": "usr_a1b2c3d4",
-      "name": "Maria Silva",
-      "email": "maria@email.com",
-      "avatar": "/avatars/usr_a1b2c3d4.jpg",
-      "bio": "Apaixonada por tarot desde 2018",
-      "birthDate": "1995-03-15",
-      "plan": "PLUS",
-      "personalArcana": "A Imperatriz",
-      "stats": {
-        "totalReadings": 42,
-        "followers": 156,
-        "following": 89,
-        "aiReadingsToday": 3,
-        "aiReadingsLimit": 10
-      },
-      "providers": ["google", "credentials"],
-      "createdAt": "2024-06-01T00:00:00Z",
-      "updatedAt": "2025-01-14T20:00:00Z"
-    }
-  }
-}
-```
+Body **flat** (sem wrapper `data`): campos de `User` (`id`, `name`, `displayName`, `avatar`,
+`email`, `plan`, `birthDate`, `astrologicalSign`, `mayanKin`, `personalArcana`) mesclados com os
+campos de `UserProfile` quando existirem (`username`, `bio`, `birthPlace`, `location`, `website`,
+`socialLinks`, `privacy`). Detalhe do shape em `docs/04-api/users.md`.
 
-### Erros
+### Erros (endpoint real)
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 401 | `AUTH_TOKEN_INVALID` | Token inválido ou expirado |
-| 401 | `AUTH_TOKEN_REVOKED` | Token revogado (tokenVersion/flags) |
+| 401 | `AUTH_TOKEN_*` | Access token ausente, inválido ou revogado |
+| 404 | `USER_NOT_FOUND` | Usuário não encontrado |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`) |
 
 ---
 
@@ -1195,7 +1237,7 @@ Referência completa de erros do módulo de autenticação:
 | `AUTH_SOCIAL_TOKEN_INVALID` | 401 | Token social inválido | Reautenticar com provedor |
 | `AUTH_SOCIAL_ACCOUNT_CONFLICT` | 409 | Conflito de conta social | Login com credenciais + vincular |
 | `AUTH_MAGIC_LINK_RATE_LIMIT` | 429 | Muitos magic links | Aguardar 1 hora |
-| `AUTH_FORGOT_RATE_LIMIT` | 429 | Muitos pedidos de recuperação de senha por e-mail (3/h) | Aguardar 1 hora |
+| `AUTH_FORGOT_RATE_LIMIT` | 429 | Muitos pedidos de recuperação de senha por e-mail (3/h) ou por IP (5/h) | Aguardar 1 hora |
 | `AUTH_MAGIC_TOKEN_INVALID` | 401 | Token de magic link inválido (já usado / single-use) | Solicitar novo link |
 | `AUTH_MAGIC_TOKEN_EXPIRED` | 410 | Token de magic link expirado (15 min) | Solicitar novo link |
 | `AUTH_EMAIL_VERIFY_INVALID` | 401 | Token de verificação de e-mail inválido (inexistente, tipo errado, já usado ou usuário inativo/deletado) | Reenviar verificação |

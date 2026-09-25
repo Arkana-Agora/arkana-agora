@@ -6,7 +6,7 @@
 
 ## Problem
 
-Returning a uniform 200 response body for non-existent accounts is not enough to prevent email enumeration. Response **timing** is a second side-channel: a no-op path that returns in 1–5ms while the real path takes 100ms–1s+ (DB lookups + email send) lets an attacker distinguish "email not registered" from "email registered" purely by measuring latency. This applies to every auth endpoint that must not reveal account existence: magic-link, forgot-password, and verify-email resend.
+Returning a uniform 200 response body for non-existent accounts is not enough to prevent email enumeration. Response **timing** is a second side-channel: a no-op path that returns in 1–5ms while the real path takes 100ms–1s+ (DB lookups + email send) lets an attacker distinguish "email not registered" from "email registered" purely by measuring latency. This applies to every auth endpoint that must not reveal account existence: register, magic-link, forgot-password, and verify-email resend.
 
 ## Solution
 
@@ -14,8 +14,8 @@ Add a **timing floor** to both success and no-op branches: `await equalizeNoopTi
 
 > **Centralized since the auth remediation (2026-09-18):** `equalizeNoopTiming()` and
 > `successResponse()` live in `src/app/api/v1/auth/_helpers.ts` and are shared by all auth routes
-> (magic-link, forgot-password, verify-email/resend, account, restore-account, login
-> user-not-found). The historical per-route duplication described in the gotcha below is gone.
+> (magic-link, forgot-password, verify-email/resend, account, restore-account, register
+> duplicate-email, login user-not-found). The historical per-route duplication described in the gotcha below is gone.
 
 ## Key Elements
 
@@ -79,7 +79,7 @@ expect(elapsedMs).toBeGreaterThanOrEqual(240); // floor 240ms (jittered 240–40
 
 ## When to Use
 
-- Any new auth endpoint that must not reveal whether an email/account exists (magic-link, forgot-password, verify-email resend, account delete, and future siblings)
+- Any new auth endpoint that must not reveal whether an email/account exists (register, magic-link, forgot-password, verify-email resend, account delete, and future siblings)
 - Any endpoint returning a uniform 200 for "not found" where the real path does meaningful work (DB + email send)
 - Reviewing existing auth routes: check that both success and no-op branches have a uniform body, a timing floor, AND uniform headers (`cache-control: no-store` on every 200)
 
@@ -113,6 +113,7 @@ expect(elapsedMs).toBeGreaterThanOrEqual(240); // floor 240ms (jittered 240–40
 - `src/app/api/v1/auth/_helpers.ts` (central home of `equalizeNoopTiming`/`successResponse` since the 2026-09-18 auth remediation; jittered 240–400ms since the hardening remediation)
 - `src/app/api/v1/auth/magic-link/route.ts` (first implementation)
 - `src/app/api/v1/auth/forgot-password/route.ts` (precedent)
+- `src/app/api/v1/auth/register/route.ts` (T6 — duplicate-email branch `await equalizeNoopTiming()` added 2026-09-24; success path relies on bcrypt+transaction cost)
 - `src/app/api/v1/auth/verify-email/resend/route.ts` (precedent)
 - `src/app/api/v1/auth/account/route.ts` (T15 — `successResponse()` on both paths)
 - `src/app/api/v1/auth/restore-account/route.ts` (T17 — `successResponse()` on both paths)

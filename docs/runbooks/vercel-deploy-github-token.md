@@ -153,4 +153,4 @@ Se o problema persistir mesmo após adicionar o `github-token`:
 
 - [Vercel Action Documentation](https://github.com/marketplace/actions/deploy-with-vercel#github-token)
 - Workflow: `.github/workflows/ci.yml` → `deploy-staging`
-- Runbook: `docs/runbooks/vercel-deploy-project-settings.md`
+- Runbooks: `docs/runbooks/vercel-deploy-auth-url.md` (índice: `docs/runbooks/README.md`; `vercel-deploy-project-settings.md` é planejado e ainda não existe)

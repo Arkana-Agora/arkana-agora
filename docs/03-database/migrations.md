@@ -177,7 +177,7 @@ ALTER TABLE "UserProfile" ADD CONSTRAINT "UserProfile_userId_fkey" FOREIGN KEY (
 
 **Migrations**: `20260921160000_add_username_birthplace_privacy` (UserProfile: username, birthPlace, privacy — T007), `20260921230000_add_reading_reading_card` (Reading + ReadingCard — T037), `20260922034000_add_ai_interpretations` (Interpretation, FollowUpMessage, AIDailyUsage), `20260923183900_add_arcana_calculations` (`ArcanaCalculation` → tabela `arcana_calculations`, FK `userId` → `User` com `ON DELETE CASCADE`, índice `(userId, createdAt)`; a mesma migration corrigiu drift de índices faltantes: `follow_up_messages("interpretationId")`, `reading_cards("readingId")` e removeu `interpretations_cacheHash_idx`).
 
-Geradas com atomic chain da skill `prisma` e todas aplicadas em dev PostgreSQL em 2026-09-23 (a de arcano foi a última; as três anteriores estavam pendentes de aplicação). SQL real versionado em `prisma/migrations/<nome>/migration.sql`. A persistência do histórico de cálculos é gravada de forma não-bloqueante em `GET /api/v1/arcana/calculate` e retorna `reductionDate`/`reductionName`.
+Geradas com atomic chain da skill `prisma` e todas aplicadas em dev PostgreSQL em 2026-09-23 (a de arcano foi a última; as três anteriores estavam pendentes de aplicação). SQL real versionado em `prisma/migrations/<nome>/migration.sql`. Em `GET /api/v1/arcana/calculate` há **duas** gravações não-bloqueantes: (1) o cache `User.personalArcana` — apenas quando ainda estava `null`, nunca sobrescrevendo valor existente (fix 2026-09-25) — e (2) o histórico em `arcana_calculations`. A resposta inclui `reductionDate`/`reductionName`.
 
 ### Sprint 1 — Leituras e Cartas (rascunho de planejamento — superado)
 
@@ -456,27 +456,21 @@ seed()
 
 ---
 
-## 8. Boas Práticas
+## 9. Execution Log — Review-Fix Batch (2026-09-25)
 
-### Regras de Migrations
+**Batch**: Meu Arcano / Google batch fixes — self-heal CAS, null-out semantics, prefill via useMyProfile, dirty invariant, enrichment validation, arcana range 1-22 enforcement, security headers, drift fixes.
 
-1. **Nunca alterar migrations existentes** — criar nova migration para correções
-2. **Migrations devem ser idempotentes** quando possível (`IF NOT EXISTS`, `IF EXISTS`)
-3. **Migrations não devem conter dados** — dados são de responsabilidade do seed
-4. **Sempre incluir rollback SQL** em comentário no arquivo de migration
-5. **Manter migrations pequenas** — uma migration por alteração conceitual
-6. **Revisar SQL gerado** pelo Prisma antes de commitar
+**Schema changes**: Nenhuma migration nova — todas as mudanças são comportamentais (código) sobre schema existente. As entidades afetadas (`User.personalArcana`, `ArcanaCalculation.arcanaNumber`) já existem; os fixes ajustam:
+- `User.personalArcana`: self-heal CAS no read (`GET /arcana/calculate`), null-out explícito no PATCH `/me/profile` quando `name` vazio, invalidação condicional no enrichment OAuth.
+- `ArcanaCalculation.arcanaNumber`: constraint conceitual `min 1, max 22` (o cálculo nunca emite 0; 22 = "O Louco" número mestre).
+- `next.config.ts`: security headers (HSTS, X-Content-Type-Options, Referrer-Policy) — sem schema change.
 
-### Rollback Manual
+**Verificação**:
+- TypeScript: `npx tsc --noEmit` ✅
+- Lint: `npx eslint` ✅
+- Tests: `npx vitest run` ✅ (arcana, profile, auth, enrichment tests passing)
+- Prisma migrate status: ✅ up to date (no pending migrations)
 
-```bash
-# Marcar migration como revertida (sem executar SQL)
-bunx prisma migrate resolve --rolled-back 20250711010000_add_reading_tables
-
-# Aplicar SQL de rollback manualmente
-psql $DATABASE_URL -f prisma/migrations/20250711010000_rollback.sql
-```
-
----
+**Documentação atualizada**: `docs/04-api/users.md`, `docs/06-features/profile.md`, `docs/04-api/ai.md`, `docs/modules/auth.md`, `docs/03-database/entities.md`, `docs/plans/20260921120000-sprint1-completion-plan.md`, `docs/work-plans/20260921120000-sprint1-completion-work-plan.md`, `docs/solutions/patterns/` (TZ determinism + derived-field invalidation patterns).
 
 *Documento parte do SDD (Software Design Document) do arkana-agora.*

@@ -198,6 +198,64 @@ Authorization: Bearer <accessToken>
 
 Gera interpretação da arcana pessoal (SSE; `done` inclui `cached: false`).
 
+> **Implementado** em `src/app/api/v1/ai/arcana-interpret/route.ts` (`POST`, `requireAuth`, SSE via
+> `withRetry` + `getInterpretationModel()`).
+
+### Requisição
+
+```http
+POST /api/v1/ai/arcana-interpret
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{ "arcanaNumber": 5, "mode": "general" }
+```
+
+### Validação
+
+| Campo | Tipo | Regras |
+|-------|------|--------|
+| `arcanaNumber` | int | **`min(1).max(22)`** — aceita **22** ("O Louco", número mestre) |
+| `mode` | enum | `general` \| `love` \| `career` \| `spiritual` — **default `general`** |
+
+> **Range `min(0).max(21)` → `min(1).max(22)` (fix 2026-09-25).** O schema Zod `arcanaInterpretSchema` aceitava
+> apenas `0–21`, então `arcanaNumber: 22` retornava **422 `VALIDATION_ERROR`** mesmo sendo um arcano
+> válido — o número mestre 22 é justamente "O Louco". Agora o limite é `1–22` (o cálculo em
+> `src/lib/arcana/calculate.ts` só emite `1–22`; `0` não é mais aceito em rotas novas).
+>
+> Resolução de número no servidor: `getArcanaByNumber(22)` (`src/data/arcana.ts`) retorna **entry 22**
+> (com `roman: "XXII"`) — **não faz mais short-circuit para `ARCANA_MAP[0]`**. A chave `22` existe em
+> `ARCANA_MAP` com conteúdo idêntico ao índice 0 ("O Louco"), mas o número 22 é agora a representação
+> canônica do número mestre. `getArcanaByNumber(0)` ainda funciona como alias histórico (retorna
+> `ARCANA_MAP[0]`), mas rotas novas usam `min(1)`.
+> Um número fora de `1–22` falha no Zod → **422 `VALIDATION_ERROR`**; dentro do range mas sem carta
+> correspondente → **422 `INVALID_ARCANA`**.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 400 | `INVALID_BODY` | Corpo não-JSON |
+| 401 | `AUTH_TOKEN_*` | Access token ausente, inválido ou revogado |
+| 404 | `USER_NOT_FOUND` | Usuário do token não existe mais |
+| 422 | `VALIDATION_ERROR` | Zod (`arcanaNumber` fora de `0–22` ou `mode` inválido) |
+| 422 | `INVALID_ARCANA` | `arcanaNumber` dentro do range mas sem carta correspondente |
+| 429 | `AI_DAILY_LIMIT_REACHED` | Limite diário de interpretações do plano (corpo inclui `remaining`/`totalLimit`) |
+| 500 | `INTERNAL_ERROR` | Falha interna (inclui `meta.requestId`) |
+
+### Resposta — 200 OK (SSE)
+
+`Content-Type: text/event-stream`, formato idêntico ao de `POST /ai/interpret`
+(ver §Formato SSE → *Implementado*). O prompt é montado no servidor com
+`getSystemPrompt(mode)` (`src/lib/ai/prompts/system.ts`) + `buildArcanaPrompt(arcanaData, mode, user.name)`
+(função **local** ao route, `src/app/api/v1/ai/arcana-interpret/route.ts`) — o cliente envia apenas
+`arcanaNumber`/`mode`, nunca dados pessoais crus. A quota diária é consumida via
+`checkAndIncrementDailyUsage(userId, plan)` (`src/services/ai-service.ts`) **antes** de abrir o stream.
+
+Coberto por `tests/integration/arcana-interpret.test.ts` (caso `arcanaNumber: 22` aceito → 200 SSE).
+
 ---
 
 ## POST /ai/reading _(planejado)_
@@ -675,7 +733,7 @@ Cada resposta inclui metadados de uso:
 
 ### Acúmulo no perfil do usuário
 
-Disponível em `GET /auth/me`:
+Disponível em `GET /api/v1/ai/usage` (Bearer; **não** existe `GET /auth/me`):
 
 ```json
 {

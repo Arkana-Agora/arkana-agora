@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-08-24
+> Versão: 1.1 | Última atualização: 2026-09-24
 
 ---
 
@@ -210,21 +210,56 @@ Sentry.setContext('reading', {
 ### 4.1 Configuração
 
 ```typescript
-// src/lib/analytics.ts
-import posthog from 'posthog-js';
+// src/lib/analytics.ts — initAnalytics() roda apenas sob consentimento
+// (initAnalyticsWithConsent()/setAnalyticsConsent() — banner LGPD,
+// localStorage key "analytics-consent"); no-op em development (evita
+// ruído de console quando scripts/recorder do PostHog são bloqueados)
+import posthog from "posthog-js";
 
-export const analytics = typeof window !== 'undefined'
-  ? posthog.init(process.env.POSTHOG_KEY!, {
-      api_host: 'https://us.i.posthog.com',
-      capture_pageviews: true,
-      capture_pageleave: true,
-      persistence: 'localStorage+cookie',
-      person_profiles: 'identified_only',
-    })
-  : null;
+const PH_API_KEY = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const PH_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://app.posthog.com";
+
+export function initAnalytics() {
+  if (typeof window === "undefined" || initialized) return;
+  // Early-return ANTES do check de key: em development não há warn
+  // nem init (2026-09-24)
+  if (process.env.NODE_ENV === "development") return;
+  // Defense-in-depth: consentimento DENTRO de init (não só nos callers)
+  if (!hasConsent()) return;
+  if (!PH_API_KEY) {
+    console.warn("[Analytics] PostHog key not configured");
+    return;
+  }
+  posthog.init(PH_API_KEY, {
+    api_host: PH_HOST,
+    debug: false,
+    capture_pageview: true,
+    capture_pageleave: true,
+    persistence: "localStorage",
+    autocapture: false,
+    // Pin loaders off locally: remote config can re-enable them and
+    // lazy-load blocked external scripts (recorder, dead-clicks)
+    disable_session_recording: true,
+    capture_dead_clicks: false,
+  });
+  initialized = true;
+}
 ```
 
-### 4.2 Eventos Customizados
+### 4.2 Eventos
+
+**Implementado (T115, `src/lib/analytics.ts`):**
+
+| Evento | Propriedades | Quando Disparado |
+|--------|-------------|-----------------|
+| `signup` | `method` (email/google), `referrer` | Conta criada / OAuth |
+| `reading` | `deckId`, `spreadType`, `isDaily`, `cardsCount` | Leitura de tarô criada |
+| `ai_interpretation` | `mode`, `mood?`, `cached?`, `durationMs?` | Interpretação IA |
+| `arcana_calculate` | `method` (date/name/combined), `arcanaNumber` | Arcano pessoal calculado |
+
+Gate: `analytics-consent === "true"` no localStorage (banner LGPD); sem consentimento, `track*` é no-op.
+
+**Planejado (não implementado — nomes aspiracionais):**
 
 | Evento | Propriedades | Quando Disparado |
 |--------|-------------|-----------------|
