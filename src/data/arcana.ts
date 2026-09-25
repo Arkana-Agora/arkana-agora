@@ -195,6 +195,5 @@ export const ARCANA_MAP: Record<number, ArcanaData> = {
 }
 
 export function getArcanaByNumber(n: number): ArcanaData | null {
-  if (n === 22) return ARCANA_MAP[0] ?? null
   return ARCANA_MAP[n] ?? null
 }

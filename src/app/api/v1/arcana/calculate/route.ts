@@ -35,10 +35,9 @@ export async function GET(request: Request): Promise<Response> {
       )
     }
 
-    const arcanaNumber =
-      user.personalArcana ?? calculatePersonalArcana(user.birthDate, user.name)
+    const recomputed = calculatePersonalArcana(user.birthDate, user.name)
 
-    if (arcanaNumber === null) {
+    if (recomputed === null) {
       return apiError(
         "CALCULATION_ERROR",
         "Nao foi possivel calcular o arcano pessoal",
@@ -47,8 +46,38 @@ export async function GET(request: Request): Promise<Response> {
       )
     }
 
+    const arcanaNumber = recomputed
+
     const arcanaData = getArcanaByNumber(arcanaNumber)
     const explanation = explainPersonalArcana(user.birthDate, user.name)
+
+    if (recomputed !== user.personalArcana) {
+      try {
+        // CAS contra o valor observado: se outra escrita (ex.: PATCH de perfil)
+        // atualizou personalArcana entre a leitura e este update, a condicao
+        // nao casa e nada e sobrescrito. Serve sempre o valor canonico.
+        await prisma.user.updateMany({
+          where: { id: auth.userId, personalArcana: user.personalArcana },
+          data: { personalArcana: recomputed },
+        })
+        // Re-read for logging/verification only; response returns canonical recomputed value
+        const refreshed = await prisma.user.findUnique({
+          where: { id: auth.userId },
+          select: { personalArcana: true },
+        })
+        if (refreshed && refreshed.personalArcana !== recomputed) {
+          logger.warn(
+            { reqId, expected: recomputed, actual: refreshed.personalArcana },
+            "[arcana/calculate] self-heal CAS succeeded but DB value differs (race)",
+          )
+        }
+      } catch (persistErr) {
+        logger.warn(
+          { reqId, err: persistErr },
+          "[arcana/calculate] falha ao reconciliar arcano pessoal",
+        )
+      }
+    }
 
     try {
       await prisma.arcanaCalculation.create({

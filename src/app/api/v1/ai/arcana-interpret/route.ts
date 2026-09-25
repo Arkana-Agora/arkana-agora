@@ -15,7 +15,7 @@ import { checkAndIncrementDailyUsage } from "@/services/ai-service"
 export const dynamic = "force-dynamic"
 
 const arcanaInterpretSchema = z.object({
-  arcanaNumber: z.number().int().min(0).max(21),
+  arcanaNumber: z.number().int().min(1).max(22),
   mode: z.enum(["general", "love", "career", "spiritual"]).default("general"),
 })
 
