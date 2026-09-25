@@ -4,6 +4,7 @@ import { updateProfileSchema } from "@/lib/validators/profile"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { calculateZodiacSign } from "@/lib/calculations/zodiac"
 import { calculateKinMaya } from "@/lib/calculations/kin-maya"
+import { calculatePersonalArcana } from "@/lib/arcana/calculate"
 import { Prisma } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
@@ -121,24 +122,31 @@ export async function PATCH(request: Request): Promise<Response> {
   const data = parsed.data
 
   try {
-    const userUpdates: Record<string, unknown> = {}
-    if (data.displayName) userUpdates.displayName = data.displayName
+    const userUpdates: Prisma.UserUpdateInput = {}
+    if (data.displayName !== undefined)
+      userUpdates.displayName = data.displayName
     if (data.birthDate) {
-      const bd = new Date(data.birthDate)
+      // Parse as UTC midnight to avoid TZ ambiguity (validated as YYYY-MM-DD)
+      const bd = new Date(`${data.birthDate}T00:00:00.000Z`)
+      const kin = calculateKinMaya(bd)
       userUpdates.birthDate = bd
       userUpdates.astrologicalSign = calculateZodiacSign(bd)
-      userUpdates.mayanKin = calculateKinMaya(bd)?.toString()
-      userUpdates.personalArcana = null
+      if (kin !== null) userUpdates.mayanKin = kin.toString()
     } else if (data.birthDate === "") {
       userUpdates.birthDate = null
       userUpdates.astrologicalSign = null
       userUpdates.mayanKin = null
       userUpdates.personalArcana = null
     }
-    if (data.birthPlace !== undefined)
-      userUpdates.birthPlace = data.birthPlace || null
-
-    const profileUpdates: Record<string, unknown> = {}
+    // Invalidate personalArcana when displayName changes and birthDate exists
+    if (data.displayName !== undefined && data.displayName !== null) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: auth.userId },
+        select: { birthDate: true },
+      })
+      if (currentUser?.birthDate) userUpdates.personalArcana = null
+    }
+    const profileUpdates: Partial<Prisma.UserProfileUncheckedCreateInput> = {}
     if (data.bio !== undefined) profileUpdates.bio = data.bio || null
     if (data.location !== undefined)
       profileUpdates.location = data.location || null
@@ -146,6 +154,8 @@ export async function PATCH(request: Request): Promise<Response> {
       profileUpdates.website = data.website || null
     if (data.username !== undefined)
       profileUpdates.username = data.username || null
+    if (data.birthPlace !== undefined)
+      profileUpdates.birthPlace = data.birthPlace || null
 
     const hasUserUpdates = Object.keys(userUpdates).length > 0
     const hasProfileUpdates = Object.keys(profileUpdates).length > 0
@@ -153,6 +163,23 @@ export async function PATCH(request: Request): Promise<Response> {
     if (hasUserUpdates || hasProfileUpdates) {
       await prisma.$transaction(async (tx) => {
         if (hasUserUpdates) {
+          if (data.birthDate) {
+            // Parse as UTC midnight to avoid TZ ambiguity (validated as YYYY-MM-DD)
+            const bd = new Date(`${data.birthDate}T00:00:00.000Z`)
+            const currentUser = await tx.user.findUnique({
+              where: { id: auth.userId },
+              select: { name: true },
+            })
+            if (currentUser) {
+              const computed = calculatePersonalArcana(bd, currentUser.name)
+              // Sem nome nao ha arcano: anula em vez de preservar valor velho,
+              // para a proxima leitura recalcular do zero.
+              userUpdates.personalArcana =
+                computed !== null && Number.isInteger(computed)
+                  ? computed
+                  : null
+            }
+          }
           await tx.user.update({
             where: { id: auth.userId },
             data: userUpdates,
@@ -161,7 +188,7 @@ export async function PATCH(request: Request): Promise<Response> {
         if (hasProfileUpdates) {
           await tx.userProfile.upsert({
             where: { userId: auth.userId },
-            create: { userId: auth.userId, ...profileUpdates },
+            create: { ...profileUpdates, userId: auth.userId },
             update: profileUpdates,
           })
         }

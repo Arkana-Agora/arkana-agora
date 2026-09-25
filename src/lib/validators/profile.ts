@@ -7,6 +7,29 @@ export const usernameSchema = z
   .max(30, "Maximo 30 caracteres")
   .regex(/^[a-zA-Z0-9_]+$/, "Apenas letras, numeros e underscore")
 
+function isRealCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
+}
+
+const birthDateFieldSchema = z
+  .union([
+    z.literal(""),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato AAAA-MM-DD"),
+  ])
+  .refine((value) => value === "" || isRealCalendarDate(value), {
+    message: "Data de nascimento invalida",
+  })
+
 export const updateProfileSchema = z
   .object({
     displayName: z
@@ -16,12 +39,7 @@ export const updateProfileSchema = z
       .max(50, "Maximo 50 caracteres")
       .optional(),
     bio: z.string().trim().max(500, "Maximo 500 caracteres").optional(),
-    birthDate: z
-      .union([
-        z.literal(""),
-        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato AAAA-MM-DD"),
-      ])
-      .optional(),
+    birthDate: birthDateFieldSchema.optional(),
     birthPlace: z.string().trim().max(200, "Maximo 200 caracteres").optional(),
     location: z.string().trim().max(100, "Maximo 100 caracteres").optional(),
     website: z
