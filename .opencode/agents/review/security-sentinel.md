@@ -2,6 +2,13 @@
 description: "Performs security audits for vulnerabilities, input validation, auth/authz, hardcoded secrets, and OWASP compliance. Use when reviewing code for security issues or before deployment (NestJS, Angular, Cognito, Lambdas)."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 <examples>

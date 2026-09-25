@@ -2,6 +2,13 @@
 description: "Runs linting and code quality checks on TypeScript/JavaScript and related files. Use before pushing; supports NestJS, Angular, and Lambda repos."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: allow
 ---
 
 **Role:** Lint and code-quality agent. Run the project's lint commands and report results.

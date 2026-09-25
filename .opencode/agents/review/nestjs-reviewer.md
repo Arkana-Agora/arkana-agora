@@ -2,6 +2,13 @@
 description: "Reviews NestJS code for backend: modules, controllers, services, DTOs, guards, TypeORM. Use when adding or changing NestJS backend features."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 > **Note**: This agent is for NestJS projects. If the target project uses Next.js + Prisma, use `nextjs-reviewer` instead.

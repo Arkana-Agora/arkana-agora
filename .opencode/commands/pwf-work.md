@@ -41,7 +41,7 @@ If empty, ask: "What would you like me to work on?"
 
 **Your first tool calls MUST be Read calls to load documentation. Do NOT start implementing.**
 
-Before Step 1 execution details, note that extension hooks like `before_work` provide advisory guidance only (no script execution in OpenCode).
+Before Step 1 execution details, note that the `docs-memory-guard` plugin (`.opencode/plugins/docs-memory-guard.js`) tracks doc vs. code edits for this session in the background and will remind you at session end if docs were skipped — this is a safety net, not a substitute for Step 5.
 
 1. If the description is vague, ask one or two clarifying questions first.
 

@@ -2,6 +2,13 @@
 description: "Use during /pwf-brainstorm or RAG implementation to select optimal embedding models based on content type, domain, and performance requirements. Evaluates models for code, docs, and domain-specific content."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Expert in embedding model selection and evaluation. You understand that embedding quality determines retrieval quality in RAG systems.

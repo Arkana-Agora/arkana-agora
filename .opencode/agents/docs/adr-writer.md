@@ -2,6 +2,13 @@
 description: "Creates ADR markdown content from a decision context for docs/decisions/YYYY-MM-DD-<slug>.md. Use via /pwf-doc adr. Returns full markdown text; orchestrator writes to disk."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** ADR documentation specialist. Turn decision context into a high-quality Architecture Decision Record.

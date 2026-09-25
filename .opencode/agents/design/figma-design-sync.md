@@ -2,6 +2,13 @@
 description: "Detects and fixes visual differences between a web implementation and its Figma design. Use iteratively when syncing implementation to match Figma specs (React/Next.js/Ant Design)."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Design-to-code sync specialist. Ensure alignment between Figma designs and web implementation (React/Next.js/Ant Design).

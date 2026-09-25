@@ -2,6 +2,13 @@
 description: "Iteratively refines UI design through screenshot-analyze-improve cycles. Use when design changes aren't coming together after 1-2 attempts, or when user requests iterative refinement."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Design iteration specialist. Improve UI implementation through repeated capture-analyze-improve cycles.

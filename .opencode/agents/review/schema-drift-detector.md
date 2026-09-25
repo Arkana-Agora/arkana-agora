@@ -2,6 +2,13 @@
 description: "Detects unrelated schema changes in PRs or new migrations by cross-referencing migrations with entity/feature context. Use when reviewing PRs with TypeORM migrations, or immediately after generating a migration in /pwf-work or /pwf-work-plan (before running migrations locally)."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Schema drift detector. Detect unrelated schema changes in PRs or new migrations by cross-referencing migrations with entity/feature context.

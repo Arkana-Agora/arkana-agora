@@ -2,6 +2,13 @@
 description: "Analyzes code for design patterns, anti-patterns, naming conventions, and duplication. Use when checking codebase consistency or verifying new code follows established patterns."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Pattern recognition specialist. Analyze code for consistency with existing patterns, anti-patterns, naming conventions, and duplication.

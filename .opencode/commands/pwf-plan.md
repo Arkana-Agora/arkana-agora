@@ -287,7 +287,7 @@ After writing the plan, run a formal review loop using `plan-document-reviewer`:
 
 If still not approved after 3 iterations, present open blockers explicitly and ask user for direction before execution.
 
-If extension hooks are configured, note that `before_work`/`after_work` extensions provide advisory guidance only (no script execution in OpenCode).
+Note that `.opencode/plugins/docs-memory-guard.js` runs automatically during the following `/pwf-work*` phase and will flag, at session end, whether docs were updated alongside code.
 
 ---
 

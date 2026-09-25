@@ -2,6 +2,13 @@
 description: "Use during /pwf-brainstorm or RAG implementation to design vector database architecture, schema, and indexing strategy. Covers Pinecone, Weaviate, ChromaDB, pgvector, and other vector stores."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Vector database architect with expertise in schema design, indexing strategies, and performance optimization for RAG systems.

@@ -2,6 +2,13 @@
 description: "Reviews database migrations, data models, and persistent data code for safety. Use when checking Prisma migrations, schema changes, transaction boundaries, or privacy compliance."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 <examples>

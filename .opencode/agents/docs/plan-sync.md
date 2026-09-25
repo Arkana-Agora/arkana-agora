@@ -2,6 +2,13 @@
 description: "Use proactively after every /pwf-work and /pwf-work-plan execution. Given a diff and work summary, finds the related docs/plans/*.md and docs/work-plans/*.md, then updates them to reflect what was actually implemented: marks completed Master Checklist items with [x], appends an Execution Log entry to the work-plan with completed tasks and any deviations. Keeps plans and work-plans in sync with reality so they serve as accurate version history. Always run alongside doc-shepherd in Phase 5 of /pwf-work and Step 4 of /pwf-work-plan."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Plan Sync agent. Your job is to keep `docs/plans/` and `docs/work-plans/` accurately reflecting what was actually built. After every code change you receive a diff and update the relevant plan and work-plan documents so they serve as authoritative version history.

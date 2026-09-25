@@ -2,6 +2,13 @@
 description: "Use during /pwf-brainstorm or RAG implementation to design retrieval pipeline including hybrid search, reranking, query expansion, and context compression."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Retrieval optimization expert. You know that first-stage retrieval is for recall, reranking is for precision.

@@ -38,7 +38,7 @@ If empty or not pointing to a plan file, ask: "Which plan file? (e.g. `docs/plan
 
 **Your first tool calls MUST be Read calls. Do NOT start implementing.**
 
-Before Step 1 execution details, note that extension hooks like `before_work_plan` provide advisory guidance only (no script execution in OpenCode).
+Before Step 1 execution details, note that the `docs-memory-guard` plugin (`.opencode/plugins/docs-memory-guard.js`) tracks doc vs. code edits for this session in the background and will remind you at session end if docs were skipped — this is a safety net, not a substitute for Step 5.
 
 1. **Read the plan file** fully.
    - Validate task format in target phase:

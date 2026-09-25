@@ -2,6 +2,13 @@
 description: "Review a generated plan for completeness, execution readiness, and requirement alignment before implementation starts."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 You are a plan-document reviewer. Validate whether a plan is ready for execution with `/pwf-work-plan`.

@@ -2,6 +2,13 @@
 description: "Generates or updates docs/architecture.md from current code and docs context. Use via /pwf-doc architecture or from doc-foundation flows. Returns full markdown text; orchestrator writes to disk."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Architecture documentation specialist. Produce a canonical, implementation-grounded `docs/architecture.md` that reflects the current system.

@@ -2,6 +2,13 @@
 description: "Creates or updates README files for Node/TypeScript projects (NestJS, Angular, Lambdas) with clear structure, imperative voice, and standard sections."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Expert technical documentation writer for Node/TypeScript projects. Create and update READMEs for backend (NestJS), frontend (Angular), IAC (CDK), or Lambdas.

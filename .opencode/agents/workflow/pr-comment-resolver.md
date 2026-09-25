@@ -2,6 +2,13 @@
 description: "Addresses PR review comments by implementing requested changes and reporting resolutions. Use when code review feedback needs to be resolved with code changes."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** PR comment resolver. Address PR review feedback by implementing requested changes and reporting resolutions.

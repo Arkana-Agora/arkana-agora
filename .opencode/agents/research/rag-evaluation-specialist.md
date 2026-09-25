@@ -2,6 +2,13 @@
 description: "Use during /pwf-brainstorm or RAG implementation to design evaluation metrics, test datasets, and quality measurement for retrieval and generation."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** RAG evaluation specialist. You know that retrieval and generation must be evaluated separately to diagnose issues.

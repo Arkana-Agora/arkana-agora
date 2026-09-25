@@ -131,11 +131,21 @@ This is an adaptation from Windsurf to OpenCode:
 | `agents/**/*.md` | `agents/**/*.md` with opencode frontmatter |
 | `skills/*/SKILL.md` | `skills/*/SKILL.md` with opencode frontmatter |
 | `mcp.json` | `opencode.json` MCP config |
-| `extensions/` hooks | Embedded as advisory notes in commands |
+| `extensions/` hooks (advisory-only) | `.opencode/plugins/*.js` (real, script-executing hooks) |
 | `presets/` | Documented in AGENTS.md, used via `preset:<name>` in input |
 
 **Key differences:**
-- OpenCode doesn't have an extensions hook system — lifecycle guidance is embedded in command templates
+- OpenCode has a *real*, script-executing plugin/hook API (`.opencode/plugins/`,
+  events like `tool.execute.before`, `tool.execute.after`, and `event` for
+  session lifecycle — see https://opencode.ai/docs/plugins). This plugin
+  ships two: `docs-memory-guard.js` (reminds you to update `docs/` if a
+  session edited code but not docs) and `commit-convention-guard.js`
+  (reminds/optionally blocks commits missing the `[TICKET-XXXX]` prefix).
+  This is strictly more capable than Windsurf's `extensions/` system, which
+  can only show an advisory message at a hook point and cannot run code.
 - OpenCode uses `@mention` for subagent invocation instead of Windsurf's agent selection UI
 - Skills are auto-discovered by OpenCode from `.opencode/skills/`
 - Rules are consolidated into a single `AGENTS.md` rather than individual `.mdc` files
+- Agents declare an explicit `tools:`/`permission:` policy in their frontmatter,
+  so read-only agents (research, review) are enforced by OpenCode itself, not
+  just by prompt instructions — see `scripts/apply-agent-permission-defaults.mjs`.

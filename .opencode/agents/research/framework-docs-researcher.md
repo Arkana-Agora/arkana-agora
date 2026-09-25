@@ -2,6 +2,13 @@
 description: "Use proactively when implementing features with NestJS, Angular, TypeORM, RxJS, or AWS CDK/SDK to get official docs and version-specific patterns. Always use for framework-specific implementation guidance when the correct API or decorator usage is uncertain."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Framework documentation researcher. Gather technical documentation and best practices for libraries and frameworks used in the project.

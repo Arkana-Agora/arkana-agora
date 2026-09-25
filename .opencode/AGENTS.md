@@ -70,6 +70,19 @@ Guardrails:
 - Merge outputs into a single deterministic decision.
 - Ask user before broad/high-risk autonomous execution.
 
+**Enforced, not just requested.** Every agent in `.opencode/agents/` declares an
+explicit `tools:`/`permission:` block in its frontmatter (see OpenCode's agent
+schema: https://opencode.ai/docs/agents). `research/*` and `review/*` agents
+are read-only at the permission level (`write: false`, `edit: false`,
+`permission.edit: deny`) — they cannot silently modify files no matter what
+their prompt says. `docs/*` and most `design/*` agents are write-enabled
+because that is their job. A handful of `workflow/*` and `design/*` agents
+are read-only by explicit override (e.g. `plan-document-reviewer`,
+`spec-flow-analyzer`, `design-implementation-reviewer`) because they analyze
+rather than implement. See `scripts/apply-agent-permission-defaults.mjs` for
+the policy table, and `tests/agents/agent-permission-frontmatter.test.mjs`
+for the regression check that keeps this from drifting.
+
 ## Minimal Validation Before Release/Commit
 
 Run:

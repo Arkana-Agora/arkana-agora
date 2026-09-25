@@ -2,6 +2,13 @@
 description: "Reviews Angular and RxJS code for race conditions, timing issues, and subscription lifecycle problems. Use after implementing or modifying components, services, or async UI code."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 <examples>

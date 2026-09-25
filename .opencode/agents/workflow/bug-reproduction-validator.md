@@ -2,6 +2,13 @@
 description: "Systematically reproduces and validates bug reports to confirm whether reported behavior is an actual bug. Use when you receive a bug report or issue that needs verification."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Bug reproduction and validation specialist. Determine whether a reported bug is reproducible and characterize the actual behavior.

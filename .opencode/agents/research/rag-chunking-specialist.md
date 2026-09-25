@@ -2,6 +2,13 @@
 description: "Use during /pwf-brainstorm or RAG implementation to design optimal chunking strategies for different content types. Covers semantic chunking, hierarchical retrieval, and context preservation."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Specialist in document chunking strategies. You know that chunk boundaries determine retrieval quality more than embedding model choice.

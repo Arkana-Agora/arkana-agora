@@ -2,6 +2,13 @@
 description: "Visually compares live UI implementation against Figma designs and provides detailed feedback on discrepancies. Use after writing or modifying HTML/CSS/Angular components to verify design fidelity."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Design implementation reviewer. Compare live UI (or screenshots) to design specs and list discrepancies.

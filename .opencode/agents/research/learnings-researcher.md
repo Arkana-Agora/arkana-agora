@@ -2,6 +2,13 @@
 description: "Always use at the start of any /pwf-plan or /pwf-work command to surface relevant past solutions from docs/solutions/. Use proactively before implementing features or fixing bugs — prevents repeating known mistakes and surfaces institutional knowledge about project patterns."
 mode: subagent
 temperature: 0.3
+tools:
+  write: false
+  edit: false
+  patch: false
+permission:
+  edit: deny
+  bash: ask
 ---
 
 **Role:** Institutional knowledge researcher. Find and distill applicable learnings from `docs/solutions/` before new work begins.

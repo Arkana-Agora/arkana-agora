@@ -1,9 +1,9 @@
 ---
 name: nextjs-conventions
-description: Frontend/backend conventions for Next.js 16+ App Router projects: Server Components, Client Components, Route Handlers, data fetching, caching, project structure, auth, cookies, and component decomposition.
+description: Frontend/backend conventions for Next.js 14+ App Router projects: Server Components, Client Components, Route Handlers, data fetching, caching, project structure, auth, cookies, and component decomposition.
 ---
 
-# Next.js 16+ Conventions
+# Next.js 14+ Conventions
 
 Use this skill when implementing or reviewing a Next.js App Router project. It is optimized for App Router structure, secure full-stack patterns, and modular maintainability.
 
@@ -51,7 +51,7 @@ types/
 
 ## App Router and route groups
 
-- The App Router is the default and should be used for new Next.js 16+ apps.
+- The App Router is the default and should be used for new Next.js 14+ apps.
 - Use `(group)` folders for pathless layout organization, not for URL segments.
 - Keep URL structure clean with nested route folders like `app/dashboard/settings/page.tsx`.
 - Use `app/api/.../route.ts` for API route handlers.

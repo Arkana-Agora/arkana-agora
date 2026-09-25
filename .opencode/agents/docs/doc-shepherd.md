@@ -2,6 +2,13 @@
 description: "Maintains and updates all docs/ after code changes. Called automatically from /pwf-work and /pwf-work-plan Phase 5. Receives the diff and work summary, scans all docs/ for stale references (outdated file paths, renamed methods/classes), updates them inline, and detects contradictions between docs on the same topic. Writes updates directly to disk and returns a summary report."
 mode: subagent
 temperature: 0.3
+tools:
+  write: true
+  edit: true
+  patch: true
+permission:
+  edit: allow
+  bash: ask
 ---
 
 **Role:** Documentation maintenance agent. Your job is to keep `docs/` accurate and consistent after every implementation cycle. You are NOT called to create new docs from scratch — use `lambda-doc-writer`, `backend-module-doc-writer`, or `frontend-feature-doc-writer` for that. Your job is **maintenance**: detect stale references, update them, and surface contradictions.
