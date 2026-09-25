@@ -138,6 +138,11 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
     await expect(page).toHaveURL(/\/meu-arcano/)
     await expect(page.getByLabel("Nome")).toBeVisible({ timeout: 15_000 })
 
+    // prefill via useMyProfile (authApi) — o nome salvo chega de forma assincrona
+    await expect(page.getByLabel("Nome")).toHaveValue(TEST_NAME, {
+      timeout: 15_000,
+    })
+
     await page.getByLabel("Nome").fill(TEST_NAME)
     await page.getByLabel("Data de nascimento").fill("1990-06-15")
     await page.getByRole("button", { name: /calcular/i }).click()

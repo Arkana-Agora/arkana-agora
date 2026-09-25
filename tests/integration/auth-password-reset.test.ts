@@ -30,6 +30,8 @@ vi.mock("@/services/token-service", () => tokenServiceMock)
 const rateLimitMock = vi.hoisted(() => ({
   isPasswordResetLimited: vi.fn(),
   recordPasswordResetRequest: vi.fn(),
+  isPasswordResetIpLimited: vi.fn(),
+  recordPasswordResetIpAttempt: vi.fn(),
 }))
 vi.mock("@/lib/rate-limit", () => rateLimitMock)
 
@@ -42,6 +44,11 @@ beforeEach(() => {
     retryAfter: 0,
   })
   rateLimitMock.recordPasswordResetRequest.mockImplementation(() => undefined)
+  rateLimitMock.isPasswordResetIpLimited.mockReturnValue({
+    allowed: true,
+    retryAfter: 0,
+  })
+  rateLimitMock.recordPasswordResetIpAttempt.mockImplementation(() => undefined)
   prismaMock.user.findFirst.mockResolvedValue(
     activeUserRow({ id: "usr_reset1" }),
   )

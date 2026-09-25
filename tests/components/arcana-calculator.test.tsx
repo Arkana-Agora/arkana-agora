@@ -67,4 +67,61 @@ describe("ArcanaCalculator", () => {
     ) as HTMLButtonElement
     expect(button.disabled).toBe(true)
   })
+
+  it("prefills fields with initial profile values", () => {
+    cleanup()
+    const { container } = render(
+      <ArcanaCalculator
+        onCalculate={vi.fn()}
+        initialName="Luna Star"
+        initialBirthDate="1995-03-15"
+      />,
+    )
+    const inputs = container.querySelectorAll("input")
+    const nameInput = inputs[0] as HTMLInputElement
+    const dateInput = inputs[1] as HTMLInputElement
+    expect(nameInput.value).toBe("Luna Star")
+    expect(dateInput.value).toBe("1995-03-15")
+  })
+
+  it("allows clearing a prefilled field without prefill persisting", () => {
+    cleanup()
+    const { container } = render(
+      <ArcanaCalculator
+        onCalculate={vi.fn()}
+        initialName="Luna Star"
+        initialBirthDate="1995-03-15"
+      />,
+    )
+    const inputs = container.querySelectorAll("input")
+    const nameInput = inputs[0] as HTMLInputElement
+
+    fireEvent.change(nameInput, { target: { value: "" } })
+    expect(
+      (container.querySelectorAll("input")[0] as HTMLInputElement).value,
+    ).toBe("")
+  })
+
+  it("does not overwrite typed values when prefill arrives asynchronously", () => {
+    cleanup()
+    const { rerender } = render(<ArcanaCalculator onCalculate={vi.fn()} />)
+    const inputs = () => document.querySelectorAll("input")
+    const nameInput = inputs()[0] as HTMLInputElement
+    const dateInput = inputs()[1] as HTMLInputElement
+
+    fireEvent.change(nameInput, { target: { value: "Maria Silva" } })
+    fireEvent.change(dateInput, { target: { value: "1990-06-15" } })
+
+    rerender(
+      <ArcanaCalculator
+        onCalculate={vi.fn()}
+        initialName="Luna Star"
+        initialBirthDate="1995-03-15"
+      />,
+    )
+
+    const afterRerender = document.querySelectorAll("input")
+    expect((afterRerender[0] as HTMLInputElement).value).toBe("Maria Silva")
+    expect((afterRerender[1] as HTMLInputElement).value).toBe("1990-06-15")
+  })
 })

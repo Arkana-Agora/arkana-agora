@@ -264,6 +264,37 @@ describe("token service T7a - verifyAccessToken", () => {
 
     await expect(verifyAccessToken(bad)).rejects.toThrow(/AUTH_TOKEN_INVALID/)
   })
+
+  it("lanca AUTH_CONFIG_INVALID_PUBLIC_KEY (e NAO AUTH_TOKEN_INVALID) quando JWT_PUBLIC_KEY esta ausente", async () => {
+    vi.stubEnv("JWT_PUBLIC_KEY", "")
+    const { verifyAccessToken } = await import("@/services/token-service")
+
+    const err: unknown = await verifyAccessToken("x.y.z").then(
+      () => null,
+      (e: unknown) => e,
+    )
+
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).name).toBe("AuthTokenError")
+    expect((err as { code?: string }).code).toBe(
+      "AUTH_CONFIG_INVALID_PUBLIC_KEY",
+    )
+  })
+
+  it("lanca AUTH_CONFIG_INVALID_PUBLIC_KEY quando JWT_PUBLIC_KEY esta malformada", async () => {
+    vi.stubEnv("JWT_PUBLIC_KEY", "not-a-pem")
+    const { verifyAccessToken } = await import("@/services/token-service")
+
+    const err: unknown = await verifyAccessToken("x.y.z").then(
+      () => null,
+      (e: unknown) => e,
+    )
+
+    expect((err as Error).name).toBe("AuthTokenError")
+    expect((err as { code?: string }).code).toBe(
+      "AUTH_CONFIG_INVALID_PUBLIC_KEY",
+    )
+  })
 })
 
 describe("token service T7a - createRefreshSession", () => {

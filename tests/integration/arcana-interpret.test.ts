@@ -136,4 +136,25 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
 
     expect(mockUsageUpsert).toHaveBeenCalled()
   })
+
+  it("accepts arcanaNumber 22 (Louco)", async () => {
+    mockUser()
+    mockAIClient()
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 22, mode: "general" }),
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toContain("text/event-stream")
+  })
+
+  it("rejects arcanaNumber 0 (faixa valida e 1-22)", async () => {
+    mockUser()
+    mockAIClient()
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 0, mode: "general" }),
+    )
+    expect(res.status).toBe(422)
+  })
 })

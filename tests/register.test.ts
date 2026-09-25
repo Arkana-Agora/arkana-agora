@@ -271,6 +271,11 @@ describe("POST /api/v1/auth/register (T6)", () => {
     expect(json.message).toBe(
       "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
     )
+    expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1)
+    expect(rateLimitMock.recordRegisterAttempt).toHaveBeenCalledWith(
+      "maria@email.com",
+    )
+    expect(rateLimitMock.recordRegisterIpAttempt).toHaveBeenCalled()
   })
 
   it("retorna 500 INTERNAL_ERROR com meta.requestId quando a token falha", async () => {

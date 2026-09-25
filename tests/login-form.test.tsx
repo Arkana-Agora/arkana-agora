@@ -7,26 +7,57 @@ import {
   cleanup,
 } from "@testing-library/react"
 
-const { mockPush, mockLogin, mockSignIn } = vi.hoisted(() => ({
+const {
+  mockPush,
+  mockReplace,
+  mockRefresh,
+  mockLogin,
+  mockSignIn,
+  mockRefreshSession,
+} = vi.hoisted(() => ({
   mockPush: vi.fn(),
+  mockReplace: vi.fn(),
+  mockRefresh: vi.fn(),
   mockLogin: vi.fn(),
   mockSignIn: vi.fn(),
+  mockRefreshSession: vi.fn(),
 }))
+const mockAuthState = vi.hoisted(() => ({ isAuthenticated: false }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
-}))
+vi.mock("next/navigation", () => {
+  const params = new URLSearchParams()
+  return {
+    useRouter: () => ({
+      push: mockPush,
+      replace: mockReplace,
+      refresh: mockRefresh,
+    }),
+    useSearchParams: () => params,
+  }
+})
 
 vi.mock("next-auth/react", () => ({
   signIn: mockSignIn,
 }))
 
-vi.mock("@/stores/auth-store", () => ({
-  useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    const state = { login: mockLogin, isLoading: false, error: null }
-    return typeof selector === "function" ? selector(state) : state
-  },
-}))
+vi.mock("@/stores/auth-store", () => {
+  const state = {
+    login: mockLogin,
+    refreshSession: mockRefreshSession,
+    isLoading: false,
+    error: null,
+  }
+  const snapshot = () => ({
+    ...state,
+    isAuthenticated: mockAuthState.isAuthenticated,
+  })
+  const useAuthStore = Object.assign(
+    (selector?: (state: Record<string, unknown>) => unknown) =>
+      typeof selector === "function" ? selector(snapshot()) : snapshot(),
+    { getState: snapshot },
+  )
+  return { useAuthStore }
+})
 
 import { LoginForm } from "@/app/(auth)/login/login-form"
 
@@ -34,6 +65,8 @@ describe("LoginForm", () => {
   beforeEach(() => {
     cleanup()
     vi.clearAllMocks()
+    mockRefreshSession.mockResolvedValue(false)
+    mockAuthState.isAuthenticated = false
   })
 
   describe("rendering", () => {
@@ -160,7 +193,7 @@ describe("LoginForm", () => {
       fireEvent.click(screen.getByRole("button", { name: /^entrar$/i }))
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/dashboard")
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard")
       })
     })
 
@@ -188,7 +221,7 @@ describe("LoginForm", () => {
 
       resolveLogin()
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/dashboard")
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard")
       })
     })
 
@@ -224,7 +257,7 @@ describe("LoginForm", () => {
       fireEvent.click(screen.getByRole("button", { name: /^entrar$/i }))
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith(
+        expect(mockReplace).toHaveBeenCalledWith(
           "/verify-email?email=user%40example.com",
         )
       })
@@ -247,6 +280,40 @@ describe("LoginForm", () => {
           /erro ao fazer login/i,
         )
       })
+    })
+  })
+
+  describe("session redirect guard", () => {
+    it("does not redirect when the server rejects the persisted session", async () => {
+      mockRefreshSession.mockResolvedValue(false)
+      render(<LoginForm />)
+
+      await waitFor(() => {
+        expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      })
+      expect(mockReplace).not.toHaveBeenCalled()
+    })
+
+    it("does not redirect on 200 refresh without an authenticated session", async () => {
+      mockRefreshSession.mockResolvedValue(true)
+      mockAuthState.isAuthenticated = false
+      render(<LoginForm />)
+
+      await waitFor(() => {
+        expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      })
+      expect(mockReplace).not.toHaveBeenCalled()
+    })
+
+    it("redirects once when the server confirms a live session", async () => {
+      mockRefreshSession.mockResolvedValue(true)
+      mockAuthState.isAuthenticated = true
+      render(<LoginForm />)
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard")
+      })
+      expect(mockReplace).toHaveBeenCalledTimes(1)
     })
   })
 

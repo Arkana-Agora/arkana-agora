@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { resetAuthRefreshState } from "@/lib/auth-refresh"
 import { useAuthStore, type User } from "@/stores/auth-store"
 
 vi.mock("next-auth/react", () => ({
@@ -8,7 +9,18 @@ vi.mock("next-auth/react", () => ({
   signOut: vi.fn(),
 }))
 
+vi.mock("@/lib/api", () => ({
+  resetAuthApiSessionCache: vi.fn(),
+}))
+
+vi.mock("@/lib/analytics", () => ({
+  resetUser: vi.fn(),
+}))
+
 import { getSession, signIn, signOut } from "next-auth/react"
+
+import { resetUser } from "@/lib/analytics"
+import { resetAuthApiSessionCache } from "@/lib/api"
 
 const user: User = {
   id: "user-1",
@@ -35,6 +47,7 @@ function mockJsonResponse(
 
 describe("auth-store", () => {
   beforeEach(() => {
+    resetAuthRefreshState()
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
@@ -266,7 +279,27 @@ describe("auth-store", () => {
       acceptTerms: true,
     }
 
-    it("cadastro bem-sucedido: nao autentica, nao armazena user e reseta isLoading", async () => {
+    it("cadastro bem-sucedido (message-only anti-enumeration): nao autentica e reseta isLoading", async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockJsonResponse({ message: "Email de verificacao enviado" }),
+        )
+
+      await useAuthStore.getState().register(registerData)
+
+      const state = useAuthStore.getState()
+      expect(state.isLoading).toBe(false)
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
+      expect(state.error).toBeNull()
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/auth/register",
+        expect.objectContaining({ method: "POST" }),
+      )
+    })
+
+    it("cadastro bem-sucedido com user no payload: nao autentica e nao armazena user", async () => {
       global.fetch = vi.fn().mockResolvedValue(
         mockJsonResponse(
           {
@@ -1004,7 +1037,7 @@ describe("auth-store", () => {
       expect(state.user).toBeNull()
     })
 
-    it("resposta nao-JSON: retorna false, limpa user e reseta isLoading", async () => {
+    it("resposta 500 nao-JSON: retorna false, preserva sessao e reseta isLoading", async () => {
       useAuthStore.setState({ user, isAuthenticated: true })
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -1014,7 +1047,25 @@ describe("auth-store", () => {
 
       expect(await useAuthStore.getState().refreshSession()).toBe(false)
       const state = useAuthStore.getState()
+      // 5xx e transitorio — nao desloga o usuario.
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.user).toEqual(user)
+      expect(state.error).toBe("Erro ao reconectar sessao")
+      expect(state.isLoading).toBe(false)
+    })
+
+    it("resposta 400 nao-JSON: retorna false, limpa user e reseta isLoading", async () => {
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      } as unknown as Response)
+
+      expect(await useAuthStore.getState().refreshSession()).toBe(false)
+      const state = useAuthStore.getState()
       expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
       expect(state.error).toBe("Resposta inesperada do servidor")
       expect(state.isLoading).toBe(false)
     })
@@ -1434,6 +1485,8 @@ describe("auth-store", () => {
         }),
       )
       expect(signOut).toHaveBeenCalledWith({ redirect: false })
+      expect(resetAuthApiSessionCache).toHaveBeenCalledTimes(1)
+      expect(resetUser).toHaveBeenCalledTimes(1)
       const state = useAuthStore.getState()
       expect(state.user).toBeNull()
       expect(state.isAuthenticated).toBe(false)

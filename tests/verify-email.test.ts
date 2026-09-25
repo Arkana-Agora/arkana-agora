@@ -411,4 +411,36 @@ describe("POST /api/v1/auth/verify-email/resend (T30)", () => {
     expect(json.error.code).toBe("INTERNAL_ERROR")
     expect(json.meta.requestId).toBeTruthy()
   })
+
+  it("registra a tentativa no rate limit mesmo no no-op anti-enumeracao", async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null)
+
+    const first = await callPost({ email: "naoexiste@email.com" })
+    expect(first.status).toBe(200)
+
+    // sem registro no caminho no-op, o 429 so existiria para contas
+    // reais — viraria oraculo de enumeracao
+    const second = await callPost({ email: "naoexiste@email.com" })
+    expect(second.status).toBe(429)
+    expect((await second.json()).error.code).toBe("AUTH_RATE_LIMITED")
+    expect(prismaMock.verificationToken.create).not.toHaveBeenCalled()
+  })
+
+  it("aplica limite de 5 por IP por hora e retorna 429 com Retry-After", async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null)
+
+    for (let i = 0; i < 5; i++) {
+      const res = await callPost({ email: `ip-limit-${i}@email.com` })
+      expect(res.status).toBe(200)
+    }
+
+    const sixth = await callPost({ email: "ip-limit-5@email.com" })
+    expect(sixth.status).toBe(429)
+    const json = await sixth.json()
+    expect(json.error.code).toBe("AUTH_RATE_LIMITED")
+    const retryAfter = Number(sixth.headers.get("Retry-After"))
+    expect(retryAfter).toBeGreaterThan(3500)
+    expect(retryAfter).toBeLessThanOrEqual(3600)
+    expect(prismaMock.user.findFirst).toHaveBeenCalledTimes(5)
+  })
 })

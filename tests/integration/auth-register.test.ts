@@ -98,7 +98,7 @@ afterEach(() => {
 })
 
 describe("POST /api/v1/auth/register — integration (T29)", () => {
-  it("fluxo completo: valida body → check rate limit → CSRF → cria user + token → envia email → retorna 201", async () => {
+  it("fluxo completo: valida body → CSRF → check rate limit → cria user + token → envia email → retorna 201", async () => {
     const res = await callPost(validBody())
     const json = await res.json()
 
@@ -171,7 +171,7 @@ describe("POST /api/v1/auth/register — integration (T29)", () => {
     expect(json.error.retryAfter).toBe(60)
   })
 
-  it("retorna 403 quando CSRF é invalido", async () => {
+  it("retorna 403 quando CSRF é invalido (antes de qualquer rate-limit/bcrypt/DB)", async () => {
     csrfMock.validateCsrfToken.mockReturnValue(false)
 
     const res = await callPost(validBody())
@@ -179,6 +179,9 @@ describe("POST /api/v1/auth/register — integration (T29)", () => {
 
     expect(res.status).toBe(403)
     expect(json.error.code).toBe("CSRF_TOKEN_INVALID")
+    expect(rateLimitMock.isRegisterIpLimited).not.toHaveBeenCalled()
+    expect(rateLimitMock.isRegisterLimited).not.toHaveBeenCalled()
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled()
   })
 
   it("retorna 201 mesmo quando email falha (anti-enumeracao por erro)", async () => {

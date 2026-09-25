@@ -19,6 +19,8 @@ vi.mock("@/lib/email/email", () => ({
 const rateLimitMock = vi.hoisted(() => ({
   isPasswordResetLimited: vi.fn(),
   recordPasswordResetRequest: vi.fn(),
+  isPasswordResetIpLimited: vi.fn(),
+  recordPasswordResetIpAttempt: vi.fn(),
 }))
 vi.mock("@/lib/rate-limit", () => rateLimitMock)
 
@@ -60,6 +62,11 @@ beforeEach(() => {
     retryAfter: 0,
   })
   rateLimitMock.recordPasswordResetRequest.mockImplementation(() => undefined)
+  rateLimitMock.isPasswordResetIpLimited.mockReturnValue({
+    allowed: true,
+    retryAfter: 0,
+  })
+  rateLimitMock.recordPasswordResetIpAttempt.mockImplementation(() => undefined)
   sendPasswordResetEmailMock.mockResolvedValue({
     data: { id: "email_1" },
     error: null,
@@ -239,6 +246,24 @@ describe("POST /api/v1/auth/forgot-password (T11)", () => {
     expect(rateLimitMock.recordPasswordResetRequest).not.toHaveBeenCalled()
     expect(prismaMock.verificationToken.create).not.toHaveBeenCalled()
     expect(sendPasswordResetEmailMock).not.toHaveBeenCalled()
+  })
+
+  it("aplica limite por IP e retorna 429 AUTH_FORGOT_RATE_LIMIT sem checar o limite por email", async () => {
+    rateLimitMock.isPasswordResetIpLimited.mockReturnValue({
+      allowed: false,
+      retryAfter: 3600,
+    })
+
+    const res = await callPost(validBody())
+    const json = await res.json()
+
+    expect(res.status).toBe(429)
+    expect(json.error.code).toBe("AUTH_FORGOT_RATE_LIMIT")
+    expect(json.error.retryAfter).toBe(3600)
+    expect(res.headers.get("Retry-After")).toBe("3600")
+    expect(rateLimitMock.recordPasswordResetIpAttempt).not.toHaveBeenCalled()
+    expect(rateLimitMock.isPasswordResetLimited).not.toHaveBeenCalled()
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled()
   })
 
   it("registra a tentativa no rate limit mesmo no no-op anti-enumeracao (anti-spam)", async () => {

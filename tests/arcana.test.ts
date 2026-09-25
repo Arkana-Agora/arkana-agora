@@ -100,38 +100,38 @@ describe("reduceToArcana", () => {
 
 describe("calculateArcanaByDate", () => {
   it("returns a number between 1 and 22", () => {
-    const result = calculateArcanaByDate(new Date(1990, 5, 15))
+    const result = calculateArcanaByDate(new Date(Date.UTC(1990, 5, 15)))
     expect(result).toBeGreaterThanOrEqual(1)
     expect(result).toBeLessThanOrEqual(22)
   })
 
   it("is deterministic for same date", () => {
-    const r1 = calculateArcanaByDate(new Date(1985, 0, 1))
-    const r2 = calculateArcanaByDate(new Date(1985, 0, 1))
+    const r1 = calculateArcanaByDate(new Date(Date.UTC(1985, 0, 1)))
+    const r2 = calculateArcanaByDate(new Date(Date.UTC(1985, 0, 1)))
     expect(r1).toBe(r2)
   })
 
   it("produces different results for different dates", () => {
-    const r1 = calculateArcanaByDate(new Date(1990, 0, 1))
-    const r2 = calculateArcanaByDate(new Date(1990, 11, 31))
+    const r1 = calculateArcanaByDate(new Date(Date.UTC(1990, 0, 1)))
+    const r2 = calculateArcanaByDate(new Date(Date.UTC(1990, 11, 31)))
     expect(r1).not.toBe(r2)
   })
 
   it("sums digits of YYYYMMDD and reduces", () => {
     // 1990-06-15 → 19900615 → 1+9+9+0+0+6+1+5 = 31 → 3+1 = 4
-    const result = calculateArcanaByDate(new Date(1990, 5, 15))
+    const result = calculateArcanaByDate(new Date(Date.UTC(1990, 5, 15)))
     expect(result).toBe(4)
   })
 
   it("handles single-digit sums directly", () => {
     // 2001-01-01 → 20010101 → 2+0+0+1+0+1+0+1 = 5
-    const result = calculateArcanaByDate(new Date(2001, 0, 1))
+    const result = calculateArcanaByDate(new Date(Date.UTC(2001, 0, 1)))
     expect(result).toBe(5)
   })
 
   it("handles edge case where sum is 0 (all zeros)", () => {
     // 2000-10-10 → 20001010 → 2+0+0+0+1+0+1+0 = 4
-    const result = calculateArcanaByDate(new Date(2000, 9, 10))
+    const result = calculateArcanaByDate(new Date(Date.UTC(2000, 9, 10)))
     expect(result).toBeGreaterThanOrEqual(1)
     expect(result).toBeLessThanOrEqual(22)
   })
@@ -220,6 +220,18 @@ describe("calculatePersonalArcana", () => {
     expect(combined).toBeGreaterThanOrEqual(1)
     expect(combined).toBeLessThanOrEqual(22)
   })
+
+  it("is timezone-independent for ISO-date strings", () => {
+    // "1990-06-15" é parseado como meia-noite UTC. Com getters locais num fuso
+    // negativo (ex.: America/Sao_Paulo), o dia vira 14 e o arcano muda.
+    // Os getters UTC garantem determinismo entre dev e prod.
+    expect(calculatePersonalArcana(new Date("1990-06-15"), "Maria Silva")).toBe(
+      10,
+    )
+    expect(
+      calculatePersonalArcana(new Date(Date.UTC(1990, 5, 15)), "Maria Silva"),
+    ).toBe(10)
+  })
 })
 
 describe("explainReduction", () => {
@@ -240,7 +252,7 @@ describe("explainReduction", () => {
 
 describe("explainPersonalArcana", () => {
   it("matches calculatePersonalArcana and includes reduction traces", () => {
-    const birthDate = new Date(1990, 5, 15)
+    const birthDate = new Date(Date.UTC(1990, 5, 15))
     const name = "Maria"
     const explained = explainPersonalArcana(birthDate, name)
     expect(explained.arcanaNumber).toBe(
@@ -302,6 +314,7 @@ describe("getArcanaByNumber", () => {
   it("returns O Louco for 22 (master number mapping)", () => {
     const arcana = getArcanaByNumber(22)
     expect(arcana?.name).toBe("O Louco")
+    expect(arcana?.number).toBe(22)
   })
 
   it("returns null for out-of-range number", () => {

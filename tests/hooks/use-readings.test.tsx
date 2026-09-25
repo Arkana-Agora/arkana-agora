@@ -141,6 +141,111 @@ describe("useDailyCount", () => {
   })
 })
 
+const deckFixture = {
+  id: "rws",
+  name: "Rider-Waite",
+  description: "Baralho classico",
+  author: "A.E. Waite",
+  year: 1909,
+  cardCount: 78,
+  hasReversals: true,
+  coverImageUrl: "/images/decks/rws-cover.jpg",
+  cardBackImageUrl: "/images/decks/rws-back.jpg",
+}
+
+const spreadFixture = {
+  id: "three-card",
+  name: "Tres Cartas",
+  description: "Passado, Presente e Futuro",
+  deckType: "tarot",
+  cardCount: 3,
+  difficulty: "beginner",
+  estimatedTime: 3,
+  layout: "linear",
+  positions: [
+    {
+      id: "past",
+      name: "Passado",
+      description: "O passado",
+      gridX: 0,
+      gridY: 0,
+    },
+  ],
+}
+
+describe("useDecks", () => {
+  it("unwraps envelope body { decks } instead of treating body as array", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: {
+        decks: [deckFixture, { ...deckFixture, id: "thoth", name: "Thoth" }],
+      },
+    } as never)
+
+    const { useDecks } = await importModule()
+    const { result } = renderHook(() => useDecks(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toHaveLength(2)
+    expect(result.current.data?.[0]?.id).toBe("rws")
+    expect(authApi.get).toHaveBeenCalledWith("/decks")
+  })
+
+  it("does not throw decks.map crash when API returns envelope", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: { decks: [] },
+    } as never)
+
+    const { useDecks } = await importModule()
+    const { result } = renderHook(() => useDecks(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual([])
+  })
+})
+
+describe("useSpreads", () => {
+  it("unwraps envelope body { spreads }", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: {
+        spreads: [spreadFixture],
+      },
+    } as never)
+
+    const { useSpreads } = await importModule()
+    const { result } = renderHook(() => useSpreads(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toHaveLength(1)
+    expect(authApi.get).toHaveBeenCalledWith("/spreads", { params: {} })
+  })
+
+  it("passes deckType filter", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: { spreads: [] },
+    } as never)
+
+    const { useSpreads } = await importModule()
+    const { result } = renderHook(() => useSpreads("major"), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(authApi.get).toHaveBeenCalledWith("/spreads", {
+      params: { deckType: "major" },
+    })
+  })
+})
+
 describe("useCreateReading", () => {
   it("creates reading and returns result", async () => {
     const { default: authApi } = await import("@/lib/api")
@@ -149,7 +254,7 @@ describe("useCreateReading", () => {
         reading: {
           id: "r1",
           cards: [],
-          spread: { id: "three-card" },
+          spread: spreadFixture,
           createdAt: "2026-01-01",
         },
       },

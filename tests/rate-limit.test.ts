@@ -288,3 +288,103 @@ describe("register IP rate limiter (T27 — 3/IP/h)", () => {
     expect(isRegisterIpLimited("10.0.0.11").allowed).toBe(true)
   })
 })
+
+describe("password-reset IP rate limiter (5/IP/h)", () => {
+  it("permite 5 pedidos por IP por hora e bloqueia o 6o", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"))
+    const {
+      isPasswordResetIpLimited,
+      recordPasswordResetIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) {
+      expect(isPasswordResetIpLimited("10.0.0.20").allowed).toBe(true)
+      recordPasswordResetIpAttempt("10.0.0.20")
+    }
+    const check = isPasswordResetIpLimited("10.0.0.20")
+    expect(check.allowed).toBe(false)
+    expect(check.retryAfter).toBe(60 * 60)
+  })
+
+  it("expira apos 1h", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"))
+    const {
+      isPasswordResetIpLimited,
+      recordPasswordResetIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) recordPasswordResetIpAttempt("10.0.0.20")
+    expect(isPasswordResetIpLimited("10.0.0.20").allowed).toBe(false)
+
+    vi.advanceTimersByTime(60 * 60 * 1000 + 1000)
+    expect(isPasswordResetIpLimited("10.0.0.20").allowed).toBe(true)
+  })
+
+  it("isola por IP", async () => {
+    const {
+      isPasswordResetIpLimited,
+      recordPasswordResetIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) recordPasswordResetIpAttempt("10.0.0.20")
+    expect(isPasswordResetIpLimited("10.0.0.21").allowed).toBe(true)
+  })
+})
+
+describe("verify-email resend IP rate limiter (5/IP/h)", () => {
+  it("permite 5 pedidos por IP por hora e bloqueia o 6o", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"))
+    const {
+      isVerifyEmailResendIpLimited,
+      recordVerifyEmailResendIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) {
+      expect(isVerifyEmailResendIpLimited("10.0.0.30").allowed).toBe(true)
+      recordVerifyEmailResendIpAttempt("10.0.0.30")
+    }
+    const check = isVerifyEmailResendIpLimited("10.0.0.30")
+    expect(check.allowed).toBe(false)
+    expect(check.retryAfter).toBe(60 * 60)
+  })
+
+  it("expira apos 1h", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"))
+    const {
+      isVerifyEmailResendIpLimited,
+      recordVerifyEmailResendIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) recordVerifyEmailResendIpAttempt("10.0.0.30")
+    expect(isVerifyEmailResendIpLimited("10.0.0.30").allowed).toBe(false)
+
+    vi.advanceTimersByTime(60 * 60 * 1000 + 1000)
+    expect(isVerifyEmailResendIpLimited("10.0.0.30").allowed).toBe(true)
+  })
+
+  it("isola por IP", async () => {
+    const {
+      isVerifyEmailResendIpLimited,
+      recordVerifyEmailResendIpAttempt,
+      resetRateLimiter,
+    } = await import("@/lib/rate-limit")
+    resetRateLimiter()
+
+    for (let i = 0; i < 5; i++) recordVerifyEmailResendIpAttempt("10.0.0.30")
+    expect(isVerifyEmailResendIpLimited("10.0.0.31").allowed).toBe(true)
+  })
+})
