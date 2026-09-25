@@ -7,47 +7,23 @@ import axios, {
 } from "axios"
 import { getSession } from "next-auth/react"
 
-const REFRESH_URL = "/api/v1/auth/refresh"
-const REFRESH_TIMEOUT_MS = 15_000
-
-let refreshPromise: Promise<string | null> | null = null
+import {
+  clearCachedAccessToken,
+  getCachedAccessToken,
+  invalidateSessionCache,
+  refreshAccessTokenOnce,
+  resolveAccessToken,
+} from "@/lib/auth-refresh"
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
-export async function refreshTokens(): Promise<string | null> {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS)
-
-    const res = await fetch(REFRESH_URL, {
-      method: "POST",
-      credentials: "include",
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-
-    if (!res.ok) return null
-
-    const data = await res.json().catch(() => null)
-    if (
-      data &&
-      typeof data === "object" &&
-      "accessToken" in data &&
-      typeof data.accessToken === "string"
-    ) {
-      return data.accessToken
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
 async function getAccessToken(): Promise<string | null> {
-  const session = await getSession()
-  return session?.accessToken ?? null
+  return resolveAccessToken(async () => {
+    const session = await getSession()
+    return session?.accessToken ?? null
+  })
 }
 
 const SENSITIVE_HEADERS = new Set(["set-cookie", "x-request-id"])
@@ -101,7 +77,15 @@ const fetchAdapter: AxiosAdapter = async (config) => {
   const error = new axios.AxiosError(
     `Request failed with status ${res.status}`,
     String(res.status),
-    config,
+    // Strip Authorization from error config to avoid token exposure in logs
+    {
+      ...config,
+      headers: Object.fromEntries(
+        Object.entries(
+          config.headers?.toJSON?.() || config.headers || {},
+        ).filter(([k]) => k.toLowerCase() !== "authorization"),
+      ) as InternalAxiosRequestConfig["headers"],
+    },
     undefined,
     response,
   )
@@ -115,9 +99,18 @@ const authApi = axios.create({
 })
 
 authApi.interceptors.request.use(async (config) => {
-  const token = await getAccessToken()
+  // Cache ownership lives in @/lib/auth-refresh (get/set/invalidate); never
+  // write the token cache here. Only inject a Bearer token when the caller
+  // did not provide one already.
+  const existingHeader = config.headers.get("authorization")
+  const existing =
+    typeof existingHeader === "string"
+      ? existingHeader.replace(/^Bearer\s+/i, "").trim()
+      : ""
+
+  const token = existing || getCachedAccessToken() || (await getAccessToken())
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    config.headers.set("Authorization", `Bearer ${token}`)
   }
   return config
 })
@@ -134,20 +127,70 @@ authApi.interceptors.response.use(
     }
     originalRequest._retry = true
 
-    if (!refreshPromise) {
-      refreshPromise = refreshTokens().finally(() => {
-        refreshPromise = null
-      })
-    }
-    const newToken = await refreshPromise
+    const outcome = await refreshAccessTokenOnce()
 
-    if (!newToken) {
+    if (outcome.kind !== "success") {
       return Promise.reject(error)
     }
 
-    originalRequest.headers.Authorization = `Bearer ${newToken}`
+    // Support both AxiosHeaders (has .set) and plain object mocks
+    if (typeof originalRequest.headers.set === "function") {
+      originalRequest.headers.set(
+        "Authorization",
+        `Bearer ${outcome.accessToken}`,
+      )
+    } else {
+      originalRequest.headers["Authorization"] = `Bearer ${outcome.accessToken}`
+    }
     return authApi(originalRequest)
   },
 )
+
+export function resetAuthApiSessionCache() {
+  invalidateSessionCache()
+  clearCachedAccessToken()
+}
+
+interface AuthStreamOptions {
+  method?: string
+  body?: unknown
+  _retry?: boolean
+}
+// Fetch autenticado para respostas nao-JSON (SSE streaming). Reusa o mesmo
+// fluxo single-flight de refresh do authApi (auth-refresh) sem duplicar a
+// injecao do token.
+export async function authStreamFetch(
+  path: string,
+  options: AuthStreamOptions = {},
+): Promise<Response> {
+  if (!path.startsWith("/api/"))
+    throw new Error("Invalid path: must start with /api/")
+  const attempt = async (token: string | null): Promise<Response> => {
+    const headers: Record<string, string> = {}
+    if (options.body !== undefined) headers["Content-Type"] = "application/json"
+    if (token) headers.Authorization = `Bearer ${token}`
+    headers.Accept = "text/event-stream"
+
+    const init: RequestInit = {
+      method: options.method ?? "GET",
+      credentials: "include",
+      headers,
+    }
+    if (options.body !== undefined) init.body = JSON.stringify(options.body)
+    return fetch(path, init)
+  }
+
+  const token = getCachedAccessToken() || (await getAccessToken())
+  const res = await attempt(token)
+
+  if (res.status === 401 && !options._retry) {
+    const outcome = await refreshAccessTokenOnce()
+    if (outcome.kind === "success") {
+      return attempt(outcome.accessToken)
+    }
+  }
+
+  return res
+}
 
 export default authApi
