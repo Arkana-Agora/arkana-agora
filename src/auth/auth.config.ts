@@ -4,6 +4,7 @@ import EmailProvider from "next-auth/providers/email"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { createRefreshSession, signAccessToken } from "@/services/token-service"
+import { enrichUserFromOAuthProfile } from "@/services/account-service"
 
 if (
   process.env.NODE_ENV === "production" &&
@@ -11,15 +12,45 @@ if (
 ) {
   if (!process.env.AUTH_URL) {
     throw new Error(
-      "AUTH_URL é obrigatório em produção — previne host-header poisoning do magic link",
+      `AUTH_URL é obrigatório em produção — previne host-header poisoning do magic link (NODE_ENV=${process.env.NODE_ENV}, VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"}, AUTH_URL_in_env=${"AUTH_URL" in process.env}, AUTH_URL_empty=${process.env.AUTH_URL === ""})`,
     )
   }
-  if (!process.env.AUTH_URL.startsWith("https://")) {
-    throw new Error("AUTH_URL deve usar https:// em produção")
+  const authUrl = (() => {
+    try {
+      return new URL(process.env.AUTH_URL)
+    } catch {
+      return null
+    }
+  })()
+  // WHATWG normaliza `https:/evil.com` e `https:\\evil.com` para um host
+  // válido — o scheme sozinho nao basta. Exigir a forma scheme://authority
+  // (origin bem-formada) na string bruta, alem do protocolo https, e rejeitar
+  // credenciais/userinfo e query/fragment que corromperiam os links de
+  // verificacao construidos por concatenacao.
+  const AUTH_URL_ORIGIN_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/\s]+/
+  const authUrlScheme = authUrl?.protocol ?? "invalid-url"
+  const authUrlHost = authUrl?.host ?? ""
+  const authUrlWellFormed = AUTH_URL_ORIGIN_RE.test(process.env.AUTH_URL)
+  const authUrlHasCredentials = Boolean(authUrl?.username || authUrl?.password)
+  const authUrlHasQueryFragment = Boolean(authUrl?.search || authUrl?.hash)
+
+  let authUrlOriginIssue = "ok"
+  if (authUrlScheme !== "https:" || authUrlHost === "" || !authUrlWellFormed) {
+    authUrlOriginIssue = "malformado"
+  } else if (authUrlHasCredentials) {
+    authUrlOriginIssue = "com-credential"
+  } else if (authUrlHasQueryFragment) {
+    authUrlOriginIssue = "com-query-fragment"
+  }
+
+  if (authUrlOriginIssue !== "ok") {
+    throw new Error(
+      `AUTH_URL deve usar https:// com origin válido em produção (got scheme=${authUrlScheme}, host=${authUrlHost || "(vazio)"}, origin=${authUrlOriginIssue})`,
+    )
   }
   if (!process.env.AUTH_SECRET) {
     throw new Error(
-      "AUTH_SECRET environment variable is required for production operation",
+      `AUTH_SECRET environment variable is required for production operation (VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"})`,
     )
   }
 }
@@ -100,6 +131,20 @@ async function emitCustomTokens(
   }
 }
 
+const events: NonNullable<NextAuthConfig["events"]> = {
+  async signIn({ user, account, profile }) {
+    if (account?.provider !== "google" || !user?.id) return
+    try {
+      await enrichUserFromOAuthProfile(user.id, profile)
+    } catch (err) {
+      logger.warn(
+        { err, userId: user.id },
+        "[auth:signin] falha ao enriquecer perfil Google",
+      )
+    }
+  },
+}
+
 const callbacks = {
   signIn: () => true,
   async jwt({ token, user, account }) {
@@ -174,4 +219,5 @@ export const authConfig = {
     }),
   ].filter(Boolean) as unknown[] as NextAuthConfig["providers"],
   callbacks,
+  events,
 } satisfies NextAuthConfig
