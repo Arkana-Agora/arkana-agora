@@ -8,14 +8,32 @@ import { Label } from "@/components/ui/label"
 interface ArcanaCalculatorProps {
   onCalculate: (params: { name: string; birthDate: string }) => void
   isLoading?: boolean
+  initialName?: string | undefined
+  initialBirthDate?: string | undefined
 }
 
 export function ArcanaCalculator({
   onCalculate,
   isLoading = false,
+  initialName,
+  initialBirthDate,
 }: ArcanaCalculatorProps) {
-  const [name, setName] = useState("")
-  const [birthDate, setBirthDate] = useState("")
+  const [name, setName] = useState(initialName ?? "")
+  const [birthDate, setBirthDate] = useState(initialBirthDate ?? "")
+  const [prevInitialName, setPrevInitialName] = useState(initialName)
+  const [prevInitialBirthDate, setPrevInitialBirthDate] =
+    useState(initialBirthDate)
+  const [nameDirty, setNameDirty] = useState(false)
+  const [birthDateDirty, setBirthDateDirty] = useState(false)
+
+  if (initialName !== prevInitialName) {
+    setPrevInitialName(initialName)
+    if (!nameDirty) setName(initialName ?? "")
+  }
+  if (initialBirthDate !== prevInitialBirthDate) {
+    setPrevInitialBirthDate(initialBirthDate)
+    if (!birthDateDirty) setBirthDate(initialBirthDate ?? "")
+  }
 
   const handleSubmit = () => {
     if (name && birthDate) {
@@ -31,7 +49,10 @@ export function ArcanaCalculator({
           id="arcana-name"
           placeholder="Seu nome completo"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setNameDirty(true)
+            setName(e.target.value)
+          }}
         />
       </div>
       <div>
@@ -40,7 +61,10 @@ export function ArcanaCalculator({
           id="arcana-birthdate"
           type="date"
           value={birthDate}
-          onChange={(e) => setBirthDate(e.target.value)}
+          onChange={(e) => {
+            setBirthDateDirty(true)
+            setBirthDate(e.target.value)
+          }}
         />
       </div>
       <Button
