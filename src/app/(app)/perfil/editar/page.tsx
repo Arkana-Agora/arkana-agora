@@ -2,10 +2,8 @@
 
 import { ProfileEditForm } from "@/components/profile/profile-edit-form"
 import { AvatarUpload } from "@/components/profile/avatar-upload"
+import { BackLink } from "@/components/layout/back-link"
 import { useMyProfile } from "@/hooks/use-profile"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
 
 function ProfileEditContent() {
   const { data: profile } = useMyProfile()
@@ -33,12 +31,7 @@ export default function ProfileEditPage() {
     <main className="mx-auto max-w-2xl space-y-6 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Editar perfil</h1>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/perfil">
-            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-            Voltar
-          </Link>
-        </Button>
+        <BackLink href="/perfil" />
       </div>
       <ProfileEditContent />
     </main>

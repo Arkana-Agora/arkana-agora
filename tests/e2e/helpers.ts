@@ -1,6 +1,11 @@
 import { APIRequestContext } from "@playwright/test"
 import { PrismaClient } from "@prisma/client"
 
+import {
+  csrfCookieName,
+  generateCsrfToken,
+} from "../../src/lib/csrf-cookie-name"
+
 export const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000"
 export const TEST_PASSWORD = "Test@12345678"
 
@@ -8,18 +13,12 @@ const globalPrisma = globalThis.__e2ePrisma ?? new PrismaClient()
 if (process.env.NODE_ENV !== "production") globalThis.__e2ePrisma = globalPrisma
 export const prisma = globalPrisma
 
-export function generateCsrfToken(): string {
-  const array = new Uint8Array(32)
-  crypto.getRandomValues(array)
-  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("")
-}
-
 export function csrfHeaders(): { headers: Record<string, string> } {
   const token = generateCsrfToken()
   return {
     headers: {
       "x-csrf-token": token,
-      Cookie: `csrf-token=${token}`,
+      Cookie: `${csrfCookieName()}=${token}`,
     },
   }
 }

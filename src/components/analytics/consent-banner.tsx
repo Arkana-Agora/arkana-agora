@@ -2,9 +2,12 @@
 
 import { Shield, X } from "lucide-react"
 import Link from "next/link"
-import { useState, useSyncExternalStore } from "react"
+import { useEffect, useSyncExternalStore, useState } from "react"
 
-const STORAGE_KEY = "analytics-consent"
+import {
+  ANALYTICS_CONSENT_STORAGE_KEY,
+  setAnalyticsConsent,
+} from "@/lib/analytics"
 
 function subscribeConsent(callback: () => void) {
   window.addEventListener("storage", callback)
@@ -16,7 +19,7 @@ function subscribeConsent(callback: () => void) {
 }
 
 function getConsentSnapshot(): string | null {
-  return localStorage.getItem(STORAGE_KEY)
+  return localStorage.getItem(ANALYTICS_CONSENT_STORAGE_KEY)
 }
 
 function getServerConsentSnapshot(): string | null {
@@ -35,16 +38,32 @@ export function AnalyticsConsentBanner() {
   )
   const consent = stored === null ? null : stored === "true"
   const [view, setView] = useState<"auto" | "open" | "closed">("auto")
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(false)
+  const [manualOverride, setManualOverride] = useState<boolean | null>(null)
 
+  // Prefer explicit switch interactions; otherwise hydrate from stored consent
+  // when the dialog is visible (reopening reflects the saved decision).
   const isOpen = view === "open" || (view === "auto" && consent === null)
+  const analyticsEnabled = manualOverride ?? consent === true
+
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setView("closed")
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isOpen])
+
+  const openDialog = () => {
+    setManualOverride(null)
+    setView("open")
+  }
 
   const applyConsent = (value: boolean) => {
-    localStorage.setItem(STORAGE_KEY, String(value))
+    setAnalyticsConsent(value)
     emitConsentChange()
     setView("closed")
-    setAnalyticsEnabled(value)
-    window.location.reload()
+    setManualOverride(null)
   }
 
   if (!isOpen) {
@@ -52,7 +71,7 @@ export function AnalyticsConsentBanner() {
       <div className="fixed bottom-20 right-4 z-50 md:bottom-4">
         <button
           className="gap-1 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
-          onClick={() => setView("open")}
+          onClick={openDialog}
         >
           <Shield className="h-4 w-4 text-primary" />
           Preferências de Analytics
@@ -117,7 +136,7 @@ export function AnalyticsConsentBanner() {
                   type="checkbox"
                   className="sr-only peer"
                   checked={analyticsEnabled}
-                  onChange={(e) => setAnalyticsEnabled(e.target.checked)}
+                  onChange={(e) => setManualOverride(e.target.checked)}
                   aria-label="Ativar analytics de uso"
                 />
                 <div className="w-11 h-6 bg-muted peer-focus:ring-2 peer-focus:ring-primary peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:border-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:bg-white after:rounded-full after:transition-all peer-focus:ring-offset-2"></div>
@@ -151,7 +170,11 @@ export function AnalyticsConsentBanner() {
               onClick={() => applyConsent(analyticsEnabled)}
               className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
-              {consent === null ? "Salvar preferências" : "Aceitar Analytics"}
+              {analyticsEnabled
+                ? "Salvar com Analytics"
+                : consent === null
+                  ? "Salvar preferências"
+                  : "Salvar sem Analytics"}
             </button>
           </div>
 

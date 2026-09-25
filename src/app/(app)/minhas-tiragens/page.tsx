@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useReadings } from "@/hooks/use-readings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { BackLink } from "@/components/layout/back-link"
 import Link from "next/link"
 
 export default function MinhasTiragensPage() {
@@ -12,7 +13,10 @@ export default function MinhasTiragensPage() {
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-4">
-      <h1 className="text-3xl font-bold">Minhas Tiragens</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Minhas Tiragens</h1>
+        <BackLink href="/dashboard" />
+      </div>
 
       {isLoading && (
         <div className="space-y-4">

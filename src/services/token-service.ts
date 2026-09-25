@@ -3,6 +3,7 @@ import {
   createPublicKey,
   randomBytes,
   randomUUID,
+  type KeyObject,
 } from "node:crypto"
 import { SignJWT, jwtVerify } from "jose"
 import { prisma } from "@/lib/prisma"
@@ -99,6 +100,24 @@ export interface VerifiedAccess {
 export async function verifyAccessToken(
   token: string,
 ): Promise<VerifiedAccess> {
+  // Config failures (missing/unparsable public key) are SERVER faults, not
+  // client token rejections. Reading/parsing the key outside the jwtVerify
+  // try keeps them apart: a broken key pair surfaces as a loud config error
+  // (500) instead of silently degrading every token to AUTH_TOKEN_INVALID and
+  // triggering an endless 401 -> refresh -> retry loop on the client.
+  let publicKey: KeyObject
+  try {
+    publicKey = createPublicKey(getPublicKey())
+  } catch {
+    logger.error(
+      "[auth:config] JWT_PUBLIC_KEY ausente ou invalida — verifique o par de chaves (JWT_PRIVATE_KEY/JWT_PUBLIC_KEY)",
+    )
+    throw new AuthTokenError(
+      "AUTH_CONFIG_INVALID_PUBLIC_KEY",
+      "Chave publica JWT ausente ou malformada",
+    )
+  }
+
   let payload: {
     sub?: string
     role?: string
@@ -106,7 +125,7 @@ export async function verifyAccessToken(
     tokenVersion?: number
   }
   try {
-    const result = await jwtVerify(token, createPublicKey(getPublicKey()), {
+    const result = await jwtVerify(token, publicKey, {
       algorithms: ["RS256"],
     })
     payload = result.payload as typeof payload

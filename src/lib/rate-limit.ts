@@ -86,6 +86,19 @@ const MAX_PASSWORD_RESET_PER_EMAIL = validatedEnvNumber(
   "MAX_PASSWORD_RESET_PER_EMAIL",
 )
 
+const MAX_PASSWORD_RESET_IP_ATTEMPTS = validatedEnvNumber(
+  process.env.MAX_PASSWORD_RESET_IP_ATTEMPTS,
+  5,
+  "MAX_PASSWORD_RESET_IP_ATTEMPTS",
+)
+
+const VERIFY_EMAIL_RESEND_IP_WINDOW_MS = 60 * 60 * 1000
+const MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS = validatedEnvNumber(
+  process.env.MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS,
+  5,
+  "MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS",
+)
+
 interface Entry {
   count: number
   resetAt: number
@@ -278,5 +291,37 @@ export function recordPasswordResetRequest(email: string): void {
     `password-reset:${email.toLowerCase()}`,
     Date.now(),
     PASSWORD_RESET_WINDOW_MS,
+  )
+}
+
+export function isPasswordResetIpLimited(ip: string): RateCheck {
+  const now = Date.now()
+  const entry = prune(`password-reset:ip:${ip}`, now)
+  if (entry && entry.count >= MAX_PASSWORD_RESET_IP_ATTEMPTS) {
+    const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return { allowed: false, retryAfter }
+  }
+  return { allowed: true, retryAfter: 0 }
+}
+
+export function recordPasswordResetIpAttempt(ip: string): void {
+  record(`password-reset:ip:${ip}`, Date.now(), PASSWORD_RESET_WINDOW_MS)
+}
+
+export function isVerifyEmailResendIpLimited(ip: string): RateCheck {
+  const now = Date.now()
+  const entry = prune(`verify-email:resend:ip:${ip}`, now)
+  if (entry && entry.count >= MAX_VERIFY_EMAIL_RESEND_IP_ATTEMPTS) {
+    const retryAfter = Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+    return { allowed: false, retryAfter }
+  }
+  return { allowed: true, retryAfter: 0 }
+}
+
+export function recordVerifyEmailResendIpAttempt(ip: string): void {
+  record(
+    `verify-email:resend:ip:${ip}`,
+    Date.now(),
+    VERIFY_EMAIL_RESEND_IP_WINDOW_MS,
   )
 }

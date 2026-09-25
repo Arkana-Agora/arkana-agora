@@ -32,6 +32,22 @@ export async function requireAuth(
   } catch (err) {
     if (err instanceof Error && err.name === "AuthTokenError") {
       const code = (err as AuthTokenError).code
+      // Config failures (ex: missing JWT_PUBLIC_KEY) are server faults.
+      // Answering 401 here would silently degrade every token to "invalid"
+      // and drive the client into an endless refresh -> retry loop.
+      if (code.startsWith("AUTH_CONFIG_")) {
+        logger.error(
+          { reqId, code },
+          "[auth:config] configuracao de chave JWT invalida no servidor",
+        )
+        return Response.json(
+          {
+            error: { code, message: "Configuracao interna invalida" },
+            meta: { requestId: reqId },
+          },
+          { status: 500 },
+        )
+      }
       logger.warn({ reqId, code }, "[auth] token rejeitado")
       return Response.json(
         {

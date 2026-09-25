@@ -26,5 +26,12 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/perfil/:path*",
+    "/tirar",
+    "/tiragem/:path*",
+    "/minhas-tiragens",
+    "/meu-arcano/:path*",
+  ],
 }

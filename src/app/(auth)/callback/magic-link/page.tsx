@@ -2,11 +2,12 @@
 
 import { AlertCircle, Loader2 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { consumeStoredCallbackUrl } from "@/hooks/use-safe-callback-url"
 import { useAuthStore } from "@/stores/auth-store"
 
 const SERVER_ERROR_MESSAGES = {
@@ -37,6 +38,14 @@ function LoadingState() {
 }
 
 export default function MagicLinkCallbackPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <MagicLinkCallbackContent />
+    </Suspense>
+  )
+}
+
+function MagicLinkCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get("token") ?? ""
@@ -60,7 +69,7 @@ export default function MagicLinkCallbackPage() {
       try {
         const result = await verifyMagicLink(token)
         if (result.success) {
-          router.push("/dashboard")
+          router.push(consumeStoredCallbackUrl())
           return
         }
         setServerError(getErrorMessage(result.code))

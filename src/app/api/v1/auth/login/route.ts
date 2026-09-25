@@ -17,6 +17,7 @@ import {
   buildAuthCookie,
   getIp,
   equalizeNoopTiming,
+  maskEmail,
   mintAuthJsSessionCookie,
 } from "../_helpers"
 export const dynamic = "force-dynamic"
@@ -71,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
   const lockout = isAccountLocked(normalizedEmail)
   if (!lockout.allowed) {
     logger.warn(
-      { reqId, email: normalizedEmail },
+      { reqId, email: maskEmail(normalizedEmail) },
       "[auth:login] conta bloqueada por tentativas",
     )
     return errorResponse(reqId, 403, {

@@ -9,9 +9,17 @@ interface ProfileHeaderProps {
   profile: PublicProfile
   isOwn?: boolean
   onEdit?: () => void
+  headingLevel?: "h1" | "h2"
 }
 
-export function ProfileHeader({ profile, isOwn, onEdit }: ProfileHeaderProps) {
+export function ProfileHeader({
+  profile,
+  isOwn,
+  onEdit,
+  headingLevel = "h1",
+}: ProfileHeaderProps) {
+  const Heading = headingLevel === "h2" ? "h2" : "h1"
+
   return (
     <div className="flex items-start gap-4">
       <Avatar className="h-20 w-20">
@@ -20,7 +28,9 @@ export function ProfileHeader({ profile, isOwn, onEdit }: ProfileHeaderProps) {
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <h1 className="text-2xl font-bold truncate">{profile.name}</h1>
+        <Heading className="text-2xl font-bold truncate">
+          {profile.name}
+        </Heading>
         {profile.username && (
           <p className="text-muted-foreground">@{profile.username}</p>
         )}

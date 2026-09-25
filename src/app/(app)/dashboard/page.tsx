@@ -1,4 +1,4 @@
-import { auth, signOut } from "@/auth/auth"
+import { auth } from "@/auth/auth"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { DailyTarot } from "@/components/tarot/daily-tarot"
+import { LogoutButton } from "@/components/auth/logout-button"
 import Link from "next/link"
 
 export default async function DashboardPage() {
@@ -43,16 +44,7 @@ export default async function DashboardPage() {
             <Button variant="outline" asChild>
               <Link href="/tirar">Tirar cartas</Link>
             </Button>
-            <form
-              action={async () => {
-                "use server"
-                await signOut({ redirectTo: "/login" })
-              }}
-            >
-              <Button type="submit" variant="outline">
-                Sair
-              </Button>
-            </form>
+            <LogoutButton />
           </CardContent>
         </Card>
       </div>

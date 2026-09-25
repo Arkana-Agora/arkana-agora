@@ -12,6 +12,7 @@ import {
   errorResponse,
   getIp,
   equalizeNoopTiming,
+  maskEmail,
   successResponse,
 } from "../_helpers"
 
@@ -60,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
   const rateCheck = isPasswordResetLimited(normalizedEmail)
   if (!rateCheck.allowed) {
     logger.info(
-      { reqId, email: normalizedEmail, ip },
+      { reqId, email: maskEmail(normalizedEmail), ip },
       "[auth:restore-account] limite de tentativas excedido",
     )
     const res = errorResponse(reqId, 429, {
@@ -83,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     // Catch any errors from service and return 200 (erro nao exposto)
     logger.error(
-      { err: error, reqId, email },
+      { err: error, reqId, email: maskEmail(email) },
       "[auth:restore-account] erro interno - retorna 200 sem expor",
     )
     return successResponse({ message: RESTORE_SUCCESS_MESSAGE })

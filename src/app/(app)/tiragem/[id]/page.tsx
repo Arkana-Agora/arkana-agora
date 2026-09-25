@@ -4,6 +4,7 @@ import { use } from "react"
 import { useReading } from "@/hooks/use-readings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { BackLink } from "@/components/layout/back-link"
 import { ReadingAIPanel } from "@/components/ai/reading-ai-panel"
 
 export default function TiragemPage({
@@ -35,9 +36,12 @@ export default function TiragemPage({
       {data && (
         <>
           <header className="space-y-2">
-            <h1 className="text-3xl font-bold">
-              {data.reading.title ?? `Tiragem ${data.reading.spreadId}`}
-            </h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-3xl font-bold">
+                {data.reading.title ?? `Tiragem ${data.reading.spreadId}`}
+              </h1>
+              <BackLink href="/minhas-tiragens" />
+            </div>
             <div className="text-sm text-muted-foreground">
               <span>{data.reading.deckId}</span>
               <span className="mx-2">·</span>

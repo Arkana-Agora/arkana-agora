@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
-import { usernameSchema } from "@/lib/validators/profile"
-import type { PrivacySettings } from "@/lib/validators/profile"
+import { privacySchema, usernameSchema } from "@/lib/validators/profile"
 import type { Metadata } from "next"
 import { PublicProfileClient } from "./client"
 
@@ -56,7 +55,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
 
   if (!profile) notFound()
 
-  const privacy = (profile.privacy as PrivacySettings) ?? {}
+  const privacy =
+    privacySchema.passthrough().safeParse(profile.privacy).data ?? {}
   if (privacy.profileVisibility === "private") notFound()
 
   const astrology =

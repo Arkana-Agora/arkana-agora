@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { cookies } from "next/headers"
+import { Suspense } from "react"
 import {
   Card,
   CardContent,
@@ -8,26 +8,14 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { generateCsrfToken } from "@/lib/csrf"
+import { AuthSessionBridge } from "@/hooks/use-safe-callback-url"
 import { LoginForm } from "./login-form"
 
 export const metadata: Metadata = {
   title: "Entrar — Arkana Agora",
 }
 
-export default async function LoginPage() {
-  const token = generateCsrfToken()
-  const cookieStore = await cookies()
-  const IS_PRODUCTION = process.env.NODE_ENV === "production"
-  const cookieName = IS_PRODUCTION ? "__Host-csrf-token" : "csrf-token"
-  cookieStore.set(cookieName, token, {
-    httpOnly: false,
-    secure: IS_PRODUCTION,
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 24,
-  })
-
+export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="absolute top-4 right-4">
@@ -41,7 +29,10 @@ export default async function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <Suspense fallback={null}>
+            <AuthSessionBridge />
+            <LoginForm />
+          </Suspense>
         </CardContent>
       </Card>
     </main>

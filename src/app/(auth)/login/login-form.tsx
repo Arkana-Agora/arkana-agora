@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { loginSchema, type LoginInput } from "@/lib/validators/auth"
+import { useSafeCallbackUrl } from "@/hooks/use-safe-callback-url"
 import { useAuthStore } from "@/stores/auth-store"
 
 const SERVER_ERROR_MESSAGES: Record<string, string> = {
@@ -25,8 +26,33 @@ const SERVER_ERROR_MESSAGES: Record<string, string> = {
 export function LoginForm() {
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
+  const refreshSession = useAuthStore((state) => state.refreshSession)
   const [showPassword, setShowPassword] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+
+  const callbackUrl = useSafeCallbackUrl() ?? "/dashboard"
+
+  useEffect(() => {
+    // Mount-only guard: never trust the persisted isAuthenticated flag alone
+    // (stale zustand state with an expired Auth.js cookie caused a
+    // /login ↔ /dashboard redirect loop). Validate against the server once
+    // and only redirect when the session is actually live.
+    let active = true
+    void refreshSession().then((ok) => {
+      // Fail-safe: refreshSession() resolves true whenever /refresh returns
+      // 200, even with no user payload. Only redirect when the store marks
+      // the session as authenticated, so a bare 200 cannot bounce the user
+      // off /login into an unauthenticated app shell.
+      const authenticated = useAuthStore.getState().isAuthenticated
+      if (active && ok && authenticated) {
+        router.replace(callbackUrl)
+      }
+    })
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only; callbackUrl read from the render that mounted the form
+  }, [])
 
   const {
     register,
@@ -39,7 +65,7 @@ export function LoginForm() {
 
   async function handleGoogleSignIn() {
     try {
-      await signIn("google", { callbackUrl: "/dashboard" })
+      await signIn("google", { callbackUrl })
     } catch (err) {
       if (!(err instanceof Error && err.message === "NEXT_REDIRECT")) {
         setServerError("Erro ao entrar com Google")
@@ -51,10 +77,10 @@ export function LoginForm() {
     setServerError(null)
     try {
       await login(data.email.trim(), data.password)
-      router.push("/dashboard")
+      router.replace(callbackUrl)
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_EMAIL_NOT_VERIFIED") {
-        router.push(
+        router.replace(
           `/verify-email?email=${encodeURIComponent(data.email.trim())}`,
         )
         return

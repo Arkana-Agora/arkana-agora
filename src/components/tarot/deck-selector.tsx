@@ -1,7 +1,7 @@
 "use client"
 
 import type { Deck, DeckId } from "@/types/tarot"
-import Image from "next/image"
+import { DeckImage } from "@/components/tarot/deck-image"
 
 interface DeckSelectorProps {
   decks: Deck[]
@@ -27,9 +27,10 @@ export function DeckSelector({
           onClick={() => onSelect(deck.id)}
           className="flex flex-col items-start rounded-lg border p-4 text-left transition-colors hover:bg-muted data-[selected=true]:border-primary data-[selected=true]:bg-accent"
         >
-          <Image
+          <DeckImage
             src={deck.coverImageUrl}
             alt={deck.name}
+            fallbackLabel={deck.name}
             width={400}
             height={128}
             className="mb-2 h-32 w-full rounded object-cover"

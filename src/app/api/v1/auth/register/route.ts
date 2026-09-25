@@ -1,3 +1,7 @@
+import bcrypt from "bcryptjs"
+import { NextResponse } from "next/server"
+import { randomBytes } from "node:crypto"
+
 import { validateCsrfToken } from "@/lib/csrf"
 import { sendVerificationEmail } from "@/lib/email/email"
 import { logger, newReqId } from "@/lib/logger"
@@ -9,22 +13,58 @@ import {
   recordRegisterIpAttempt,
 } from "@/lib/rate-limit"
 import { registerSchema } from "@/lib/validators/auth"
-import bcrypt from "bcryptjs"
-import { NextResponse } from "next/server"
-import { randomBytes } from "node:crypto"
-import { errorResponse, getIp, getBaseUrl } from "../_helpers"
+import {
+  equalizeNoopTiming,
+  errorResponse,
+  getBaseUrl,
+  getIp,
+  maskEmail,
+} from "../_helpers"
 
 export const dynamic = "force-dynamic"
 
 const BCRYPT_COST = 12
 const VERIFY_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000
+const DUPLICATE_EMAIL_MESSAGE =
+  "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado"
 
 function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    (error as { code?: unknown }).code === "P2002"
+    error.code === "P2002"
+  )
+}
+
+async function respondAsDuplicate(
+  reqId: string,
+  email: string,
+  ip: string,
+  token: string,
+): Promise<Response> {
+  await equalizeNoopTiming()
+  logger.info(
+    { reqId },
+    "[auth:register] email ja cadastrado — resposta uniforme anti-enumeracao",
+  )
+
+  const verificationUrl = `${getBaseUrl()}/verify-email?token=${token}`
+  try {
+    await sendVerificationEmail(email, { verificationUrl })
+  } catch (error) {
+    logger.error(
+      { err: error, reqId },
+      "[auth:register] email de verificacao falhou",
+    )
+  }
+
+  recordRegisterAttempt(email)
+  recordRegisterIpAttempt(ip)
+
+  return NextResponse.json(
+    { message: DUPLICATE_EMAIL_MESSAGE },
+    { status: 201 },
   )
 }
 
@@ -62,6 +102,18 @@ export async function POST(request: Request): Promise<Response> {
   const { name, email, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
 
+  // CSRF (double-submit): validado antes de qualquer efeito colateral
+  // (mesmo padrao do login; sem CSRF valido nao ha rate-limit/bcrypt/DB)
+  if (!validateCsrfToken(request)) {
+    logger.warn({ reqId }, "[auth:register] CSRF token invalido")
+    return errorResponse(reqId, 403, {
+      error: {
+        code: "CSRF_TOKEN_INVALID",
+        message: "Token CSRF invalido",
+      },
+    })
+  }
+
   const ip = getIp(request)
 
   const ipLimit = isRegisterIpLimited(ip)
@@ -81,7 +133,7 @@ export async function POST(request: Request): Promise<Response> {
   const emailLimit = isRegisterLimited(normalizedEmail)
   if (!emailLimit.allowed) {
     logger.warn(
-      { reqId, email: normalizedEmail },
+      { reqId, email: maskEmail(normalizedEmail) },
       "[auth:register] limite de cadastro por email",
     )
     const res = errorResponse(reqId, 429, {
@@ -93,16 +145,6 @@ export async function POST(request: Request): Promise<Response> {
     })
     res.headers.set("Retry-After", String(emailLimit.retryAfter))
     return res
-  }
-
-  if (!validateCsrfToken(request)) {
-    logger.warn({ reqId }, "[auth:register] CSRF token invalido")
-    return errorResponse(reqId, 403, {
-      error: {
-        code: "CSRF_TOKEN_INVALID",
-        message: "Token CSRF invalido",
-      },
-    })
   }
 
   const token = randomBytes(32).toString("hex")
@@ -142,10 +184,7 @@ export async function POST(request: Request): Promise<Response> {
 
       logger.info({ reqId, userId: user.id }, "[auth:register] conta criada")
     } else {
-      logger.info(
-        { reqId },
-        "[auth:register] email ja cadastrado — resposta uniforme anti-enumeracao",
-      )
+      return await respondAsDuplicate(reqId, normalizedEmail, ip, token)
     }
 
     const baseUrl = getBaseUrl()
@@ -163,22 +202,13 @@ export async function POST(request: Request): Promise<Response> {
     recordRegisterIpAttempt(ip)
 
     return NextResponse.json(
-      {
-        message:
-          "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
-      },
+      { message: DUPLICATE_EMAIL_MESSAGE },
       { status: 201 },
     )
   } catch (error) {
     if (isUniqueViolation(error)) {
       logger.info({ reqId }, "[auth:register] corrida de email unico (P2002)")
-      return NextResponse.json(
-        {
-          message:
-            "Se o e-mail nao estiver cadastrado, um e-mail de verificacao sera enviado",
-        },
-        { status: 201 },
-      )
+      return await respondAsDuplicate(reqId, normalizedEmail, ip, token)
     }
     logger.error({ err: error, reqId }, "[auth:register] falha ao criar conta")
     return errorResponse(reqId, 500, {

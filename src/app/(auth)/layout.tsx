@@ -68,6 +68,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
                 src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
                 alt="Arkana Agora spiritual journey"
                 fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
                 className="rounded-3xl shadow-2xl object-cover"
                 priority
               />

@@ -35,6 +35,22 @@ export function successResponse(body: Record<string, unknown>): Response {
   return response
 }
 
+// ── Logging helpers ────────────────────────────────────────────────────────
+
+// Masks the local part of an email for log/observability output (LGPD):
+// "alice@example.com" -> "al***@example.com". At least one character of the
+// local part always stays hidden ("ab@x.com" -> "a*@x.com"). The domain is
+// kept so abuse patterns remain diagnosable.
+export function maskEmail(email: string): string {
+  const at = email.indexOf("@")
+  if (at <= 0) return "***"
+  const local = email.slice(0, at)
+  const domain = email.slice(at + 1)
+  const visible = local.slice(0, Math.min(2, Math.max(local.length - 1, 0)))
+  const hidden = Math.max(local.length - visible.length, 1)
+  return `${visible}${"*".repeat(hidden)}@${domain}`
+}
+
 // ── Timing equalization ────────────────────────────────────────────────────
 
 export async function equalizeNoopTiming(): Promise<void> {

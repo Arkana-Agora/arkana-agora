@@ -5,10 +5,17 @@ import { logger, newReqId } from "@/lib/logger"
 import { verifyEmailResendSchema } from "@/lib/validators/auth"
 import { sendVerificationEmail } from "@/lib/email/email"
 import {
+  isVerifyEmailResendIpLimited,
   isVerifyEmailResendLimited,
+  recordVerifyEmailResendIpAttempt,
   recordVerifyEmailResend,
 } from "@/lib/rate-limit"
-import { errorResponse, getBaseUrl, equalizeNoopTiming } from "../../_helpers"
+import {
+  errorResponse,
+  getBaseUrl,
+  getIp,
+  equalizeNoopTiming,
+} from "../../_helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -48,6 +55,25 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const normalizedEmail = parsed.data.email.toLowerCase()
+  const ip = getIp(request)
+
+  const ipLimit = isVerifyEmailResendIpLimited(ip)
+  if (!ipLimit.allowed) {
+    logger.warn(
+      { reqId, ip },
+      "[auth:verify-email:resend] limite de reenvio por IP atingido",
+    )
+    const ipRes = errorResponse(reqId, 429, {
+      error: {
+        code: "AUTH_RATE_LIMITED",
+        message: "Muitas tentativas de reenvio, tente novamente em instantes",
+        retryAfter: ipLimit.retryAfter,
+      },
+    })
+    ipRes.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return ipRes
+  }
+  recordVerifyEmailResendIpAttempt(ip)
 
   const resendLimit = isVerifyEmailResendLimited(normalizedEmail)
   if (!resendLimit.allowed) {
@@ -65,6 +91,10 @@ export async function POST(request: Request): Promise<Response> {
     res.headers.set("Retry-After", String(resendLimit.retryAfter))
     return res
   }
+  // Registra antes do lookup: senao o 429 (so para conta existente/nao
+  // verificada) viraria um oraculo de enumeracao — igual magic-link e
+  // forgot-password.
+  recordVerifyEmailResend(normalizedEmail)
 
   try {
     const user = await prisma.user.findFirst({
@@ -112,8 +142,6 @@ export async function POST(request: Request): Promise<Response> {
         },
       }),
     ])
-
-    recordVerifyEmailResend(normalizedEmail)
 
     const baseUrl = getBaseUrl()
     const verificationUrl = `${baseUrl}/verify-email?token=${token}`

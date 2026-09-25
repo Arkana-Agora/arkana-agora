@@ -39,13 +39,14 @@ export function Providers({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    const consent = localStorage.getItem("analytics-consent")
-    if (consent === "true") {
-      // Dynamic import to avoid SSR issues
-      import("@/lib/analytics").then(({ initAnalytics }) => {
-        initAnalytics()
+    // Dynamic import avoids SSR issues; initAnalytics re-checks consent.
+    import("@/lib/analytics")
+      .then(({ initAnalyticsWithConsent }) => {
+        initAnalyticsWithConsent()
       })
-    }
+      .catch((err) => {
+        console.warn("Analytics init failed:", err)
+      })
   }, [])
 
   return (

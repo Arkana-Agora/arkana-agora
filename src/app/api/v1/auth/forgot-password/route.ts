@@ -5,7 +5,9 @@ import { logger, newReqId } from "@/lib/logger"
 import { forgotPasswordSchema } from "@/lib/validators/auth"
 import { sendPasswordResetEmail } from "@/lib/email/email"
 import {
+  isPasswordResetIpLimited,
   isPasswordResetLimited,
+  recordPasswordResetIpAttempt,
   recordPasswordResetRequest,
 } from "@/lib/rate-limit"
 import {
@@ -63,6 +65,25 @@ export async function POST(request: Request): Promise<Response> {
 
   const { email } = parsed.data
   const normalizedEmail = email.toLowerCase()
+
+  const ipLimit = isPasswordResetIpLimited(ip)
+  if (!ipLimit.allowed) {
+    logger.warn(
+      { reqId, ip, userAgent },
+      "[auth:forgot-password] limite de pedidos de reset por IP atingido",
+    )
+    const ipRes = errorResponse(reqId, 429, {
+      error: {
+        code: "AUTH_FORGOT_RATE_LIMIT",
+        message:
+          "Muitos pedidos de recuperacao de senha, tente novamente mais tarde",
+        retryAfter: ipLimit.retryAfter,
+      },
+    })
+    ipRes.headers.set("Retry-After", String(ipLimit.retryAfter))
+    return ipRes
+  }
+  recordPasswordResetIpAttempt(ip)
 
   const limit = isPasswordResetLimited(normalizedEmail)
   if (!limit.allowed) {

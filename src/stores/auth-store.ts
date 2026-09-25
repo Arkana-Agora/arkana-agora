@@ -1,9 +1,14 @@
 "use client"
 
-import type { RegisterInput, ResetPasswordInput } from "@/lib/validators/auth"
 import { getSession, signIn, signOut } from "next-auth/react"
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
+
+import { resetUser } from "@/lib/analytics"
+import { resetAuthApiSessionCache } from "@/lib/api"
+import { refreshAccessTokenOnce, resolveAccessToken } from "@/lib/auth-refresh"
+import { ensureCsrfCookie } from "@/lib/csrf-client"
+import type { RegisterInput, ResetPasswordInput } from "@/lib/validators/auth"
 
 export type UserRole = "USER" | "PROFESSIONAL" | "ADMIN"
 
@@ -100,6 +105,27 @@ type AuthUserPayload = Omit<User, "emailVerified"> & {
   emailVerified?: boolean | null
 }
 
+// Estrutura minima confiavel do usuario retornado pela API (o localStorage e
+// input nao confiavel — ver isStoredUser; aqui validamos o payload do servidor
+// antes de converte-lo em StoredUser).
+function isAuthUserPayload(value: unknown): value is AuthUserPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.id === "string" &&
+    typeof v.name === "string" &&
+    typeof v.email === "string" &&
+    (typeof v.displayName === "string" || v.displayName === null) &&
+    typeof v.role === "string" &&
+    VALID_ROLES.includes(v.role as UserRole) &&
+    typeof v.plan === "string" &&
+    (typeof v.avatar === "string" || v.avatar === null) &&
+    (v.emailVerified === undefined ||
+      v.emailVerified === null ||
+      typeof v.emailVerified === "boolean")
+  )
+}
+
 function toStoredUser(userData: AuthUserPayload): User {
   return {
     ...userData,
@@ -108,19 +134,6 @@ function toStoredUser(userData: AuthUserPayload): User {
         ? true
         : userData.emailVerified === true,
   }
-}
-
-function getCsrfTokenFromBrowser(): string {
-  const isSecure = window.location.protocol === "https:"
-  const csrfCookieName = isSecure ? "__Host-csrf-token" : "csrf-token"
-  return (
-    document.cookie
-      .split("; ")
-      .find((row) => row.startsWith(`${csrfCookieName}=`))
-      ?.split("=")
-      .slice(1)
-      .join("=") ?? ""
-  )
 }
 
 // Guard de reidratacao: localStorage e input nao confiavel (antigo/corrompido/adulterado).
@@ -153,10 +166,9 @@ function parseAuthSuccessPayload(data: unknown): AuthUserPayload | null {
     "accessToken" in data &&
     typeof data.accessToken === "string" &&
     "user" in data &&
-    typeof data.user === "object" &&
-    data.user !== null
+    isAuthUserPayload(data.user)
   ) {
-    return (data as { accessToken: string; user: AuthUserPayload }).user
+    return data.user
   }
   return null
 }
@@ -272,10 +284,14 @@ function asAuthFailure<TErrorCode extends string>(
 }
 
 // Bearer para endpoints autenticados: sessao Auth.js -> access token validado.
+// Uses shared single-flight cache so N parallel calls do not hit /api/auth/session.
 async function getAccessToken(): Promise<string | null> {
-  const session = await getSession()
-  const accessToken = (session as { accessToken?: string } | null)?.accessToken
-  return typeof accessToken === "string" ? accessToken : null
+  return resolveAccessToken(async () => {
+    const session = await getSession()
+    const accessToken = (session as { accessToken?: string } | null)
+      ?.accessToken
+    return typeof accessToken === "string" ? accessToken : null
+  })
 }
 
 async function authFetch<TErrorCode extends string>(
@@ -306,10 +322,11 @@ async function authFetch<TErrorCode extends string>(
     }
 
     if (res.ok && successCheck(data)) {
-      const message = (data as { message?: string }).message
       return {
         success: true,
-        message: message ?? "Operação realizada com sucesso",
+        message: hasMessage(data)
+          ? data.message
+          : "Operação realizada com sucesso",
       }
     }
 
@@ -348,7 +365,7 @@ interface AuthState {
   verifyEmail: (token: string) => Promise<VerifyEmailResult>
   resendVerifyEmail: (email: string) => Promise<VerifyEmailResult>
   verifyMagicLink: (token: string) => Promise<VerifyMagicLinkResult>
-  loginWithGoogle: () => void
+  loginWithGoogle: (callbackUrl?: string) => void
   logout: () => Promise<void>
   deleteAccount: (email: string) => Promise<void>
   refreshSession: () => Promise<boolean>
@@ -391,13 +408,13 @@ export const useAuthStore = create<AuthState>()(
         login: async (email: string, password: string) => {
           set({ isLoading: true, error: null })
           try {
-            const csrfToken = getCsrfTokenFromBrowser()
+            const csrfToken = ensureCsrfCookie()
 
             const res = await fetch("/api/v1/auth/login", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-csrf-token": csrfToken ?? "",
+                "x-csrf-token": csrfToken,
               },
               body: JSON.stringify({ email, password }),
             })
@@ -450,13 +467,13 @@ export const useAuthStore = create<AuthState>()(
         register: async (registerData: RegisterInput) => {
           set({ isLoading: true, error: null })
           try {
-            const csrfToken = getCsrfTokenFromBrowser()
+            const csrfToken = ensureCsrfCookie()
 
             const res = await fetch("/api/v1/auth/register", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-csrf-token": csrfToken ?? "",
+                "x-csrf-token": csrfToken,
               },
               body: JSON.stringify(registerData),
             })
@@ -468,13 +485,9 @@ export const useAuthStore = create<AuthState>()(
               throw new Error("NETWORK_ERROR")
             }
 
-            if (
-              res.ok &&
-              responseData &&
-              typeof responseData === "object" &&
-              "user" in responseData &&
-              "message" in responseData
-            ) {
+            if (res.ok && hasMessage(responseData)) {
+              // Anti-enumeration contract: 201 always returns { message } only
+              // (no user object) — see register route + docs/04-api/authentication.md.
               return
             }
 
@@ -702,40 +715,13 @@ export const useAuthStore = create<AuthState>()(
           const executeRefresh = async () => {
             set({ isLoading: true, error: null })
             try {
-              const controller = new AbortController()
-              const timeoutId = setTimeout(() => controller.abort(), 10000)
+              const outcome = await refreshAccessTokenOnce()
 
-              const res = await fetch("/api/v1/auth/refresh", {
-                method: "POST",
-                credentials: "include",
-                signal: controller.signal,
-              })
-              clearTimeout(timeoutId)
-
-              let data: unknown
-              try {
-                data = await res.json()
-              } catch {
-                set({
-                  user: null,
-                  isAuthenticated: false,
-                  error: "Resposta inesperada do servidor",
-                })
-                return false
-              }
-
-              if (
-                res.ok &&
-                data &&
-                typeof data === "object" &&
-                "accessToken" in data &&
-                typeof data.accessToken === "string"
-              ) {
+              if (outcome.kind === "success") {
+                const data = outcome.data
                 const serverUser =
-                  "user" in data &&
-                  typeof data.user === "object" &&
-                  data.user !== null
-                    ? (data.user as AuthUserPayload)
+                  "user" in data && isAuthUserPayload(data.user)
+                    ? data.user
                     : null
                 if (serverUser) {
                   const storedUser = toStoredUser(serverUser)
@@ -744,33 +730,46 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: storedUser.emailVerified,
                   })
                 } else {
-                  // Fallback: servidor retornou accessToken mas sem user
-                  // (nao deveria happen apos F1; limpa por seguranca)
-                  set({
-                    user: null,
-                    isAuthenticated: false,
-                  })
+                  const existing = get().user
+                  if (existing) {
+                    // Success with accessToken only — keep existing persisted
+                    // user instead of wiping a valid session.
+                    set({ isAuthenticated: existing.emailVerified })
+                  } else {
+                    set({ user: null, isAuthenticated: false })
+                  }
                 }
                 return true
               }
 
-              const errorData = parseErrorResponse(data)
+              if (
+                outcome.kind === "network_error" ||
+                outcome.kind === "server_error"
+              ) {
+                // Transient failure (network drop or backend 5xx) — do not
+                // log the user out.
+                set({ error: "Erro ao reconectar sessao" })
+                return false
+              }
+
+              if (outcome.kind === "bad_response") {
+                set({
+                  user: null,
+                  isAuthenticated: false,
+                  error: "Resposta inesperada do servidor",
+                })
+                return false
+              }
+
+              const errorData = parseErrorResponse(outcome.data)
               set({
                 user: null,
                 isAuthenticated: false,
                 error: errorData?.message ?? "Sessao expirada",
               })
               return false
-            } catch (err) {
-              if (err instanceof TypeError) {
-                set({ error: "Erro ao reconectar sessao" })
-                return false
-              }
-              set({
-                user: null,
-                isAuthenticated: false,
-                error: "Sessao expirada",
-              })
+            } catch {
+              set({ error: "Erro ao reconectar sessao" })
               return false
             } finally {
               set({ isLoading: false })
@@ -791,9 +790,9 @@ export const useAuthStore = create<AuthState>()(
           return promise
         },
 
-        loginWithGoogle: () => {
+        loginWithGoogle: (callbackUrl = "/dashboard") => {
           set({ isLoading: true, error: null })
-          void signIn("google", { callbackUrl: "/dashboard" }).catch((err) => {
+          void signIn("google", { callbackUrl }).catch((err) => {
             if (!(err instanceof Error && err.message === "NEXT_REDIRECT")) {
               set({ error: "Erro ao entrar com Google", isLoading: false })
             }
@@ -819,6 +818,8 @@ export const useAuthStore = create<AuthState>()(
               // melhor esforco: Auth.js pode falhar; encerra o estado local abaixo
             }
             set({ user: null, isAuthenticated: false, isLoading: false })
+            resetAuthApiSessionCache()
+            resetUser()
             try {
               if (typeof caches !== "undefined") {
                 const keys = await caches.keys()
@@ -863,6 +864,8 @@ export const useAuthStore = create<AuthState>()(
               // conta ja excluida; encerra o estado local abaixo mesmo assim
             }
             set({ user: null, isAuthenticated: false, isLoading: false })
+            resetAuthApiSessionCache()
+            resetUser()
           } catch {
             set({ error: "Erro ao excluir conta", isLoading: false })
           }

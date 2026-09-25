@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import { VerifyEmailForm } from "./verify-email-form"
 
 export const metadata: Metadata = {
@@ -27,7 +28,9 @@ export default function VerifyEmailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <VerifyEmailForm />
+          <Suspense fallback={null}>
+            <VerifyEmailForm />
+          </Suspense>
         </CardContent>
       </Card>
     </main>

@@ -7,7 +7,18 @@ import "./globals.css"
 
 const font = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
+const APP_URL_FALLBACK = "https://arkanaagora.com"
+
+function metadataBaseFromEnv(): URL {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_APP_URL || APP_URL_FALLBACK)
+  } catch {
+    return new URL(APP_URL_FALLBACK)
+  }
+}
+
 export const metadata: Metadata = {
+  metadataBase: metadataBaseFromEnv(),
   title: {
     default: "Arkana Agora",
     template: "%s | Arkana Agora",

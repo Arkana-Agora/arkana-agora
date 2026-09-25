@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
-import Image from "next/image"
+import { DeckImage } from "@/components/tarot/deck-image"
 
 interface TarotCardProps {
   name: string
@@ -72,11 +72,7 @@ export function TarotCard({
             }}
           >
             <div className="relative w-full h-full">
-              <Image
-                src={imageUrl}
-                alt={name}
-                className="w-full h-full object-cover"
-              />
+              <DeckImage src={imageUrl} alt={name} fallbackLabel={name} fill />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-3">
                 <h3 className="text-white font-semibold text-sm truncate">

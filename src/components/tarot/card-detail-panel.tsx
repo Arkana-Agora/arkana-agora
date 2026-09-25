@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
 import { X } from "lucide-react"
-import Image from "next/image"
+import { DeckImage } from "@/components/tarot/deck-image"
 
 interface CardDetailPanelProps {
   isOpen: boolean
@@ -66,11 +66,12 @@ export function CardDetailPanel({
               <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 <div className="aspect-[3/4] w-full max-w-xs mx-auto rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 relative">
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Image
+                    <DeckImage
                       src={card.imageUrl}
                       alt={card.name}
+                      fallbackLabel={card.name}
                       fill
-                      className="object-cover opacity-80"
+                      className="opacity-80"
                     />
                   </div>
                 </div>
