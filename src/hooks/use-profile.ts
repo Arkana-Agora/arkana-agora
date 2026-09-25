@@ -8,7 +8,7 @@ import type { PrivacyInput } from "@/lib/validators/profile"
 const publicProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
-  username: z.string(),
+  username: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   plan: z.string(),
@@ -22,13 +22,17 @@ const publicProfileSchema = z.object({
     .optional(),
 })
 
+// GET /users/me/profile devolve os campos do User (flat) + UserProfile quando
+// houver registro em userProfile — `username` so existe nesse caso.
 const myProfileSchema = publicProfileSchema.extend({
   email: z.string(),
   displayName: z.string().nullable().optional(),
+  avatar: z.string().nullable().optional(),
   birthDate: z.string().nullable().optional(),
   birthPlace: z.string().nullable().optional(),
   website: z.string().nullable().optional(),
   socialLinks: z.record(z.string()).nullable().optional(),
+  personalArcana: z.number().int().min(1).max(22).nullable().optional(),
   privacy: z
     .object({
       profileVisibility: z.enum(["public", "private"]).optional(),
@@ -75,6 +79,7 @@ export function useMyProfile() {
       const res = await authApi.get("/users/me/profile")
       return myProfileSchema.parse(res.data)
     },
+    staleTime: 5 * 60 * 1000,
   })
 }
 
