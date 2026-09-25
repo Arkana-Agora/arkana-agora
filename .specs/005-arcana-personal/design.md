@@ -368,13 +368,25 @@ const ARCANA_MAP: Record<number, ArcanaData> = {
 
 ### POST /api/v1/ai/arcana-interpret
 **Descricao**: Gera interpretacao IA do Arcano Pessoal (streaming).
-**Body**: `{ dateArcana, nameArcana, combinedArcana, sunSign?, birthDate, fullName }`
+**Body**: `{ arcanaNumber, mode? }` — `arcanaNumber` validado por `min(0).max(22)`, `mode` em `general|love|career|spiritual` (default `general`).
 **Response 200**: `text/event-stream` com tokens
 
+> Implementado em `src/app/api/v1/ai/arcana-interpret/route.ts`. O design original abaixo
+> (`dateArcana`/`nameArcana`/`combinedArcana`/`birthDate`/`fullName`) foi superado: a rota atual
+> recebe apenas o `arcanaNumber` ja reduzido e monta o prompt com os dados do usuario no servidor.
+> O limite superior passou de `max(21)` para `max(22)` em 2026-09-25, porque 22 ("O Louco") e valido
+> — `getArcanaByNumber(22)` resolve para `ARCANA_MAP[0]`.
+
 ### GET /api/v1/arcana/calculate
-**Descricao**: Calcula o Arcano Pessoal (alternativa server-side). Util para validacao.
-**Query**: `?day=15&month=4&year=1992&name=Maria%20Silva`
-**Response 200**: `{ dateArcana, nameArcana, combinedArcana }`
+**Descricao**: Calcula (ou retorna) o Arcano Pessoal do usuario autenticado.
+**Auth**: `Authorization: Bearer <accessToken>` (obrigatorio) — **nao aceita query params**; le `name` e `birthDate` de `User`.
+**Pre-condicao**: `User.birthDate` e `User.name` preenchidos, senao **422 `INCOMPLETE_PROFILE`**.
+**Response 200**: `{ arcana, arcanaData, name, birthDate, reductionDate, reductionName, meta }`
+**Efeitos**: persiste `User.personalArcana` (best-effort, apenas quando `null` — nunca sobrescreve cache) e grava o historico em `arcana_calculations` (best-effort, sempre).
+
+> O design original previa `?day=15&month=4&year=1992&name=Maria%20Silva` retornando
+> `{ dateArcana, nameArcana, combinedArcana }`. **Nao implementado nesse formato**: a rota atual le o
+> perfil do usuario autenticado. Ver `docs/04-api/profile` / `docs/06-features/profile.md`.
 
 ---
 
@@ -382,11 +394,13 @@ const ARCANA_MAP: Record<number, ArcanaData> = {
 
 | Rota | Componente | Protegida | Descricao |
 |---|---|---|---|
-| `/meu-arcano` | ArcanaPage | Sim | Calculo e exibicao do arcano pessoal |
-| `/meu-arcano/:arcana` | ArcanaDetailPage | Nao | Pagina de detalhe de qualquer arcano (0-21) |
+| `/meu-arcano` | ArcanaPage | Sim | Calculo e exibicao do arcano pessoal. No mount busca `GET /api/v1/arcana/calculate` (Bearer) e pre-preenche nome+data; o calculo manual permanece client-side |
+| `/meu-arcano/:arcana` | ArcanaDetailPage | Nao | Pagina de detalhe de qualquer arcano (1-22) |
 
 ---
 
 ## 8. Estado
 
-O calculo e puramente client-side. O resultado e salvo no perfil do usuario (campo `personalArcana` na tabela Profile) ao preencher a data de nascimento e nome pela primeira vez. Nao e necessario Zustand dedicado -- o estado e gerenciado por estado local do componente React.
+O calculo manual e puramente client-side (`src/app/(app)/meu-arcano/page.tsx` importa `src/lib/arcana/calculate.ts` sob demanda). O resultado e persistido em `User.personalArcana` (nao em uma tabela `Profile`) por dois caminhos de servidor: `GET /api/v1/arcana/calculate` (best-effort, so quando `null`) e `PATCH /api/v1/users/me/profile` (recalculado quando `birthDate` chega preenchido). A pagina `/meu-arcano` tambem busca `GET /api/v1/arcana/calculate` no mount para pre-preencher o formulario e exibir o arcano ja salvo; um `ref` (`hasUserCalculated`) impede que essa resposta sobrescreva um calculo manual do usuario. Nao e necessario Zustand dedicado -- o estado e gerenciado por estado local do componente React.
+
+> `reduceToArcana` normaliza `0 -> 22`, portanto o calculo emite **1-22** (22 = "O Louco"), nunca `0`. A extracao da data usa getters **UTC** (`getUTCFullYear`/`getUTCMonth`/`getUTCDate`), garantindo o mesmo resultado em dev (BRT) e prod (UTC).
