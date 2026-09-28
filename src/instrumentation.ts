@@ -1,6 +1,13 @@
 import * as Sentry from "@sentry/nextjs"
 
+import { getEnv } from "@/lib/env"
+
 export async function register(): Promise<void> {
+  // Fail-fast do env no boot do servidor (arch INFO-4): formatos inválidos
+  // (ex.: REDIS_URL que não é URL) quebram aqui em vez do primeiro uso;
+  // getEnv() cacheia para os consumidores lazy (moderation, queue, r2).
+  getEnv()
+
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
   if (!dsn) {
     return
