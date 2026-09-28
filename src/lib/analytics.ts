@@ -1,6 +1,11 @@
 "use client"
 
+import type { UserPlan } from "@prisma/client"
+
 import posthog from "posthog-js"
+
+import type { SocialLimit } from "@/lib/social/limits"
+import type { VersosSource } from "@/lib/social/versos"
 
 const PH_API_KEY = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
 const PH_HOST =
@@ -78,6 +83,62 @@ export function trackArcanaCalculate(
   arcanaNumber: number,
 ) {
   track("arcana_calculate", { method, arcanaNumber })
+}
+
+// --- Sprint 2 — eventos sociais/horóscopos (T024 + bypass T027) ---
+
+export function trackPostCreate(
+  postType: "reading" | "text" | "image",
+  hasImages: boolean,
+) {
+  track("post_create", { postType, hasImages })
+}
+
+export function trackLike(postId: string) {
+  track("like", { postId })
+}
+
+export function trackComment(postId: string, isReply: boolean) {
+  track("comment", { postId, isReply })
+}
+
+export function trackFollow(targetUserId: string) {
+  track("follow", { targetUserId })
+}
+
+export function trackGiftSend(giftId: string, cost: number, toUserId: string) {
+  track("gift_send", { giftId, cost, toUserId })
+}
+
+export function trackHoroscopeView(
+  type: "western" | "chinese" | "maya",
+  period: "daily" | "weekly" | "monthly",
+) {
+  track("horoscope_view", { type, period })
+}
+
+export function trackGiftClaimDaily(day: number, reward: number) {
+  track("gift_claim_daily", { day, reward })
+}
+
+export function trackVersosEarned(
+  source: VersosSource,
+  amount: number,
+  balance: number,
+) {
+  track("versos_earned", { source, amount, balance })
+}
+
+export function trackPostLimitHit(tier: UserPlan, limit: number) {
+  track("post_limit_hit", { tier, limit })
+}
+
+export function trackCsrfFailure(path: string, reason: string) {
+  track("csrf_failure", { path, reason })
+}
+
+export function trackRateLimiterBypass(limit: SocialLimit, reason: string) {
+  track("rate_limiter_bypass", { limit, reason })
 }
 
 export function setUserProperties(properties: Record<string, unknown>) {
