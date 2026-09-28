@@ -49,7 +49,7 @@ Ordenação (4 níveis, por página de 10):
 Cursor: base64url de { createdAt, id } = menor (createdAt, id) já lido —
 aproximação sobre o ranking: paginação estável, sem repetir nem pular posts.
 Cache: src/lib/feed-cache.ts (Redis, TTL 5 min) para perfis com
-> 1000 seguindo, materializado pelo cron src/jobs/feed-cache-refresh.ts (*/5 * * * *).
+> 1000 seguindo, materializado pelo cron src/jobs/feed-cache-refresh.ts (0 0 * * *, diário desde SC34).
 ```
 
 ---

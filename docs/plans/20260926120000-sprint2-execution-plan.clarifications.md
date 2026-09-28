@@ -178,6 +178,7 @@
 - Recommendation: cron horário
 - Final Answer: **Cron horário `0 * * * *`** (em vez de `*/5 * * * *` de T042) — o tier alvo do projeto é Hobby (`scalability.md`), que só aceita cron ≥ 1 dia; refresh horário é coerente com TTL de 5 min do cache e threshold `>1000` following raramente atingido no MVP; upgrade para Pro fica Sprint 3+ se o refresh horário não bastar
 - Impact on Plan: **T042 atualizado** (`*/5` → `0 * * * *`); `vercel.json` e banner de `docs/infrastructure.md` ajustados na execução
+- Execution Resolution (2026-09-28): a doc oficial da Vercel confirma que `0 * * * *` (per-hour) **também falha o deploy em Hobby** (`Hobby accounts are limited to daily cron jobs`) — contrariando a razão da própria decisão; na execução o dono foi consultado e confirmou **`0 0 * * *` (diário 00:00 UTC)** como schedule final. `vercel.json`, `FEED_CACHE_REFRESH_CRON`, testes e docs (`infrastructure.md`, `deployment.md`, `overview.md`, `social.md`, `security.md`) ajustados
 
 ## Coverage Summary
 

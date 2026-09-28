@@ -129,8 +129,8 @@ SMTP_USER=
 SMTP_PASS=
 # Resend (e-mails transacionais — src/lib/email/email.ts); em dev use AUTH_EMAIL_SKIP_SEND=true para logar no console
 RESEND_API_KEY=
-# Vercel Cron (T16 — GET /api/cron/hard-delete 0 3 * * * + GET /api/cron/feed-cache-refresh */5, ambos em vercel.json):
-# obrigatório em prod; sem ele os dois crons retornam 401
+# Vercel Cron (T16 — GET /api/cron/hard-delete 0 3 * * *, GET /api/cron/feed-cache-refresh 0 0 * * * e GET /api/cron/counter-reconcile 0 4 * * *, todos em vercel.json):
+# obrigatório em prod; sem ele os crons retornam 401
 CRON_SECRET=
 
 # IA (openai SDK — src/lib/ai/client.ts + src/lib/ai/models.ts; ver .env.example)
@@ -279,7 +279,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | *Token do projeto PostHog* | Production | Client analytics PostHog (`src/lib/analytics.ts`); sem ele, `console.warn("[Analytics] PostHog key not configured")` e não init (fora de development) |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` | Production | Host do PostHog (`src/lib/analytics.ts`; default `https://app.posthog.com`; override com `us.i.posthog.com`/`eu.i.posthog.com` conforme a região do projeto) |
 | `AUTH_URL` | `https://arkanaagora.com.br` | Production + Preview | Origem canônica da aplicação (HTTPS obrigatório); guard de runtime em `src/auth/auth.config.ts` (`AUTH_URL_in_env`/`AUTH_URL_empty` no erro — redeploy após editar env) |
-| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`) e `feed-cache-refresh` (Sprint 2, `*/5`); obrigatório, sem ele os crons retornam 401 |
+| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`), `feed-cache-refresh` (Sprint 2, `0 0 * * *` diário — SC34) e `counter-reconcile` (Sprint 2 T147 — reconciliação de contadores, `0 4 * * *`); obrigatório, sem ele os crons retornam 401 |
 
 **Configuração no Vercel (Staging)**:
 
@@ -287,7 +287,7 @@ Acesse `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-
 1. Crie uma variável `AUTH_URL` com valor `https://arkana-agora.vercel.app` (ou `https://staging.arkanaagora.com.br` se configurado)
 2. Configure as outras variáveis de ambiente conforme a tabela acima
 
-**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron — `hard-delete` + `feed-cache-refresh`) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
+**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron — `hard-delete` + `feed-cache-refresh` + `counter-reconcile`) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
 
 ### 4.3 Serviços de Produção
 

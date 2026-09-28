@@ -113,7 +113,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | Dados da conta (excluída) | 30 dias após exclusão | Grace period para reativação |
 | Dados da conta (excluída definitiva) | Eliminados/anonimizados após 30 dias | Eliminação LGPD (T16 hard-delete job: `src/jobs/hard-delete-accounts.ts`, Vercel Cron 03:00 UTC) |
 | Dados sociais (posts, comentários, follows, likes, gifts enviados, notificações, entradas de horóscopo) | Purgados na mesma transação do T16 (após 30 dias) | Purga social Sprint 2 (review LGPD) — `HoroscopeContent` (catálogo) e gifts **recebidos** (ledger do doador) permanecem; revisitar gifts antes do launch |
-| Histórico de leituras | 90 dias após exclusão da conta | Backup e segurança |
+| Histórico de leituras | 90 dias após exclusão da conta | Purga pelo mesmo job T16 (Sprint 2 T148/S2-20): `purgeExpiredReadings()` apaga `Interpretation` → `ReadingCard` → `Reading` na transação do tick — janela de 90d coexiste com a de 30d (anonimização) |
 | Dados financeiros | 5 anos | Obrigação fiscal (Lei 9.613/98) |
 | Logs de acesso | 90 dias | Segurança e auditoria |
 | Cookies de análise | 13 meses | Padrão do Google Analytics |

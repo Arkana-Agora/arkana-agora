@@ -93,12 +93,14 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > wrapper `data`. Este é o contrato canônico dos endpoints de auth (ver
 > `docs/04-api/authentication.md`). O envelope `data` aplica-se aos demais endpoints REST.
 > **Rotas internas (cron, `vercel.json`):** `GET /api/cron/hard-delete` (Vercel Cron 03:00 UTC,
-> `0 3 * * *`) e `GET /api/cron/feed-cache-refresh` (a cada 5 min, `*/5`, job
-> `src/jobs/feed-cache-refresh.ts`) — ambas protegidas por `Authorization: Bearer $CRON_SECRET`
-> e ambas retornam `{ ok: true, data: <summary>, meta: { requestId } }` (401 `{ error: { code:
+> `0 3 * * *`), `GET /api/cron/feed-cache-refresh` (diário 00:00 UTC, `0 0 * * *` — SC34, job
+> `src/jobs/feed-cache-refresh.ts`) e `GET /api/cron/counter-reconcile` (diário 04:00 UTC,
+> `0 4 * * *` — T147, job `src/jobs/counter-reconcile.ts`) — todas protegidas por `Authorization: Bearer $CRON_SECRET`
+> e todas retornam `{ ok: true, data: <summary>, meta: { requestId } }` (401 `{ error: { code:
 > "UNAUTHORIZED" } }` sem/errado o header — o Vercel injeta `CRON_SECRET` sozinho nos runs
-> agendados). `hard-delete`: `{ processed, failed, errors }` — ver `docs/04-api/authentication.md`
-> §GET /cron/hard-delete.
+> agendados). `hard-delete`: `{ processed, failed, readingsPurged, errors }` (T148 adicionou
+> `readingsPurged` — ver `docs/04-api/authentication.md` §GET /cron/hard-delete);
+> `counter-reconcile`: `{ posts, comments, total }` (rows divergentes corrigidas; 0 = idempotente).
 
 ### SSE (Server-Sent Events — streaming de IA)
 
@@ -142,7 +144,7 @@ data: {"type": "done", "cached": false, "interpretationId": "itr_abc123"}
 | `X-RateLimit-Reset` | Timestamp de reset do rate limit |
 | `X-Response-Time` | Tempo de processamento (ms) |
 
-> **Implementado (Sprint 2 Phase 0.5)**: o único middleware de rate limit existente é `src/lib/middleware/rate-limit.ts`, que emite **apenas** `X-RateLimit-Limit`, `X-RateLimit-Remaining` (e `Retry-After` quando bloqueia) — **não** emite `X-RateLimit-Reset`. As rotas de auth emitem `Retry-After` + `retryAfter` no body. `X-Response-Time` é estado-alvo.
+> **Implementado (Sprint 2 Phase 0.5)**: o único middleware de rate limit existente é `src/lib/middleware/rate-limit.ts`, que emite **apenas** `X-RateLimit-Limit`, `X-RateLimit-Remaining` (e `Retry-After` quando bloqueia) — **não** emite `X-RateLimit-Reset`. As rotas de auth emitem `Retry-After` + `retryAfter` no body; desde o SC33 o 429 social também emite `retryAfter` (segundos) no body ao lado de `resetAt`. `X-Response-Time` é estado-alvo.
 
 ---
 
@@ -223,10 +225,10 @@ HTTP 429 Too Many Requests
 ```
 
 > **Códigos reais hoje** (o `RATE_LIMIT_EXCEEDED` acima é o contrato genérico, **ainda não emitido** por nenhuma rota):
-> - **Social** — `src/lib/middleware/rate-limit.ts` responde 429 **`RATE_LIMITED`** com `{ limit: <tipo>, resetAt }` + headers `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`Retry-After`.
+> - **Social** — `src/lib/middleware/rate-limit.ts` responde 429 **`RATE_LIMITED`** com `{ limit: <tipo>, resetAt, retryAfter }` + headers `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`Retry-After` (`retryAfter` em segundos no body = SC33, alinhado ao contrato de auth).
 > - **Auth** — 429 **`AUTH_RATE_LIMITED`** / `AUTH_MAGIC_LINK_RATE_LIMIT` / `AUTH_FORGOT_RATE_LIMIT` (com `retryAfter` no body).
 > - O 429 **nunca** vem de falha de infraestrutura: os limites sociais são fail-open (Q26) e nunca devolvem 503.
-> - ⚠️ **Taxonomia pendente (review learnings)**: o corpo dos 429 sociais usa `resetAt` (ISO) em `details`, enquanto o contrato de auth exige `retryAfter` (segundos) — unificar quando as rotas sociais consumirem o middleware (family do CHK004).
+> - ✅ **Taxonomia unificada (SC33, fechado em 2026-09-28)**: o corpo dos 429 sociais agora emite `retryAfter` (segundos) **e** `resetAt` (ISO) em `details` — o contrato de auth (`retryAfter`) deixa de ser divergente.
 
 ---
 
