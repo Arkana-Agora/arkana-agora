@@ -12,7 +12,10 @@ const nextConfig: NextConfig = {
           {
             type: "header",
             key: "accept",
-            value: "text/html",
+            // `has.value` vira regex ancorada (^…$) em prepare-destination —
+            // "text/html" puro NÃO casa com o Accept real do browser
+            // ("text/html,application/xhtml+xml,…"). `text/html.*` cobre.
+            value: "text/html.*",
           },
         ],
         headers: [
@@ -24,6 +27,14 @@ const nextConfig: NextConfig = {
           {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
+          },
+          // Clickjacking (review): deny framing em qualquer origem.
+          // base-uri/object-src fecham injection de <base>/<object>
+          // (review S-I8); img-src cobre avatar/CDN/inline data:.
+          {
+            key: "Content-Security-Policy",
+            value:
+              "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; img-src 'self' https: data:",
           },
           { key: "Cache-Control", value: "private, no-store" },
         ],
