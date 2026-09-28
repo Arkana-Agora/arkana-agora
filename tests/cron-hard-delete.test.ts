@@ -7,7 +7,7 @@ const jobMock = vi.hoisted(() => ({
 
 vi.mock("@/jobs/hard-delete-accounts", () => jobMock)
 
-const summary = { processed: 2, failed: 0, errors: [] }
+const summary = { processed: 2, failed: 0, readingsPurged: 1, errors: [] }
 
 beforeEach(() => {
   vi.clearAllMocks()

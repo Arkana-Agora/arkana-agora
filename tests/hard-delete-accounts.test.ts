@@ -29,6 +29,9 @@ const prismaMock = vi.hoisted(() => ({
   horoscopeEntry: { deleteMany: vi.fn() },
   horoscopeLog: { deleteMany: vi.fn() },
   horoscopeNotification: { deleteMany: vi.fn() },
+  interpretation: { deleteMany: vi.fn() },
+  readingCard: { deleteMany: vi.fn() },
+  reading: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
 }))
 
@@ -41,6 +44,7 @@ vi.mock("@/lib/email/email", () => ({
 
 const NOW = new Date("2026-09-05T00:00:00.000Z")
 const CUTOFF = new Date("2026-08-06T00:00:00.000Z")
+const DAY_IN_MS = 86_400_000
 
 const expiredRow = { id: "usr_1", email: "maria@email.com" }
 
@@ -61,6 +65,9 @@ const purgeModels = [
   "horoscopeEntry",
   "horoscopeLog",
   "horoscopeNotification",
+  "interpretation",
+  "readingCard",
+  "reading",
 ] as const
 
 const txClient = {
@@ -70,7 +77,12 @@ const txClient = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  prismaMock.user.findMany.mockResolvedValue([expiredRow])
+  // Selecao da anonimizacao (select { id, email }) devolve a conta expirada;
+  // selecao da purga de leituras (select { id }, S2-20) devolve [] por padrao.
+  prismaMock.user.findMany.mockImplementation(
+    async (args?: { select?: Record<string, boolean> }) =>
+      args?.select && !args.select.email ? [] : [expiredRow],
+  )
   prismaMock.$transaction.mockImplementation(
     async (fn: (tx: unknown) => unknown) => fn(txClient),
   )
@@ -289,5 +301,79 @@ describe("job hard-delete-accounts (T16)", () => {
     expect(summary.processed).toBe(0)
     expect(sendAccountDeletedFinalEmailMock).toHaveBeenCalledTimes(1)
     expect(mirrorTokenVersionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("purga leituras de contas excluidas ha mais de 90 dias (S2-20/T148)", async () => {
+    prismaMock.user.findMany.mockImplementation(
+      async (args?: { select?: Record<string, boolean> }) =>
+        args?.select && !args.select.email
+          ? [{ id: "usr_stale" }]
+          : [expiredRow],
+    )
+
+    const summary = await runJob()
+
+    expect(summary.readingsPurged).toBe(1)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2)
+    expect(prismaMock.interpretation.deleteMany).toHaveBeenCalledWith({
+      where: { userId: { in: ["usr_stale"] } },
+    })
+    expect(prismaMock.readingCard.deleteMany).toHaveBeenCalledWith({
+      where: { reading: { userId: { in: ["usr_stale"] } } },
+    })
+    expect(prismaMock.reading.deleteMany).toHaveBeenCalledWith({
+      where: { userId: { in: ["usr_stale"] } },
+    })
+    const interpretationOrder =
+      prismaMock.interpretation.deleteMany.mock.invocationCallOrder[0]!
+    const cardOrder =
+      prismaMock.readingCard.deleteMany.mock.invocationCallOrder[0]!
+    const readingOrder =
+      prismaMock.reading.deleteMany.mock.invocationCallOrder[0]!
+    expect(interpretationOrder).toBeLessThan(cardOrder)
+    expect(cardOrder).toBeLessThan(readingOrder)
+  })
+
+  it("conta excluida ha 45 dias mantem as leituras (corte de 90 dias)", async () => {
+    const summary = await runJob()
+
+    expect(summary.readingsPurged).toBe(0)
+    const purgeCall = prismaMock.user.findMany.mock.calls.find(
+      ([args]) =>
+        !(args as { select?: Record<string, boolean> })?.select?.email,
+    )
+    expect(purgeCall).toBeDefined()
+    const where = (
+      purgeCall![0] as {
+        where: {
+          deletedAt: { not: null; lte: Date }
+          readings: { some: Record<string, never> }
+        }
+      }
+    ).where
+    expect(where.deletedAt.lte.toISOString()).toBe(
+      new Date(NOW.getTime() - 90 * DAY_IN_MS).toISOString(),
+    )
+    expect(where.readings).toEqual({ some: {} })
+    expect(prismaMock.interpretation.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.reading.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("purga de leituras e idempotente: 2a execucao sem leituras nao refaz nada", async () => {
+    let purgeSelections = 0
+    prismaMock.user.findMany.mockImplementation(
+      async (args?: { select?: Record<string, boolean> }) => {
+        if (args?.select?.email) return [expiredRow]
+        purgeSelections += 1
+        return purgeSelections === 1 ? [{ id: "usr_1" }] : []
+      },
+    )
+
+    const first = await runJob()
+    const second = await runJob()
+
+    expect(first.readingsPurged).toBe(1)
+    expect(second.readingsPurged).toBe(0)
+    expect(prismaMock.reading.deleteMany).toHaveBeenCalledTimes(1)
   })
 })

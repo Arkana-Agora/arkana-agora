@@ -11,9 +11,20 @@ const ANONYMOUS_NAME = "Usuario Removido"
 
 const DAY_IN_MS = 86_400_000
 
+/**
+ * Retenção de leituras (S2-20/T148, `docs/07-security/lgpd.md`): purga
+ * `Reading`/`ReadingCard`/`Interpretation` 90 dias após o soft-delete.
+ * Coexiste com a janela de 30 dias (LGPD_WINDOW_DAYS) da anonimização:
+ * a anonimização roda 1x por conta (email vira `@deleted.local` e sai da
+ * seleção), já a purga de leituras é reaproveitada a cada tick e se esgota
+ * sozinha (conta sem leituras sai do `where`).
+ */
+export const READING_RETENTION_DAYS = 90
+
 export interface HardDeleteSummary {
   processed: number
   failed: number
+  readingsPurged: number
   errors: { userId: string; error: string }[]
 }
 
@@ -41,7 +52,12 @@ export async function runHardDeleteJob(
     select: { id: true, email: true },
   })
 
-  const summary: HardDeleteSummary = { processed: 0, failed: 0, errors: [] }
+  const summary: HardDeleteSummary = {
+    processed: 0,
+    failed: 0,
+    readingsPurged: 0,
+    errors: [],
+  }
 
   for (const user of expired) {
     try {
@@ -67,11 +83,67 @@ export async function runHardDeleteJob(
     }
   }
 
+  try {
+    summary.readingsPurged = await purgeExpiredReadings(now, reqId)
+  } catch (error) {
+    logger.error(
+      { err: error, reqId },
+      "[job:hard-delete] falha ao purgar leituras expiradas",
+    )
+  }
+
   logger.info(
-    { processed: summary.processed, failed: summary.failed, reqId },
+    {
+      processed: summary.processed,
+      failed: summary.failed,
+      readingsPurged: summary.readingsPurged,
+      reqId,
+    },
     "[job:hard-delete] tick concluido",
   )
   return summary
+}
+
+/**
+ * S2-20/T148 — apaga leituras de contas soft-deletadas há >90 dias,
+ * na ordem de FK: Interpretation → ReadingCard → Reading (mesma transação).
+ * Idempotente: `deleteMany` sem rows = 0 e a conta sem leituras sai da
+ * seleção da próxima execução.
+ */
+export async function purgeExpiredReadings(
+  now: Date = new Date(),
+  reqId?: string,
+): Promise<number> {
+  const purgeCutoff = new Date(
+    now.getTime() - READING_RETENTION_DAYS * DAY_IN_MS,
+  )
+
+  const stale = await prisma.user.findMany({
+    where: {
+      deletedAt: { not: null, lte: purgeCutoff },
+      readings: { some: {} },
+    },
+    select: { id: true },
+  })
+
+  if (stale.length === 0) {
+    return 0
+  }
+
+  const ids = stale.map((user) => user.id)
+  await prisma.$transaction(async (tx) => {
+    await tx.interpretation.deleteMany({ where: { userId: { in: ids } } })
+    await tx.readingCard.deleteMany({
+      where: { reading: { userId: { in: ids } } },
+    })
+    await tx.reading.deleteMany({ where: { userId: { in: ids } } })
+  })
+
+  logger.info(
+    { users: stale.length, reqId },
+    "[job:hard-delete] leituras expiradas purgadas",
+  )
+  return stale.length
 }
 
 async function anonymizeAccount(
