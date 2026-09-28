@@ -116,6 +116,10 @@ describe("enforceSocialLimit (T040)", () => {
     const body = await outcome.response.json()
     expect(body.error.code).toBe("RATE_LIMITED")
     expect(body.error.details.limit).toBe("gift")
+    expect(body.error.details.resetAt).toEqual(expect.any(String))
+    expect(typeof body.error.details.retryAfter).toBe("number")
+    expect(body.error.details.retryAfter).toBeGreaterThanOrEqual(0)
+    expect(body.error.details.retryAfter).toBeLessThanOrEqual(42)
     expect(body.meta.requestId).toBe("req-9")
   })
 

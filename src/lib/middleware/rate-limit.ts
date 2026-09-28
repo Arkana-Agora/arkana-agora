@@ -55,6 +55,10 @@ export async function enforceSocialLimit(options: {
     return { allowed: true, headers, check }
   }
 
+  const retryAfter = Math.max(
+    0,
+    Math.ceil((check.resetAt.getTime() - Date.now()) / 1000),
+  )
   const body: ApiError = {
     error: {
       code: "RATE_LIMITED",
@@ -62,6 +66,7 @@ export async function enforceSocialLimit(options: {
       details: {
         limit: options.limit,
         resetAt: check.resetAt.toISOString(),
+        retryAfter,
       },
     },
     meta: { requestId: options.reqId },
