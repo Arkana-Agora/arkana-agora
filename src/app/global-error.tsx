@@ -1,24 +1,16 @@
 "use client"
 
-import * as Sentry from "@sentry/nextjs"
-import { useEffect } from "react"
+// global-error substitui o root layout inteiro (incluindo o import de CSS de
+// layout.tsx) — sem este import a página de erro raiz renderiza sem estilos.
+import "./globals.css"
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string }
-  reset: () => void
-}) {
-  useEffect(() => {
-    Sentry.captureException(error)
-  }, [error])
+import { RouteError, type RouteErrorProps } from "@/components/route-error"
 
+export default function GlobalError(props: RouteErrorProps) {
   return (
     <html lang="pt-BR">
       <body>
-        <p>Algo deu errado. Tente novamente.</p>
-        <button onClick={() => reset()}>Tentar novamente</button>
+        <RouteError {...props} />
       </body>
     </html>
   )
