@@ -14,6 +14,7 @@ email verification, refresh token rotation with reuse detection, and LGPD accoun
 | File | Role |
 |------|------|
 | `src/services/token-service.ts` | JWT signing, token rotation, reuse detection, session management |
+| `src/services/account-service.ts` | Account lifecycle: `restoreAccount()` (LGPD 30-day window) + `enrichUserFromOAuthProfile()` (Zod validation of Google claims, non-destructive fill, conditional `personalArcana` invalidation) |
 | `src/app/api/v1/auth/_helpers.ts` | Shared route helpers (error/success envelopes, cookie builders incl. Auth.js session bridge, timing equalization, `maskEmail()` PII masking for auth logs, request parsing) |
 | `src/app/api/v1/auth/*/route.ts` | API route handlers (12 endpoints) |
 | `src/lib/rate-limit.ts` | In-memory rate limiter with sliding window |
@@ -21,7 +22,7 @@ email verification, refresh token rotation with reuse detection, and LGPD accoun
 | `src/lib/csrf.ts`, `src/lib/csrf-client.ts`, `src/lib/csrf-cookie-name.ts` | CSRF double-submit trio: server `validateCsrfToken` (`timingSafeEqual`, byte-length), browser cookie writer (`ensureCsrfCookie`), shared cookie name/token generation |
 | `src/lib/redis.ts` | Redis singleton (tokenVersion cache, optional) |
 | `src/lib/auth-refresh.ts` | Client single-flight refresh (`refreshAccessTokenOnce`), shared access-token cache (60s TTL), session-lookup dedup (`resolveAccessToken`) |
-| `src/lib/api.ts` | Axios `authApi` client: Bearer injection + 401→refresh retry **without** re-reading session (`_retry` — stale-token race fix) |
+| `src/lib/api.ts` | Axios `authApi` client: Bearer injection + 401→refresh retry **without** re-reading session (`_retry` — stale-token race fix); request interceptor também anexa `x-csrf-token` (via `ensureCsrfCookie()`) em métodos inseguros quando o chamador não enviou (Sprint 2 review) |
 | `src/auth/auth.config.ts` | Auth.js v5 edge config (Google OAuth + EmailProvider) + `events.signIn` (non-destructive Google profile enrichment: `name`/`displayName`/`avatar`, only-when-empty) + production env hard guard (`AUTH_URL` https + `AUTH_SECRET` required, fails fast at module load, no secret values logged) |
 | `src/auth/prisma-adapter.ts` | Minimal Auth.js Prisma adapter |
 | `prisma/schema.prisma` | User, Session, VerificationToken models |
@@ -119,10 +120,10 @@ shared helpers:
 12. **PII in auth logs** — auth routes mask e-mail identifiers in warning/error logs via `maskEmail()` (`src/app/api/v1/auth/_helpers.ts`, e.g. register/login/restore-account rate-limit and error logs). New auth logs must mask e-mails the same way instead of logging `normalizedEmail` raw.
 13. **`events.signIn` enriches Google profile non-destructively** — `src/auth/auth.config.ts` runs an `events.signIn` for `account.provider === "google"` that back-fills `User.name`/`displayName` from `profile.name` and `User.avatar` from `profile.picture` **only when the current field is empty**; it never overwrites user-edited values and skips the `update` entirely when nothing changes. The whole handler is wrapped in `try/catch` and only logs `warn` — a `throw` here would abort session creation *after* authentication already succeeded, so enrichment must never fail a login. **`birthDate` is NOT synced**: Google's `openid email profile` scope does not return it, so `birthDate`/`astrologicalSign`/`mayanKin`/`personalArcana` stay null until the user fills the date in `/perfil/editar`. Pulling it would require the Google People API (`contacts.readonly` + extra consent) — out of MVP scope, needs a new ADR.
 
-14. **Enrichment service validation (fix 2026-09-25)** — `src/services/enrichment-service.ts` valida o perfil do Google com schemas Zod estritos antes de aplicar:
+14. **Enrichment service validation (fix 2026-09-25)** — `enrichUserFromOAuthProfile()` em **`src/services/account-service.ts`** valida o perfil do Google com schemas Zod estritos antes de aplicar (o nome antigo do arquivo, `src/services/enrichment-service.ts`, não existe):
     - `oauthNameSchema`: strip de control chars/zero-width, `trim()`, `min(1).max(120)` — rejeita nomes vazios ou só whitespace.
-    - `oauthPictureSchema`: exige `https://` + allowlist de domínios conhecidos (Google, Gravatar, etc.) — rejeita `http://` e domínios desconhecidos.
-    - `oauthGoogleProfileSchema`: compose estrito dos dois acima + `email` (email válido) + `sub` (string non-empty).
+    - `oauthPictureSchema`: exige `https://` + allowlist de hosts de avatar (`lh3.googleusercontent.com`, `googleusercontent.com`, `platform-lookaside.fbsbx.com`) — URL fora do allowlist vira `null` e o avatar não é gravado.
+    - `oauthGoogleProfileSchema`: `z.object({ name, picture }).strict()` (sem `email`/`sub` — o scope `openid email profile` não é lido aqui).
     - **Invalidation condicional**: `personalArcana` é invalidado (setado `null`) **apenas quando** o nome do Google muda **E** `birthDate` está presente no usuário. Se não há `birthDate`, o arcano não é tocado (não há base para recalcular). Isso evita nulagem espúria em contas OAuth sem data de nascimento.
 
 15. **Drift fixes: naming & edge config (fix 2026-09-25)**:

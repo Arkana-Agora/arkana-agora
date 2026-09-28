@@ -128,8 +128,15 @@ async function handleAccountDeletion(req: Request, res: Response) {
 > account was restored between selection and execution → skipped, no deletes, no email), then
 > anonymizes `User` PII (email/providerId → hex digest `@deleted.local`, name/displayName →
 > `"Usuario Removido"`, nulling all sensitive fields, `isActive: false`, `tokenVersion` increment),
-> deletes `session`/`userProfile`/`subscription` rows and purges `VerificationToken` rows by
-> `identifier` (original email — no FK to User, not cascade-deleted). After commit: mirrors
+> deletes `session`/`userProfile`/`subscription`/`arcanaCalculation` rows and purges
+> `VerificationToken` rows by `identifier` (original email — no FK to User, not cascade-deleted).
+> **Sprint 2 (LGPD review, 2026-09-27/28)**: the same transaction also purges the user's
+> social/horoscope rows — `Follow` (both `followerId`/`followingId`), `Post` (`authorId`),
+> `Comment` (`authorId`), `PostLike`/`CommentLike`, **gifts sent** (`Gift.fromUserId` — gifts
+> *received* stay as the donor's ledger, revisitar antes do launch), `Notification`,
+> `ContentReport` (`reporterId`), `HoroscopeEntry`/`HoroscopeLog`/`HoroscopeNotification`.
+> `HoroscopeContent` stays (global catalog, no `userId`); `post_hashtags`/`comment_likes` on the
+> user's own posts/comments fall by FK cascade. After commit: mirrors
 > `tokenVersion` to Redis and sends the best-effort final-deletion email
 > (`sendAccountDeletedFinalEmail(email, { deleteAfterDays: LGPD_WINDOW_DAYS })`). `deletedAt` is
 > preserved. Returns `{ processed, failed, errors }`. No schema change required.

@@ -2,6 +2,7 @@
 
 > **Prioridade**: Máxima — segurança do usuário acima de tudo
 > **Conformidade**: LGPD, Marco Civil da Internet, CVV
+> **Status (2026-09-26)**: **parcialmente implementado (Sprint 2 Phase 0.5 / T025).** O filtro MVP por palavra existe em **`src/lib/moderation.ts`** — `checkContent(content): { allowed, flaggedWords }`, lê `MODERATION_BLOCKED_WORDS` (CSV, `src/lib/env.ts`), case-insensitive com fronteira de palavra (não casa substring: `golpe` não casa em `golpista`/`desgolpe`), sem env → tudo permitido; o CSV e as regex são **compilados uma vez por valor de env** (cache de módulo — recompila só se o env mudar; review S-N13), coberto por `tests/moderation.test.ts`. **Nenhuma rota chama `checkContent` ainda** (integração no feed = T129, report endpoint = T128, Phase 8). O design alvo das 4 camadas continua o mesmo: **não existe `src/lib/ai/moderation/`** (o `keyword-filter.ts` do snippet abaixo é o design alvo — contexto/gravidade, score e Camada 3 de output continuam planejados), `src/lib/ai/{client,models,rate-limit,retry,cache}.ts` + `src/lib/ai/prompts/` seguem sem filtro de moderação no fluxo de IA, e a Camada 4 (denúncias) depende do model `ContentReport` já criado no schema do Sprint 2.
 
 ## Sumário
 
@@ -35,7 +36,7 @@ A moderação atua em 4 camadas sequenciais:
 │                                                           │
 │  Camada 3: Output Filter (Pós-IA)                         │
 │  ├── Verificação da resposta gerada                       │
-│  ├── Detecção de内容 que vazou pelas regras              │
+│  ├── Detecção de conteúdo que vazou pelas regras              │
 │  └── Substituição ou bloqueio da resposta                 │
 │                                                           │
 │  Camada 4: User Reports (Pós-interação)                  │
@@ -162,8 +163,10 @@ Input do Usuário
 
 ### Implementação
 
+> **Implementado hoje (Phase 0.5 / T025) ≠ snippet abaixo.** O código real é `src/lib/moderation.ts` (`checkContent()` — lista vinda da env, sem regex de contexto, sem gravidade/ação), consumido por nenhuma rota ainda. O snippet a seguir é o **design alvo** (categorias, gravidade, ação `cvv_redirect`) e deve ser implementado em `src/lib/ai/moderation/keyword-filter.ts` quando as camadas 1–3 forem ligadas ao fluxo de IA.
+
 ```typescript
-// src/lib/ai/moderation/keyword-filter.ts
+// src/lib/ai/moderation/keyword-filter.ts (design alvo — ainda não existe)
 
 interface ModerationResult {
   safe: boolean

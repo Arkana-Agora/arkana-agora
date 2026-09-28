@@ -1,10 +1,10 @@
 # Estratégia de Indexação — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-23
+> Versão: 1.2 | Última atualização: 2026-09-26
 
 ---
 
-> **Status:** **11 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`) — migrations aplicadas em dev PostgreSQL. As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, `HoroscopeEntry`, social, marketplace, notificações) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
@@ -31,7 +31,9 @@ Consultas mais frequentes (ordenadas por impacto):
 
 ## 2. Índices Primários (PK)
 
-Todas as 18 entidades possuem índice primário automático via `@id`.
+Todas as 24 models possuem índice primário automático via `@id`.
+
+> **Nota (Sprint 2 Phase 0):** os `@id` reais são `String @default(cuid())` (não `UUID`) e a tabela abaixo é o **ERD alvo** — 7 models novos (`PostLike`, `CommentLike`, `PostHashtag`, `ContentReport`, `HoroscopeContent`, `HoroscopeLog`, `HoroscopeNotification`) ainda não têm linha aqui; os índices reais deles estão em §7.1. `Card`, `TarotDeck`, `Spread`, `Product`, `Order`, `Payment` e `DailyCard` seguem planejados.
 
 | Entidade | Coluna PK | Tipo | Nota |
 |----------|-----------|------|------|
@@ -148,6 +150,8 @@ LIMIT 20 OFFSET 0;
 
 ### 4.2 Post(authorId, isPublic, createdAt)
 
+> ⚠️ **Alvo, não real (Sprint 2 Phase 0):** `Post` **não tem** `isPublic` — o schema real usa `audience String @default("public")` (`'public' | 'followers'`). Índices reais já criados: `(authorId, createdAt)` e `(createdAt)` (ver §7.1).
+
 ```prisma
 model Post {
   authorId  UUID     @indexed
@@ -171,6 +175,8 @@ ORDER BY "createdAt" DESC;
 ```
 
 ### 4.3 Post(isPublic, createdAt)
+
+> ⚠️ **Alvo, não real (Sprint 2 Phase 0):** filtro de visibilidade é `audience = 'public'`; o índice real do feed global é `@@index([createdAt])` (§7.1).
 
 ```prisma
 model Post {
@@ -435,6 +441,32 @@ WHERE "isPublic" = true;
 | 28 | Gift | `receiverId` | B-tree | ❌ | Presentes recebidos |
 | 29 | ArcanaCalculation | `(userId, createdAt)` | B-tree | ❌ | Histórico de arcanos do usuário |
 | 30 | HoroscopeEntry | `userId` | B-tree | ❌ | Horóscopos do usuário |
+
+### 7.1 Índices reais — Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`)
+
+Índices efetivamente criados no schema (`prisma/schema.prisma` — fonte da verdade; as tabelas das §3–§7 acima são o **alvo** e ainda citam colunas que não existem, ex.: `Post.isPublic`, `Gift.senderId`).
+
+| Tabela | Coluna(s) | Tipo | Único | Uso principal |
+|--------|-----------|------|:-----:|---------------|
+| `follows` | `(followerId, followingId)` | B-tree | ✅ | Impedir follow duplicado |
+| `follows` | `followerId` | B-tree | | Lista de "seguindo" |
+| `follows` | `followingId` | B-tree | | Lista de seguidores |
+| `posts` | `(authorId, createdAt)` | B-tree | | Posts por autor (perfil) |
+| `posts` | `createdAt` | B-tree | | Feed global (cronológico) |
+| `comments` | `(postId, createdAt)` | B-tree | | Comentários de um post |
+| `post_likes` | `(postId, userId)` | B-tree | ✅ | Like idempotente |
+| `comment_likes` | `(commentId, userId)` | B-tree | ✅ | Like de comentário idempotente |
+| `comment_likes` | `commentId` | B-tree | | Contagem/lookup por comentário |
+| `post_hashtags` | `tag` | B-tree | | Trending/lookup por hashtag |
+| `gifts` | `(toUserId, createdAt)` | B-tree | | Histórico de gifts recebidos |
+| `notifications` | `(userId, isRead, createdAt)` | B-tree | | Inbox + não-lidas |
+| `content_reports` | `(targetType, targetId)` | B-tree | | Fila de moderação por alvo |
+| `horoscope_contents` | `(type, signId, element, period, date)` | B-tree | ✅ | 1 conteúdo por combinação/date |
+| `horoscope_entries` | `(userId, createdAt)` | B-tree | | Histórico de horóscopos (RF-HORO-007) |
+| `horoscope_logs` | `(userId, createdAt)` | B-tree | | Logs de leitura |
+| `horoscope_notifications` | `userId` | B-tree | ✅ | 1 row de preferências por usuário |
+
+**Consultas sem índice dedicado ainda** (planejadas, ver plano Sprint 2): busca full-text de posts (`Post.content` GIN — §7 linha 15), contagem parcial de não-lidas (`WHERE isRead = false`), busca de seguidores por nome (`?q=` — T044).
 
 ---
 

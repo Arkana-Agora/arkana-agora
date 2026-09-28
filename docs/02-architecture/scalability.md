@@ -236,6 +236,8 @@ Usuário solicita leitura IA
   com progresso em tempo real
 ```
 
+> **Status (Sprint 2 Phase 0.5):** `bullmq` já está instalado e a primeira fila real existe — `src/lib/queue/horoscope-queue.ts` (enqueue/clean de geração de horóscopos; worker e cron são T098). O diagrama acima (API → queue → AI worker → SSE) continua **planejado**: não existe worker de IA nem stream SSE de leitura, e a rota `/api/v1/readings` segue síncrona.
+
 ### 5.2 Rate Limiting da IA
 
 ```typescript

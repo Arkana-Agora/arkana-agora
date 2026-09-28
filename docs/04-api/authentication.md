@@ -1145,8 +1145,9 @@ Authorization: Bearer $CRON_SECRET
      - **Claim primeiro:** `tx.user.updateMany({ where: { id, deletedAt: { not: null } } })` — se `count === 0`, a conta foi **restaurada entre seleção e execução** → pulada (sem deletes, sem e-mail; não conta como processed nem failed; log `"conta restaurada entre selecao e execucao — pulada"`)
      - Anonimiza PII no `User`: `email`/`providerId` → `anonymizedEmail(userId, email)` (hex digest SHA-256 de `${userId}:${email}`, 24 chars, domínio `@deleted.local`), `name`/`displayName` → `"Usuario Removido"`, `avatar`/`passwordHash`/`birthDate`/`astrologicalSign`/`mayanKin`/`personalArcana`/`emailVerified` → `null`, `isActive` → `false`, `tokenVersion` → `{ increment: 1 }` (invalidação defensiva)
      - Deleta todas as `Session` do usuário
-     - Deleta `UserProfile` e `Subscription` do usuário
+     - Deleta `UserProfile`, `Subscription` e `ArcanaCalculation` do usuário
      - Purga `VerificationToken` do usuário: `tx.verificationToken.deleteMany({ where: { identifier: email } })` — `VerificationToken` guarda o e-mail original em `identifier`, **não tem FK para `User`** e não era cascade-deletado antes
+     - **Purga dados sociais/horóscopos (Sprint 2 — review LGPD)**: `Follow` (ambas as direções `followerId`/`followingId`), `Post` (autor), `Comment` (autor), `PostLike`/`CommentLike` (do usuário), `Gift` **enviado** (`fromUserId`), `Notification`, `ContentReport` (reporter), `HoroscopeEntry`/`HoroscopeLog`/`HoroscopeNotification`. `HoroscopeContent` permanece (catálogo global, sem `userId`); `PostHashtag`/`CommentLike` de posts/comentários do autor caem em cascade; likes do usuário em conteúdo de terceiros são deletados direto. **Gifts recebidos permanecem** como ledger do doador (FK para o id já anonimizado — revisitar antes do launch)
    - `deletedAt` é **preservado** (não limpo)
    - Após o commit: espelha `tokenVersion` no Redis (`mirrorTokenVersion(userId)`, best-effort)
    - Envia `sendAccountDeletedFinalEmail(email, { deleteAfterDays: LGPD_WINDOW_DAYS })` — **após o commit** da transação, **best-effort** (falha logada, não fatal)
@@ -1210,6 +1211,7 @@ Falha **total** do job (erro não capturado na execução) → **nenhuma** conta
 - **Idempotente** — contas já anonimizadas (`email` terminando com `@deleted.local`) são ignoradas na query
 - **Claim-guard** — conta restaurada entre seleção e execução é **pulada** (`updateMany` com `count === 0` → skip; não conta como processed nem failed); o claim revalida o e-mail original, tornando-o **idempotente** em execuções sobrepostas
 - **Purga de `VerificationToken`** — tokens de verificação do e-mail original são deletados na mesma transação (sem FK para `User`; antes não eram cascade-deletados)
+- **Purga social (Sprint 2)** — a mesma transação purga `Follow`/`Post`/`Comment`/`PostLike`/`CommentLike`/`Gift` (enviado)/`Notification`/`ContentReport`/`HoroscopeEntry`/`HoroscopeLog`/`HoroscopeNotification`/`ArcanaCalculation`; gifts **recebidos** ficam (ledger do doador — item aberto p/ launch)
 - **Persistência de `deletedAt`** — preservado após anonimização para auditoria (regua LGPD: 30 dias de janela + hard delete)
 - **Enviroment:** `CRON_SECRET` obrigatório em produção (Vercel env var) — ausente → 401 em todas as chamadas; o Vercel Cron injeta `Authorization: Bearer <CRON_SECRET>` automaticamente (sem campo `Authorization` no `vercel.json`)
 - Testes: `tests/hard-delete-accounts.test.ts` (8) + `tests/cron-hard-delete.test.ts` (6)

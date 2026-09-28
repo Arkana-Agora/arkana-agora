@@ -1,6 +1,6 @@
 # Estratégia de Migrações — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-23
+> Versão: 1.3 | Última atualização: 2026-09-28
 
 ---
 
@@ -24,6 +24,12 @@ prisma/
     │   └── migration.sql   # Interpretation, FollowUpMessage, AIDailyUsage — APLICADA (Sprint 1 / AI)
     ├── 20260923183900_add_arcana_calculations/
     │   └── migration.sql   # ArcanaCalculation (arcana_calculations) + drift de índices — APLICADA (Sprint 1 / task 23)
+    ├── 20260926182325_sprint2_social_horoscopes/
+    │   └── migration.sql   # 13 models sociais/horóscopos + campos User/UserProfile — APLICADA (Sprint 2 / Phase 0)
+    ├── 20260927222620_sprint2_review_fixes/
+    │   └── migration.sql   # Índice gifts(fromUserId,createdAt) + unique NULLS NOT DISTINCT + 7 CHECKs de domínio — APLICADA (Sprint 2 / review Step 5, CRIT-2/I5)
+    ├── 20260928004004_horoscope_contents_domain_checks/
+    │   └── migration.sql   # CHECKs type/period de horoscope_contents — APLICADA (Sprint 2 / review Step 5, I6)
     └── migration_lock.toml  # provider = postgresql
 ```
 
@@ -43,6 +49,9 @@ YYYYMMDDHHMMSS_descriptive_name
 |-----------|------|-----------|
 | `20260813000605` | `init` | Criação inicial (User, UserProfile, Subscription, Session, VerificationToken) — **aplicada (Sprint 0 / F1)** |
 | `20260902015420` | `add_token_version` | Add `User.tokenVersion` (Int, default 0) p/ revogação imediata de JWT — **aplicada (Módulo 1 Auth, T5)** |
+| `20260926182325` | `sprint2_social_horoscopes` | 13 models sociais/horóscopos + campos novos em `User`/`UserProfile` — **aplicada (Sprint 2 / Phase 0)** |
+| `20260927222620` | `sprint2_review_fixes` | Índice `gifts(fromUserId, createdAt)`, recriação da unique de `horoscope_contents` com `NULLS NOT DISTINCT` (dedupe prévio) e **7 CHECKs** (posts/notifications/content_reports/versosBalance/hour) — **aplicada (Sprint 2 / review Step 5)** |
+| `20260928004004` | `horoscope_contents_domain_checks` | CHECKs `type IN ('western','chinese','maya')` e `period IN ('daily','weekly','monthly')` em `horoscope_contents` — **aplicada (Sprint 2 / review Step 5, I6)** |
 | `20250711010000` | `add_reading_tables` | Tabelas de leitura, cartas e baralhos |
 | `20250712000000` | `add_social_tables` | Tabelas de feed, follows, comentários |
 | `20250712010000` | `add_marketplace_tables` | Tabelas de produtos, pedidos e pagamentos |
@@ -210,9 +219,22 @@ CREATE TABLE "DailyCard" ( ... );
 CREATE TABLE "HoroscopeEntry" ( ... );
 ```
 
-### Sprint 2 — Social
+### Sprint 2 — Social & Horóscopos — ✅ APLICADA (2026-09-26, Phase 0)
 
-**Migration**: `20250712000000_add_social_tables`
+**Migration**: `20260926182325_sprint2_social_horoscopes` — aplicada em dev (`npx prisma migrate status` → up-to-date; **7 migrations** na chain **na data do Phase 0** — hoje são **9**: seguem `20260927222620_sprint2_review_fixes` e `20260928004004_horoscope_contents_domain_checks`, ver §11 e §1). Cria os **13 models** novos do Phase 0 (T001–T014): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport` (social) e `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (horóscopos), além de campos novos:
+
+- `User`: `subscriptionTier UserPlan @default(FREE)`, `isBanned`, `bannedAt`, `banReason`, `maxFollowing Int @default(5000)`
+- `UserProfile`: `versosBalance Int @default(0)`, `versosStreak Int @default(0)`, `lastClaimAt DateTime?`
+
+Gerada com `npx prisma migrate dev --name sprint2_social_horoscopes` (T015; sem `db push`); SQL real versionado em `prisma/migrations/20260926182325_sprint2_social_horoscopes/migration.sql`. Índices/úniques entregues junto (T016): `Post(authorId,createdAt)`, `Post(createdAt)`, `Follow(followerId)`, `Follow(followingId)`, `Notification(userId,isRead,createdAt)`, `PostHashtag(tag)`, `HoroscopeEntry(userId,createdAt)`, `HoroscopeLog(userId,createdAt)`, `Gift(toUserId,createdAt)`, `ContentReport(targetType,targetId)`, únicos `Follow(followerId,followingId)`, `PostLike(postId,userId)`, `CommentLike(commentId,userId)`, `HoroscopeContent(type,signId,element,period,date)`, `HoroscopeNotification(userId)`.
+
+> **Backfill de `User.mayanKin`**: a troca de epoch do Kin Maya para a **correlação GMT 584283** (Phase 0 — AC-11/RF-HORO-004) invalida valores calculados antes do Sprint 2. O script pontual `prisma/backfill-mayankin.ts` recalcula tudo a partir da fonte única `calculateKinMaya` — `npx tsx prisma/backfill-mayankin.ts` (**dry-run por padrão**, sem flag) → `npx tsx prisma/backfill-mayankin.ts --apply` (grava; idempotente — em dev foi validado com `1990-06-15 → Kin 255` e revertido). Guard de execução direta (importar o módulo não roda o backfill) e e-mails mascarados no stdout (LGPD, `maskEmail`). **Não é migration**: roda sob demanda em cada ambiente que tenha dados pré-existentes.
+
+### Sprint 2 — Social (rascunho de planejamento — superado)
+
+> **Nota (2026-09-26):** seção histórica de planejamento. A migration real é `20260926182325_sprint2_social_horoscopes` (subsection acima), não `20250712000000_add_social_tables`, e o escopo real inclui likes/comentários/denúncias/horóscopos além de `Follow`/`Post`/`Comment`/`Gift`/`Notification`.
+
+**Migration (planejada, nunca gerada)**: `20250712000000_add_social_tables`
 
 Entidades: `Follow`, `Post`, `Comment`, `Gift`, `Notification`
 
@@ -249,7 +271,7 @@ bunx prisma db seed
 
 ### 6.2 Dados de Seed
 
-> **Estado atual (Sprint 0 / F1):** o `prisma/seed.ts` real cria **1 admin + 1 test user** via `upsert` idempotente (com `UserProfile` aninhado; `providerId` EMAIL = email lowercase, H-2). Os dados de baralhos/spreads/astrologia abaixo são o **plano de seed** para quando essas entidades forem migradas (Sprints 1+).
+> **Estado atual (Sprint 2 / Phase 0.5, 2026-09-26):** o `prisma/seed.ts` real cria **1 admin + 1 test user** via `upsert` idempotente (com `UserProfile` aninhado; `providerId` EMAIL = email lowercase, H-2) e, desde o Sprint 2, também: (1) `HoroscopeNotification` **defaults** para os usuários do seed (`westernEnabled=true`, `chineseEnabled=false`, `mayaEnabled=false`, `hour=7` — `upsert`, idempotente); (2) **fallbacks de `HoroscopeContent`** — o Phase 0 criou 24 linhas western daily e o **Phase 0.5 (T032)** estendeu para **1328 linhas**: (12 signos ocidentais + 60 combos chineses + 260 kins maia) × (`daily` em **2** datas civis BRT + `weekly` + `monthly`), `date` em `America/Sao_Paulo` (helpers `civilDateBrt()`/`civilIsoWeek()`/`civilMonth()` — movidos no review para **`src/lib/horoscopes/dates.ts`**, single-source p/ seed/backfill/future crons), query-then-`createMany` idempotente (rodar o seed 2ª vez → 0 linhas novas). **Garantias no banco (review Step 5)**: a unique de `horoscope_contents(type, signId, element, period, date)` foi recriada com **`NULLS NOT DISTINCT`** (`20260927222620` — sem isso o Postgres trata `element IS NULL` como distintos e a idempotência não valia para western/maya) e os domínios têm **CHECKs** (`type`/`period` em `20260928004004`; demais CHECKs da mesma migration de review). — pré-existem ao cron 04:00 BRT para a página nunca retornar vazio. **Catálogos vivem em código** (`src/lib/horoscopes/western.ts`, `chinese.ts`, `maya.ts`), não no seed; o **catálogo de gifts SPEC-007** (6 itens) também é código, em `src/lib/social/gifts.ts` (T036, Phase 0.5 — **não é semeado**), e as **palavras de moderação** são env `MODERATION_BLOCKED_WORDS` consumida por `src/lib/moderation.ts` (T025). Os dados de baralhos/spreads/astrologia abaixo continuam sendo o **plano de seed** para quando essas entidades forem migradas.
 
 #### Baralho Rider-Waite-Smith (78 cartas)
 
@@ -354,6 +376,8 @@ bunx prisma db seed
 | Aquário | Ar | 20/01 | 18/02 | Urano |
 | Peixes | Água | 19/02 | 20/03 | Netuno |
 
+> ⚠️ **Catálogos agora vivem em código (Sprint 2 Phase 0).** As tabelas abaixo são o **rascunho pré-Sprint 2** — a fonte de verdade é `src/lib/horoscopes/{western,chinese,maya}.ts` (exigência: `.specs/006-horoscopes/requirements.md` RF-HORO-003/RF-HORO-002). Divergências já conhecidas do rascunho: a coluna "Tom" da tabela de selos na verdade repete o id do selo; as colunas "Poder"/"Ação" dos tons não correspondem a `power`/`action` do código em todas as linhas; e o nome do Tom 5 é **Ondulado** (não "Harmônico" — Harmónico é o Tom 8). Não copie estes valores para o seed: os catálogos são literais em código e cobertos por `tests/horoscopes.test.ts`.
+
 **Selos Solares Maias (20 selos)**:
 
 | # | Nome | Cor | Tom | Atributo |
@@ -363,11 +387,11 @@ bunx prisma db seed
 | 3 | Noite Azul | Azul | 3 | Sonho |
 | 4 | Semente Amarela | Amarelo | 4 | Florescimento |
 | 5 | Serpente Vermelha | Vermelho | 5 | Sobrevivência |
-| 6 | Enlace Mundial Branco | Branco | 6 | Morte |
+| 6 | Enlaçador de Mundos Branco | Branco | 6 | Morte |
 | 7 | Mão Azul | Azul | 7 | Conhecimento |
 | 8 | Estrela Amarela | Amarelo | 8 | Arte |
 | 9 | Lua Vermelha | Vermelho | 9 | Purificação |
-| 10 | Cão Branco | Branco | 10 | Lealdade |
+| 10 | Cachorro Branco | Branco | 10 | Lealdade |
 | 11 | Macaco Azul | Azul | 11 | Brincadeira |
 | 12 | Humano Amarelo | Amarelo | 12 | Livre-arbítrio |
 | 13 | Caminhante do Céu Vermelho | Vermelho | 13 | Espaço |
@@ -387,7 +411,7 @@ bunx prisma db seed
 | 2 | Lunar | Polarizar | Estabilizar |
 | 3 | Elétrico | Ativar | Vincular |
 | 4 | Autoexistente | Definir | Medir |
-| 5 | Harmônico | Comandar | Empoderar |
+| 5 | Ondulado | Comandar | Empoderar |
 | 6 | Rítmico | Organizar | Equilibrar |
 | 7 | Ressonante | Canalizar | Inspirar |
 | 8 | Galáctico | Harmonizar | Modelar |
@@ -402,7 +426,10 @@ bunx prisma db seed
 ## 7. Estrutura do Script de Seed
 
 ```typescript
-// prisma/seed.ts — estado real (Sprint 0 / F1): admin + test user (upsert idempotente)
+// prisma/seed.ts — recorte do estado real: upserts de usuário (Sprint 0/F1),
+// que o Sprint 2 preservou. A partir do Sprint 2 o arquivo também importa
+// "dotenv/config", usa o singleton de `../src/lib/prisma` e chama
+// seedHoroscopeNotifications() + seedHoroscopeFallbacks() após os upserts.
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -454,6 +481,15 @@ seed()
   });
 ```
 
+> **Acrescentado no Sprint 2 (Phase 0)** — o bloco acima mostra só os upserts de usuário. O `seed()` real chama em seguida:
+>
+> ```typescript
+> await seedHoroscopeNotifications([admin.id, test.id]); // defaults HoroscopeNotification
+> await seedHoroscopeFallbacks();                        // 1328 HoroscopeContent (Phase 0.5 / T032)
+> ```
+>
+> `seedHoroscopeFallbacks()` varre `FALLBACK_PERIODS = ["daily","weekly","monthly"]` e, para cada período, gera as linhas com `buildWesternFallback(index, date, period)` (12 signos), `buildChineseFallback(...)` (60 combos) e `buildMayaFallback(...)` (260 kins) — 1328 linhas no total (`daily` usa 2 datas civis BRT, `weekly` a ISO week e `monthly` o mês civil, via `civilDateBrt()`/`civilIsoWeek()`/`civilMonth()`). Só insere o que ainda não existe (checa `findMany` antes do `createMany`; chave `type|signId|element|period|date`) — rodar o seed duas vezes não duplica linhas (2ª execução: 0 inseridas). **Os templates de fallback ficam fora da validação de palavras do T035** (decisão 2026-09-26 — a validação vale para conteúdo gerado por IA).
+
 ---
 
 ## 9. Execution Log — Review-Fix Batch (2026-09-25)
@@ -472,5 +508,49 @@ seed()
 - Prisma migrate status: ✅ up to date (no pending migrations)
 
 **Documentação atualizada**: `docs/04-api/users.md`, `docs/06-features/profile.md`, `docs/04-api/ai.md`, `docs/modules/auth.md`, `docs/03-database/entities.md`, `docs/plans/20260921120000-sprint1-completion-plan.md`, `docs/work-plans/20260921120000-sprint1-completion-work-plan.md`, `docs/solutions/patterns/` (TZ determinism + derived-field invalidation patterns).
+
+---
+
+## 10. Execution Log — Sprint 2 Phase 0 (2026-09-26)
+
+**Batch**: Social & Horóscopos — T001–T023 (`docs/plans/20260926120000-sprint2-execution-plan.md`).
+
+**Schema changes**: **1 migration nova** — `20260926182325_sprint2_social_horoscopes` (13 models + campos `User`/`UserProfile`, detalhes na §5). Gerada com `npx prisma migrate dev --name sprint2_social_horoscopes`, aplicada em dev; `npx prisma migrate status` → up-to-date (7 migrations na chain). `prisma generate` re-executado após a mudança (client desatualizado).
+
+**Seed**: `prisma/seed.ts` estendido (usuários admin/test preservados + `HoroscopeNotification` defaults + 24 fallbacks `HoroscopeContent` western daily de hoje/amanhã em data civil BRT, idempotente). Executado em dev — 2ª passada sem duplicar linhas.
+
+> ⚠️ Este log registra o estado do **Phase 0**. No **Phase 0.5 (T032)** o seed foi ampliado para **1328 fallbacks** (12 zodíacos ocidentais + 60 chineses + 260 mayas × daily×2 + weekly + monthly, helpers `civilDateBrt()`/`civilIsoWeek()`/`civilMonth()`), idempotente — estado atual em §6.2.
+
+**Fora do schema (código puro)**: catálogos/algoritmos `src/lib/horoscopes/{western,chinese,maya}.ts`, validação de env `src/lib/env.ts`, testes `tests/horoscopes.test.ts`.
+
+**Mudança de contrato**: epoch do Kin Maya trocada para a **correlação GMT 584283** (`GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts`); `src/lib/calculations/kin-maya.ts` agora **delega** para `gregorianToMayanLongCount()` mantendo a assinatura `calculateKinMaya(birthDate): number | null`. Valores antigos de `User.mayanKin` ficam stale → backfill via `prisma/backfill-mayankin.ts` (ver §5).
+
+**Verificação**:
+- Lint: ✅ | Type-check: ✅
+- Tests: ✅ 1781 testes (baseline 1124; `tests/horoscopes.test.ts` = 658)
+- Prisma migrate status: ✅ up to date (no pending migrations)
+
+**Documentação atualizada**: `docs/03-database/{migrations,entities,relationships,indexing,erd}.md`, `docs/06-features/profile.md`, `docs/01-product/{business-rules,use-cases}.md`, `docs/00-overview/glossary.md`, `docs/solutions/patterns/calculation/tz-determinism-utc-tests.md`, `docs/02-architecture/deployment.md`, `docs/08-sprints/sprint-2.md`.
+
+---
+
+## 11. Execution Log — Sprint 2 Review Fixes (2026-09-27/28)
+
+**Batch**: Correções da review multi-agente Step 4/5 (data-integrity C1/CRIT-2, lint, security, architecture).
+
+**Schema changes**: **2 migrations novas** (ambas geradas via CLI + SQL customizado anexado — skill `prisma`):
+
+1. `20260927222620_sprint2_review_fixes` — índice `gifts("fromUserId","createdAt")` (fallback Prisma do limite de gifts, I5); dedupe defensivo + recriação da unique de `horoscope_contents` com **`NULLS NOT DISTINCT`** (C1/CRIT-2: sem ela, as 1000+ linhas `element IS NULL` de western/maya ficavam sem backstop de unicidade); **7 CHECKs** de domínio documentados nos comentários do `schema.prisma`: `posts(type/audience)`, `notifications(type)`, `content_reports(targetType/status)`, `UserProfile_versosBalance_nonneg` (S2-17), `horoscope_notifications_hour_range` (0–23).
+2. `20260928004004_horoscope_contents_domain_checks` — CHECKs `type IN ('western','chinese','maya')` e `period IN ('daily','weekly','monthly')` (I6; dados existentes verificados no domínio antes do `ADD CONSTRAINT`). Estender um domínio exige migration futura (`DROP CONSTRAINT` + `ADD CONSTRAINT`).
+
+**Gate de drift (data N12)**: `.github/workflows/ci.yml` (job Testes, após `migrate deploy`) agora roda `prisma migrate status` + `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` — drift migrations×schema×DB vira falha de build.
+
+**Verificação**:
+- Lint: ✓ | Type-check: ✓ | Prettier: ✓ (`prettier --check .` 0)
+- Prisma migrate status: ✓ 9 migrations, up to date
+- `prisma migrate diff` (datasource→schema): ✓ "No difference detected" (exit 0)
+- Testes: ✓ suíte completa
+
+**Documentação atualizada**: `docs/03-database/migrations.md` (§1/§2/§6.2/§11), banners de chain (9 migrations) em `entities/relationships/indexing/erd.md`.
 
 *Documento parte do SDD (Software Design Document) do arkana-agora.*

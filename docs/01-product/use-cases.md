@@ -187,20 +187,20 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 ### Fluxo Principal
 
 1. O usuario acessa a secao "Kin Maya" no menu
-2. O sistema calcula a diferenca em dias entre a data de nascimento e 26/07/1954
-3. O sistema aplica modulo 260: `Kin = (diferenca_dias % 260) + 1`
+2. O sistema calcula o dia juliano da data de nascimento (UTC) e subtrai a correlacao GMT 584283 (origem da Contagem Longa)
+3. O sistema aplica modulo 260: `Kin = (((d + 159) % 260) + 260) % 260 + 1`
 4. O sistema calcula Selo Solar: `((Kin - 1) % 20) + 1`
 5. O sistema calcula Tom Galactico: `((Kin - 1) % 13) + 1`
 6. O sistema busca os nomes correspondentes na base de dados
-7. O sistema exibe: numero do Kin, nome completo (ex.: "Kin 147 - Vento Eletrico"), Selo Solar, Tom Galactico
+7. O sistema exibe: numero do Kin, nome completo (ex.: "Kin 42 - Vento Eletrico"), Selo Solar, Tom Galactico
 8. O usuario pode solicitar interpretacao IA
 9. O sistema gera interpretacao contextualizada via streaming
 
 ### Fluxos Alternativos
 
 **FA-001: Data antes da referencia**
-- Se a data de nascimento for anterior a 26/07/1954, a diferenca em dias sera negativa
-- O sistema normaliza: aplica modulo 260 ao valor absoluto e subtrai de 260
+- Se a data de nascimento for anterior a origem da Contagem Longa (JDN 584283), a diferenca em dias sera negativa
+- O sistema normaliza com modulo sempre positivo: `(((d + 159) % 260) + 260) % 260 + 1`
 
 ### Pos-condicoes
 

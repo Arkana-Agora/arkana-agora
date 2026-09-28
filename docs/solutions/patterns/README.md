@@ -156,8 +156,8 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 
 19. **`docs/solutions/patterns/calculation/tz-determinism-utc-tests.md`** (2026-09-25, Current)
     - **Problem**: Cálculos de data (arcano pessoal, signo zodiacal, kin maya) divergiam entre dev (BRT, UTC-3) e prod (UTC) quando usavam getters locais (`getFullYear`/`getMonth`/`getDate`). Um usuário nascido perto da meia-noite tinha arcano persistido diferente do recalculado em outro ambiente.
-    - **Solution**: Todas as funções de cálculo (`calculateArcanaByDate`, `calculatePersonalArcana`, `calculateZodiacSign`, `calculateKinMaya`) usam **getters UTC** (`getUTCFullYear`/`getUTCMonth`/`getUTCDate`). Testes forçam `process.env.TZ = "UTC"` no setup global (`vitest.setup.ts`) para garantir determinismo cross-env.
-    - **Implementation**: `src/lib/arcana/calculate.ts`, `src/lib/calculations/zodiac.ts`, `src/lib/calculations/kin-maya.ts`; `tests/arcana.test.ts` (100+ cases), `vitest.setup.ts` exporta `process.env.TZ = "UTC"`.
+    - **Solution**: Todas as funções de cálculo (`calculateArcanaByDate`, `calculatePersonalArcana`, `calculateZodiacSign`, `calculateKinMaya`) usam **getters UTC** (`getUTCFullYear`/`getUTCMonth`/`getUTCDate`) ou aritmética inteira sobre JDN (Tzolkin, desde o Sprint 2). Testes forçam `process.env.TZ = "UTC"` no setup global (`tests/setup.ts`) para garantir determinismo cross-env.
+    - **Implementation**: `src/lib/arcana/calculate.ts`, `src/lib/calculations/zodiac.ts`, `src/lib/calculations/kin-maya.ts` (**delega** desde o Sprint 2 para a fonte `src/lib/horoscopes/maya.ts` — correlação GMT 584283); `tests/arcana.test.ts` (100+ cases), `tests/horoscopes.test.ts` (658 cases), `tests/setup.ts` exporta `process.env.TZ = "UTC"`.
     - **Key invariant**: O mesmo `birthDate` (ISO string) **sempre** produz o mesmo resultado numérico, independente do TZ do runtime.
 
 20. **`docs/solutions/patterns/calculation/derived-field-invalidation.md`** (2026-09-25, Current)
@@ -165,8 +165,8 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - **Solution**: Padrão de **invalidação condicional explícita** em três pontos:
       1. **PATCH `/me/profile`** (source-of-truth write): recalcula `personalArcana` via `calculatePersonalArcana(bd, currentUser.name)` dentro da transação; se retorna `null` (nome vazio) → **null-out explícito** (`personalArcana: null`); `birthDate: ""` → reset completo (zera todos os derivados).
       2. **GET `/arcana/calculate`** (read-path self-heal): serve cache canônico mas executa CAS `updateMany({ where: { id, personalArcana: observed }, data: { personalArcana: recomputed } })` para curar stale cache no read.
-      3. **Enrichment OAuth** (`events.signIn` + `enrichment-service`): invalida `personalArcana` **apenas quando** nome do Google muda **E** `birthDate` presente no usuário. Se não há `birthDate`, não há base para recalcular → não toca no arcano.
-    - **Implementation**: `src/app/api/v1/users/me/profile/route.ts`, `src/app/api/v1/arcana/calculate/route.ts`, `src/services/enrichment-service.ts`, `src/auth/auth.config.ts` (`events.signIn`).
+      3. **Enrichment OAuth** (`events.signIn` + `enrichUserFromOAuthProfile`): invalida `personalArcana` **apenas quando** nome do Google muda **E** `birthDate` presente no usuário. Se não há `birthDate`, não há base para recalcular → não toca no arcano.
+    - **Implementation**: `src/app/api/v1/users/me/profile/route.ts`, `src/app/api/v1/arcana/calculate/route.ts`, `src/services/account-service.ts` (`enrichUserFromOAuthProfile`), `src/auth/auth.config.ts` (`events.signIn`).
     - **Key invariant**: Campo derivado **nunca** fica stale silenciosamente — ou é recalculado no write, ou curado no read (CAS), ou invalidado condicionalmente no enrichment. Null-out explícito evita "arcano fantasma" quando a fonte (`name`) desaparece.
 
 ## Related Changes

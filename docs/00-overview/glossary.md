@@ -60,9 +60,9 @@ Este glossario define os termos tecnicos e de dominio utilizados em toda a docum
 | **Kin** | Numero de ordem de um dia no ciclo Tzolkin (1 a 260). Cada Kin combina um Selo Solar com um Tom Galactico. |
 | **Selo Solar** | Um dos 20 simbolos do Tzolkin (Dragao, Vento, Noite, Semente, Serpente, etc.), representando energia arquetipica. |
 | **Tom Galactico** | Um dos 13 numeros (1 a 13) que qualifica a expressao do Selo Solar. |
-| **Onda Encantada** | Ciclo de 13 dias no Tzolkin, iniciado por um mesmo Selo Solar nos 13 Tons. |
+| **Onda Encantada** | Ciclo de 13 dias no Tzolkin, iniciado por um mesmo Selo Solar nos 13 Tons. A leitura do produto expoe **9 camaras** (posicoes 2, 3, 4, 6, 7, 8, 10, 11, 12 — portais 1/13 e torres 5/9 ficam de fora). |
 | **Castelo** | Periodo de 52 dias no Tzolkin, agrupando 4 Ondas Encantadas. |
-| **Data de Referencia** | 26/07/1954, utilizada como Kin 1 (Dragao 1) para o calculo de qualquer Kin a partir de uma data gregoriana. |
+| **Data de Referencia** | Correlacao **GMT** (JDN **584283** = 0.0.0.0.0 da Contagem Longa), usada como origem para o calculo de qualquer Kin a partir de uma data gregoriana — `GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts`. *(Substitui a epoch "26/07/1954 = Kin 1" em 2026-09-26 — Sprint 2 Phase 0, AC-11/RF-HORO-004.)* |
 | **Calendario Haab** | Calendario solar maia de 365 dias, usado em conjunto com o Tzolkin para formar o Calendario Conta Longa. |
 | **Poder de Escolha** | Direcao cosmica associada ao Kin do dia, sugerindo postura ou acao reflexiva. |
 

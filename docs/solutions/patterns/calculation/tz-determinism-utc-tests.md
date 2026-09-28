@@ -45,19 +45,38 @@ export function calculateZodiacSign(birthDate: Date): string {
 ```
 
 ```typescript
-// src/lib/calculations/kin-maya.ts
-export function calculateKinMaya(birthDate: Date): number {
-  const ref = new Date(Date.UTC(1954, 6, 26)) // 26/07/1954 = Kin 1
-  const diff = birthDate.getTime() - ref.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  return ((days % 260) + 260) % 260 + 1
+// src/lib/calculations/kin-maya.ts — delega para a fonte (Sprint 2 Phase 0)
+import { gregorianToMayanLongCount } from "@/lib/horoscopes/maya"
+
+export function calculateKinMaya(birthDate: Date | null | undefined): number | null {
+  if (!birthDate) return null
+  return gregorianToMayanLongCount(
+    birthDate.getUTCFullYear(),
+    birthDate.getUTCMonth() + 1,
+    birthDate.getUTCDate(),
+  ).kinNumber
+}
+```
+
+```typescript
+// src/lib/horoscopes/maya.ts — correlação GMT 584283 (getters UTC + JDN)
+export const GMT_CORRELATION_JDN = 584283
+
+export function gregorianToJdn(year: number, month: number, day: number): number {
+  // ... cálculo do Julian Day Number com aritmética inteira (sem Date)
+}
+
+export function gregorianToMayanLongCount(year: number, month: number, day: number): MayanDate {
+  const daysSinceCreation = gregorianToJdn(year, month, day) - GMT_CORRELATION_JDN
+  const kinNumber = ((((daysSinceCreation + 159) % 260) + 260) % 260) + 1
+  // ...
 }
 ```
 
 **Testes forçam `process.env.TZ = "UTC"`** no setup global para garantir determinismo cross-env:
 
 ```typescript
-// vitest.setup.ts
+// tests/setup.ts
 process.env.TZ = "UTC"
 ```
 
@@ -67,9 +86,11 @@ process.env.TZ = "UTC"
 |------|------|
 | `src/lib/arcana/calculate.ts` | `calculateArcanaByDate`, `calculatePersonalArcana`, `explainPersonalArcana` — getters UTC |
 | `src/lib/calculations/zodiac.ts` | `calculateZodiacSign` — getters UTC (já usava UTC antes do fix) |
-| `src/lib/calculations/kin-maya.ts` | `calculateKinMaya` — getters UTC via `Date.UTC` |
+| `src/lib/calculations/kin-maya.ts` | `calculateKinMaya` — getters UTC; **delega** para `maya.ts` desde o Sprint 2 (epoch GMT 584283) |
+| `src/lib/horoscopes/maya.ts` | `gregorianToJdn`, `gregorianToMayanLongCount`, `kinToSealTone`, `getMayanOndaEncantada` — aritmética inteira (sem `Date`), portátil a qualquer TZ |
 | `tests/arcana.test.ts` | 100+ casos de redução pitagórica (datas conhecidas) |
-| `vitest.setup.ts` | `process.env.TZ = "UTC"` global |
+| `tests/horoscopes.test.ts` | 658 casos (Western/Chinese/Maya) — Sprint 2; inclui datas de referência do Tzolkin |
+| `tests/setup.ts` | `process.env.TZ = "UTC"` global |
 
 ## Key Invariant
 
@@ -78,6 +99,7 @@ process.env.TZ = "UTC"
 ## Verification
 
 - `npx vitest run tests/arcana.test.ts` — 100+ testes passando
+- `npx vitest run tests/horoscopes.test.ts` — 658 testes passando (Sprint 2: algoritmos ocidental/chinês/maia)
 - `npx vitest run tests/integration/arcana-calculate.test.ts` — endpoint integration tests
 - Manual: `TZ=UTC node -e "..."` vs `TZ=America/Sao_Paulo node -e "..."` → mesmo output
 

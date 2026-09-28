@@ -19,7 +19,7 @@ O módulo inclui configurações de privacidade granulares — o usuário pode d
 - **Campos editáveis**: `displayName`, `bio`, `birthDate`, `birthPlace`, `location`, `website`, `username` (`updateProfileSchema` em `src/lib/validators/profile.ts` — **sem `gender`**) — `socialLinks` existe no model mas **não** é editável via PATCH
 - **Arcana Pessoal** — cálculo automático via numerologia pitagórica (nome + data de nascimento)
 - **Signo Zodiacal** — cálculo automático a partir da data de nascimento
-- **Kin Maya** — cálculo automático baseado no calendário Tzolkin (data de referência: 26/07/1954 = Kin 1 — Dragão Magnético)
+- **Kin Maya** — cálculo automático baseado no calendário Tzolkin (**correlação GMT 584283** — `src/lib/horoscopes/maya.ts`; ver §Cálculo do Kin Maya)
 - **Horóscopo Chinês** — cálculo automático baseado no ano lunar (12 animais × 5 elementos)
 - **Configurações de privacidade** (JSON em `UserProfile.privacy`): `profileVisibility`, `statsVisibility`, `arcanaVisibility` (`public`|`private`), `whoCanFollow`, `whoCanComment` (`all`|`following`|`nobody`) — `PATCH /api/v1/users/me/privacy`
 - **Upgrade para perfil profissional**: especialidades, preço, disponibilidade
@@ -60,14 +60,18 @@ Algoritmo:
 
 ```
 Calendário Tzolkin: 20 Selos Solares × 13 Tons Galácticos = 260 dias
-Data de referência: 26/07/1954 = Kin 1 (Dragão Magnético)
+Correlação GMT (Goodman-Martinez-Thompson): JDN 584283 = 0.0.0.0.0 da Contagem Longa
 
-Algoritmo:
-1. Calcular dias corridos desde 26/07/1954 até a data de nascimento
-2. kin_number = (dias_corridos % 260) + 1
-3. Tom Galáctico = ((kin_number - 1) % 13) + 1
-4. Selo Solar = ((kin_number - 1) % 20) + 1
+Algoritmo (fonte única: src/lib/horoscopes/maya.ts — gregorianToMayanLongCount):
+1. d = JDN(data de nascimento em UTC) − 584283
+2. kin_number = ((d + 159) mod 260) + 1        // 1–260
+3. Tom Galáctico = ((kin_number − 1) % 13) + 1 // 1–13
+4. Selo Solar (índice 0–19) = (kin_number − 1) % 20
 ```
+
+> **Implementação real:** `calculateKinMaya(birthDate)` (`src/lib/calculations/kin-maya.ts`) apenas **delega** para `gregorianToMayanLongCount()` — a assinatura pública (`number | null`, `null` sem `birthDate`) foi preservada. `kinToSealTone()` devolve selo/tom; `getMayanOndaEncantada(kinNumber)` devolve a onda com **9 câmaras** (posições 2, 3, 4, 6, 7, 8, 10, 11, 12 — portais 1/13 e torres 5/9 ficam de fora). Exemplo de verificação: `15/06/1990 → Kin 255`.
+>
+> **Epoch anterior:** a documentação citava `26/07/1954 = Kin 1 (Dragão Magnético)` (e o código Sprint 1 usava `11/08/1993 = Kin 1`) — ambos **substituídos** na correlação GMT em 2026-09-26 (Phase 0 do Sprint 2, AC-11/RF-HORO-004). `User.mayanKin` gravado antes disso está stale: recalcular com `prisma/backfill-mayankin.ts` (dry-run → apply).
 
 ---
 
@@ -233,7 +237,7 @@ emite `0`**. A copy de erro de `/meu-arcano/[arcana]` foi corrigida de "Valores 
 ## Critérios de Aceite
 
 - **CA-01**: O Arcana Pessoal deve ser calculado corretamente para qualquer nome e data de nascimento válidos, seguindo a tabela pitagórica e regras de redução
-- **CA-02**: O Kin Maya deve ser calculado corretamente com base na data de referência 26/07/1954 = Kin 1 (Dragão Magnético)
+- **CA-02**: O Kin Maya deve ser calculado corretamente pela **correlação GMT 584283** (`GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts` — ex.: 15/06/1990 → Kin 255; testado em `tests/horoscopes.test.ts`)
 - **CA-03**: As configurações de privacidade devem ser aplicadas em menos de 1 segundo após a alteração
 - **CA-04**: O perfil deve ser acessível publicamente por URL única (slug) e respeitar as configurações de privacidade do usuário
 - **CA-05**: O upload de avatar deve aceitar imagens até 5 MB nos formatos JPG, PNG e WebP, com redimensionamento automático para 400×400px

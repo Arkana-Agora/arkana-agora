@@ -92,9 +92,13 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > respectivamente — **sem**
 > wrapper `data`. Este é o contrato canônico dos endpoints de auth (ver
 > `docs/04-api/authentication.md`). O envelope `data` aplica-se aos demais endpoints REST.
-> **Rota interna (cron):** `GET /api/cron/hard-delete` (Vercel Cron 03:00 UTC, protegida por
-> `Authorization: Bearer $CRON_SECRET`) retorna `{ ok, data: { processed, failed, errors },
-> meta: { requestId } }` — ver `docs/04-api/authentication.md` §GET /cron/hard-delete.
+> **Rotas internas (cron, `vercel.json`):** `GET /api/cron/hard-delete` (Vercel Cron 03:00 UTC,
+> `0 3 * * *`) e `GET /api/cron/feed-cache-refresh` (a cada 5 min, `*/5`, job
+> `src/jobs/feed-cache-refresh.ts`) — ambas protegidas por `Authorization: Bearer $CRON_SECRET`
+> e ambas retornam `{ ok: true, data: <summary>, meta: { requestId } }` (401 `{ error: { code:
+> "UNAUTHORIZED" } }` sem/errado o header — o Vercel injeta `CRON_SECRET` sozinho nos runs
+> agendados). `hard-delete`: `{ processed, failed, errors }` — ver `docs/04-api/authentication.md`
+> §GET /cron/hard-delete.
 
 ### SSE (Server-Sent Events — streaming de IA)
 
@@ -138,6 +142,8 @@ data: {"type": "done", "cached": false, "interpretationId": "itr_abc123"}
 | `X-RateLimit-Reset` | Timestamp de reset do rate limit |
 | `X-Response-Time` | Tempo de processamento (ms) |
 
+> **Implementado (Sprint 2 Phase 0.5)**: o único middleware de rate limit existente é `src/lib/middleware/rate-limit.ts`, que emite **apenas** `X-RateLimit-Limit`, `X-RateLimit-Remaining` (e `Retry-After` quando bloqueia) — **não** emite `X-RateLimit-Reset`. As rotas de auth emitem `Retry-After` + `retryAfter` no body. `X-Response-Time` é estado-alvo.
+
 ---
 
 ## Paginação
@@ -161,6 +167,8 @@ GET /api/v1/social/feed?cursor=eyJpZCI6MTIzfQ&limit=20
 ```
 
 > **Usado em**: Feed social, notificações, histórico de tiragens.
+>
+> **Implementado (Sprint 2 Phase 0.5)**: o único cursor real hoje é o de feed — `src/lib/social/feed-algorithm.ts` (`encodeFeedCursor`/`decodeFeedCursor` = base64url de `{createdAt, id}`; `FEED_DEFAULT_LIMIT=10`, `FEED_MAX_LIMIT=50`) e a lib devolve **`{ posts, nextCursor }`**, sem `prevCursor`/`hasMore`. O envelope `{ data, pagination }` acima é o contrato de rota — a T052 decide adaptá-lo ou expor o shape da lib.
 
 ### Offset-based (Listas paginadas simples)
 
@@ -214,6 +222,12 @@ HTTP 429 Too Many Requests
 }
 ```
 
+> **Códigos reais hoje** (o `RATE_LIMIT_EXCEEDED` acima é o contrato genérico, **ainda não emitido** por nenhuma rota):
+> - **Social** — `src/lib/middleware/rate-limit.ts` responde 429 **`RATE_LIMITED`** com `{ limit: <tipo>, resetAt }` + headers `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`Retry-After`.
+> - **Auth** — 429 **`AUTH_RATE_LIMITED`** / `AUTH_MAGIC_LINK_RATE_LIMIT` / `AUTH_FORGOT_RATE_LIMIT` (com `retryAfter` no body).
+> - O 429 **nunca** vem de falha de infraestrutura: os limites sociais são fail-open (Q26) e nunca devolvem 503.
+> - ⚠️ **Taxonomia pendente (review learnings)**: o corpo dos 429 sociais usa `resetAt` (ISO) em `details`, enquanto o contrato de auth exige `retryAfter` (segundos) — unificar quando as rotas sociais consumirem o middleware (family do CHK004).
+
 ---
 
 ## Tratamento de Erros
@@ -260,7 +274,9 @@ HTTP 429 Too Many Requests
 | Negócio | `INSUFFICIENT_CREDITS` | Créditos insuficientes |
 | Negócio | `READING_NOT_FOUND` | Tiragem não encontrada |
 | Negócio | `DECK_NOT_AVAILABLE` | Baralho não disponível |
-| Rate Limit | `RATE_LIMIT_EXCEEDED` | Limite excedido |
+| Rate Limit | `RATE_LIMIT_EXCEEDED` | Limite excedido **[contrato genérico — ainda não emitido]** |
+| Rate Limit | `RATE_LIMITED` | Limite social excedido (posts/likes/comentários/follow/gifts/uploads) — **implementado** em `src/lib/middleware/rate-limit.ts` (T040) |
+| Segurança | `CSRF_TOKEN_INVALID` | CSRF inválido — code **canônico AC-20** emitido hoje pelas rotas de auth do Sprint 1 (`validateCsrfToken` direto em login/register). O helper `enforceCsrf` (`src/lib/middleware/csrf.ts`, T041) emite o mesmo code, mas **ainda não tem rota consumidora** (wiring = fase das rotas sociais, ver `docs/07-security/security.md` §CSRF); o `CSRF_INVALID` intermediário do T041 foi alinhado na review Step 5 |
 | AI | `AI_SERVICE_UNAVAILABLE` | Serviço de IA indisponível |
 | AI | `AI_DAILY_LIMIT_REACHED` | Limite diário de IA atingido |
 | Sistema | `INTERNAL_ERROR` | Erro interno do servidor |

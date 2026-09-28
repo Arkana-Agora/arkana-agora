@@ -92,8 +92,8 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 ### BR-KIN-001: Algoritmo Tzolkin
 
 - O calculo do Kin utiliza o **Calendario Tzolkin** de 260 dias (20 Selos Solares x 13 Tons Galacticos).
-- Data de referencia: **26/07/1954** = Kin 1 (Dragao Magnetico / Tom 1, Selo 1).
-- O Kin de qualquer data e calculado pela diferenca em dias em relacao a data de referencia, aplicando modulo 260.
+- Data de referencia: **correlacao GMT** (JDN **584283** = 0.0.0.0.0 da Contagem Longa) — fonte unica `GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts`; ex.: 15/06/1990 = Kin 255. *(Epoch anterior "26/07/1954 = Kin 1" foi substituida em 2026-09-26 — Sprint 2 Phase 0, AC-11/RF-HORO-004; `User.mayanKin` gravado antes disso precisa de backfill: `prisma/backfill-mayankin.ts`.)*
+- O Kin de qualquer data e calculado pela diferenca de dias em relacao a origem da Contagem Longa, aplicando modulo 260.
 
 ### BR-KIN-002: Componentes do Kin
 
@@ -105,12 +105,12 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 
 - O Kin pessoal e calculado pela data de nascimento.
 - O Kin do dia muda diariamente.
-- A onda encantada (ciclo de 13 dias) e calculada a partir do Kin pessoal.
+- A onda encantada (ciclo de 13 dias) e calculada a partir do Kin pessoal; a leitura expoe **9 camaras** (posicoes 2, 3, 4, 6, 7, 8, 10, 11, 12 — portais 1/13 e torres 5/9 ficam de fora).
 
 ### BR-KIN-004: Selos Solares e Tons Galacticos
 
 - Os 20 Selos Solares: Dragao, Vento, Noite, Semente, Serpente, Enlaçador de Mundos, Mao, Estrela, Lua, Cachorro, Macaco, Humano, Caminhante do Ceu, Mago, Aguia, Guerreiro, Terra, Espelho, Tormenta, Sol.
-- Os 13 Tons Galacticos: Magnetico (1), Lunar (2), Eletrico (3), Auto-existente (4), Harmônico (5), Ritmico (6), Resonante (7), Galáctico (8), Solar (9), Planetario (10), Espectral (11), Cristal (12), Cosmico (13).
+- Os 13 Tons Galacticos: Magnetico (1), Lunar (2), Eletrico (3), Auto-existente (4), Ondulado (5), Ritmico (6), Resonante (7), Galáctico (8), Solar (9), Planetario (10), Espectral (11), Cristal (12), Cosmico (13). *(Nome do Tom 5 corrigido de "Harmônico" — RF-HORO-003 e `MAYAN_TONES` usam "Ondulado"; "Harmónico" é o Tom 8.)*
 
 ---
 

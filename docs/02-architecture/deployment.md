@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-09-24
+> Versão: 1.1 | Última atualização: 2026-09-28
 
 ---
 
@@ -102,6 +102,8 @@ bun run dev:all
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_WS_URL=ws://localhost:3003
+# Sprint 2 (src/lib/env.ts) — porta do mini-service Socket.io (default 3003; serviço ainda não scaffoldado — T066)
+SOCKET_PORT=3003
 
 # Banco (dev) — Prisma Postgres via Vercel Marketplace (pooled p/ runtime, direct p/ CLI)
 DATABASE_URL=postgres://user:pass@pooled.db.prisma.io:5432/postgres?sslmode=require
@@ -127,13 +129,24 @@ SMTP_USER=
 SMTP_PASS=
 # Resend (e-mails transacionais — src/lib/email/email.ts); em dev use AUTH_EMAIL_SKIP_SEND=true para logar no console
 RESEND_API_KEY=
-# Vercel Cron (T16 — GET /api/cron/hard-delete): obrigatório em prod; sem ele o cron retorna 401
+# Vercel Cron (T16 — GET /api/cron/hard-delete 0 3 * * * + GET /api/cron/feed-cache-refresh */5, ambos em vercel.json):
+# obrigatório em prod; sem ele os dois crons retornam 401
 CRON_SECRET=
 
 # IA (openai SDK — src/lib/ai/client.ts + src/lib/ai/models.ts; ver .env.example)
 AI_API_KEY=dev-ai-key
 AI_MODEL=gpt-4o
 AI_MODEL_FOLLOWUP=gpt-4o-mini
+
+# Sprint 2 (src/lib/env.ts) — AI_HOROSCOPE_* segue sem consumidor (fases 5/6 do plano);
+# MODERATION_BLOCKED_WORDS já tem consumidor (Phase 0.5): src/lib/moderation.ts
+# Horóscopos (T097/T098 — geração via IA)
+AI_HOROSCOPE_API_KEY=
+AI_HOROSCOPE_MODEL=gpt-4o-mini
+# Moderação de posts/comentários (T025 — consumidor: src/lib/moderation.ts checkContent(); ainda não chamado por nenhuma rota — T129; palavras separadas por vírgula)
+MODERATION_BLOCKED_WORDS=
+# Sharp (libvips global ignorada — usado em upload de imagens)
+SHARP_IGNORE_GLOBAL_LIBVIPS=
 
 # Mercado Pago (sandbox)
 MP_ACCESS_TOKEN=TEST-xxxxx
@@ -153,12 +166,12 @@ POSTHOG_KEY=
 NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=
 NEXT_PUBLIC_POSTHOG_HOST=
 
-# Cloudflare R2 (S3-compatible)
+# Cloudflare R2 (S3-compatible) — nomes iguais a .env.example / src/lib/env.ts
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
-R2_BUCKET=
-R2_PUBLIC_URL=https
+R2_BUCKET_NAME=
+R2_PUBLIC_URL=https://your-r2-bucket-name.r2.cloudflarestorage.com
 ```
 
 ---
@@ -248,11 +261,16 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `R2_ACCOUNT_ID` | *ID da conta Cloudflare R2* | Production | Conta ID da R2 |
 | `R2_ACCESS_KEY_ID` | *Access Key ID da R2* | Production | Chave de acesso da R2 |
 | `R2_SECRET_ACCESS_KEY` | *Access Key Secret da R2* | Production | Segredo da chave de acesso da R2 |
-| `R2_BUCKET` | *Nome do bucket da R2* | Production | Nome do bucket na R2 |
+| `R2_BUCKET_NAME` | *Nome do bucket da R2* | Production | Nome do bucket na R2 — lido por `src/lib/r2.ts`/`src/lib/env.ts` (não existe `R2_BUCKET`) |
 | `R2_PUBLIC_URL` | `https://` | Production | URL pública do bucket (ex: `https://your-bucket.r2.dev` se custom domain) |
 | `AI_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
 | `AI_MODEL` | *Modelo OpenAI* | Production | Modelo de interpretacao (default: gpt-4o) |
 | `AI_MODEL_FOLLOWUP` | *Modelo OpenAI follow-up* | Production | Modelo de follow-up (default: gpt-4o-mini) |
+| `SOCKET_PORT` | `3003` | Production | Porta do mini-service Socket.io (Sprint 2 — `src/lib/env.ts`, default 3003; **serviço ainda não scaffoldado** — T066) |
+| `AI_HOROSCOPE_API_KEY` | *Chave dedicada* | Production | Opcional — chave separada p/ geração de horóscopos (Sprint 2; **sem consumidor até as fases 5/6** do plano) |
+| `AI_HOROSCOPE_MODEL` | `gpt-4o-mini` | Production | Modelo da geração de horóscopos (idem — pendente de T097/T098) |
+| `MODERATION_BLOCKED_WORDS` | *palavra1,palavra2* | Production | Palavras bloqueadas da moderação de posts/comentários (Sprint 2 T025 — declarada em `src/lib/env.ts`, consumida por `src/lib/moderation.ts` `checkContent()` desde o Phase 0.5; **nenhuma rota aplica o filtro ainda** — T129) |
+| `SHARP_IGNORE_GLOBAL_LIBVIPS` | `true` \| `false` | Production | Flag do Sharp para upload de imagens (Sprint 2 — `src/lib/env.ts`) |
 | `MP_ACCESS_TOKEN` | *Token Mercado Pago* | Production | Token de acesso do Mercado Pago |
 | `MP_WEBHOOK_URL` | *URL do webhook Mercado Pago* | Production | URL de callback do webhook |
 | `SENTRY_DSN` | *DSN do Sentry* | Production | DSN do Sentry (opcional, SDK desabilitado sem DSN) |
@@ -261,7 +279,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | *Token do projeto PostHog* | Production | Client analytics PostHog (`src/lib/analytics.ts`); sem ele, `console.warn("[Analytics] PostHog key not configured")` e não init (fora de development) |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` | Production | Host do PostHog (`src/lib/analytics.ts`; default `https://app.posthog.com`; override com `us.i.posthog.com`/`eu.i.posthog.com` conforme a região do projeto) |
 | `AUTH_URL` | `https://arkanaagora.com.br` | Production + Preview | Origem canônica da aplicação (HTTPS obrigatório); guard de runtime em `src/auth/auth.config.ts` (`AUTH_URL_in_env`/`AUTH_URL_empty` no erro — redeploy após editar env) |
-| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege `GET /api/cron/hard-delete` (T16 — LGPD hard-delete); obrigatório, sem ele o cron retorna 401 |
+| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`) e `feed-cache-refresh` (Sprint 2, `*/5`); obrigatório, sem ele os crons retornam 401 |
 
 **Configuração no Vercel (Staging)**:
 
@@ -269,7 +287,7 @@ Acesse `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-
 1. Crie uma variável `AUTH_URL` com valor `https://arkana-agora.vercel.app` (ou `https://staging.arkanaagora.com.br` se configurado)
 2. Configure as outras variáveis de ambiente conforme a tabela acima
 
-**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron T16) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
+**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron — `hard-delete` + `feed-cache-refresh`) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
 
 ### 4.3 Serviços de Produção
 

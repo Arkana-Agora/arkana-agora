@@ -1,12 +1,14 @@
 # Rede Social — Arkana Agora
 
 > **Identificador**: `arkana-agora` | **Módulo**: Rede Social | **Versão**: V1
+>
+> **Status (2026-09-26)**: **parcialmente implementado.** Desde o Sprint 2 Phase 0 existem no schema os models `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag` e `ContentReport` (migração `20260926182325_sprint2_social_horoscopes`). Desde o **Phase 0.5** existem as **utilidades compartilhadas**, ainda sem rota/UI: `src/lib/social/feed-algorithm.ts` (T026), `src/lib/social/limits.ts` (T027), `src/lib/social/mentions.ts`, `src/lib/social/gifts.ts` (T036), `src/lib/social/versos.ts` (T037), `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts` (T040/T041), `src/lib/feed-cache.ts` + cron `src/jobs/feed-cache-refresh.ts` (T042), `src/lib/og-image.ts` (T029), `src/hooks/use-social.ts`, `src/components/route-error.tsx`. **Não há rota em `src/app/api/v1/social/` nem UI de feed** (rotas = Phase 1/2 do plano). Contrato de endpoints: `docs/04-api/social.md`.
 
 ---
 
 ## Descrição
 
-O módulo de Rede Social do **Arkana Agora** transforma a plataforma em uma comunidade viva de entusiastas de esoterismo, Tarot e autoconhecimento. O feed de notícias utiliza um algoritmo de distribuição em três camadas: primeiro, publicações de usuários seguidos; em seguida, leituras e conteúdos em alta (trending); por fim, sugestões de novos criadores e profissionais. Esse modelo garante relevância e descoberta simultaneamente.
+O módulo de Rede Social do **Arkana Agora** transforma a plataforma em uma comunidade viva de entusiastas de esoterismo, Tarot e autoconhecimento. O feed de notícias é ordenado por **quatro níveis** (S2-5/RF-SOC-002, implementado em `src/lib/social/feed-algorithm.ts`): posts fixados, engajamento das últimas 2 horas, recência e interação prévia do usuário — 10 posts por página, com fallback para o conteúdo de **Explorar** quando o usuário ainda não segue ninguém. A descoberta de novos criadores e profissionais (conteúdos em alta e sugestões) fica por conta da página Explorar. Esse modelo garante relevância e descoberta simultaneamente.
 
 O sistema de publicações suporta texto livre, compartilhamento de leituras salvas (com visualização inline do baralho) e upload de imagens. A interação é composta por likes, comentários encadeados e envio de presentes virtuais. A página Explorar oferece curadoria de conteúdos populares, profissionais em destaque e temas esotéricos em tendência. Mecanismos de moderação incluem denúncias de conteúdo e bloqueio de usuários, com revisão pela equipe administrativa.
 
@@ -15,7 +17,7 @@ O sistema de publicações suporta texto livre, compartilhamento de leituras sal
 ## Funcionalidades
 
 - **Seguir/deixar de seguir** usuários
-- **Feed timeline** com algoritmo de três camadas (seguindo → trending → sugeridos)
+- **Feed timeline** com ordenação em 4 níveis (fixado → engajamento 2h → recência → interação prévia; fallback explore em 0 following)
 - **Criação de publicações** com texto, compartilhamento de leitura e imagens (até 4 por post)
 - **Sistema de likes** com contagem e lista de curtidores
 - **Comentários encadeados** (até 3 níveis de profundidade)
@@ -28,14 +30,26 @@ O sistema de publicações suporta texto livre, compartilhamento de leituras sal
 
 ## Algoritmo do Feed
 
-```
-1. Posts de usuários seguidos (ordenado por data, peso: 1.0)
-2. Leituras em alta (engajamento nas últimas 24h, peso: 0.7)
-3. Conteúdos sugeridos (baseado em interesses do perfil, peso: 0.4)
+> **Implementado (Sprint 2 Phase 0.5, T026)** em `src/lib/social/feed-algorithm.ts`. O rascunho antigo "3 camadas com pesos" (peso × recency × engagement, janela de 24h) foi **substituído** pela ordenação em 4 níveis do S2-5; sugestões/trending não entram no ranking do feed — ficam com Explorar (Phase 2).
 
-Score final = peso × recency_score × engagement_score
-recency_score = 1 / (horas_desde_publicacao + 1)
-engagement_score = (likes × 1) + (comments × 3) + (shares × 5)
+```
+Candidatos (S2-15): isHidden = false
+  E (audience = 'public'
+     OU audience = 'followers' com authorId em followingIds)
+  + perfil privado (UserProfile.privacy.profileVisibility = 'PRIVATE')
+    só aparece para quem segue o autor
+  + 0 following → só posts públicos (fallback explore)
+
+Ordenação (4 níveis, por página de 10):
+1. Post fixado (isPinned)      — no máximo 1 por página
+2. Engajamento das últimas 2h  — likes + comments × 2
+3. Recência (createdAt desc)
+4. Desempate                  — viewer já interagiu (PostLike/Comment) e id desc
+
+Cursor: base64url de { createdAt, id } = menor (createdAt, id) já lido —
+aproximação sobre o ranking: paginação estável, sem repetir nem pular posts.
+Cache: src/lib/feed-cache.ts (Redis, TTL 5 min) para perfis com
+> 1000 seguindo, materializado pelo cron src/jobs/feed-cache-refresh.ts (*/5 * * * *).
 ```
 
 ---
@@ -43,7 +57,7 @@ engagement_score = (likes × 1) + (comments × 3) + (shares × 5)
 ## Fluxo Principal
 
 1. O usuário acessa o feed na tela inicial da aba "Comunidade"
-2. O sistema carrega as publicações seguindo o algoritmo de três camadas
+2. O sistema carrega as publicações seguindo a ordenação em 4 níveis (fallback para Explorar quando o usuário ainda não segue ninguém)
 3. O usuário rola a tela para carregar mais conteúdo (scroll infinito)
 4. O usuário pode curtir, comentar ou compartilhar qualquer publicação
 5. O usuário pode criar uma nova publicação tocando no botão "Publicar"

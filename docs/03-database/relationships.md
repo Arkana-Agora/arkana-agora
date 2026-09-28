@@ -1,16 +1,16 @@
 # Relacionamentos — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-23
+> Versão: 1.2 | Última atualização: 2026-09-26
 
 ---
 
-> **Status:** **11 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`) — migrations aplicadas em dev PostgreSQL. As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, `HoroscopeEntry`, social, marketplace, notificações) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
 ## 1. Visão Geral dos Relacionamentos
 
-O banco de dados possui **16 relacionamentos** entre 18 entidades, distribuídos entre relações **1:1**, **1:N** e **N:M** (via tabela juntura).
+O banco de dados possui **24 models implementados** (o Sprint 2 Phase 0 adicionou 13 models sociais/horóscopos). A tabela abaixo cobre os relacionamentos do **ERD alvo** — inclusive os de entidades ainda planejadas (`TarotDeck`, `Card`, `Product`, `Order`, `Payment`, `DailyCard`) — e é distribuída entre relações **1:1**, **1:N** e **N:M** (via tabela juntura). A §5 marca o que já existe no schema.
 
 | # | Entidade A | Entidade B | Tipo | Descrição |
 |---|------------|------------|------|-----------|
@@ -302,7 +302,7 @@ model Follow {
 | User → ArcanaCalculation | ✅ | | | |
 | User → HoroscopeEntry | ✅ | | | |
 | User → Post | ✅ | | | |
-| User → Comment | | ✅ | | |
+| User → Comment | ✅ | | | |
 | User → Product | | ✅ | | |
 | User → Order | | ✅ | | |
 | User → Payment | ✅ | | | |
@@ -310,14 +310,24 @@ model Follow {
 | User → Gift (sender) | ✅ | | | |
 | User → Gift (receiver) | ✅ | | | |
 | Post → Comment | ✅ | | | |
+| User → PostLike | ✅ | | | |
+| User → CommentLike | ✅ | | | |
+| User → ContentReport | ✅ | | | |
+| User → HoroscopeLog | ✅ | | | |
+| User → HoroscopeNotification | ✅ | | | |
+| Post → PostLike | ✅ | | | |
+| Post → PostHashtag | ✅ | | | |
+| Comment → CommentLike | ✅ | | | |
 | Product → Order | | | ✅ | |
-| Order → Payment | | ✅ | | |
+| Order → Payment | | | ✅ | |
 | Card → DailyCard | | | ✅ | |
+
+> **Nota (Sprint 2 Phase 0, 2026-09-26):** as linhas de `PostLike` a `CommentLike` refletem o schema real (`20260926182325_sprint2_social_horoscopes`); todas são `onDelete: Cascade`. `User → Comment` passou a ser **CASCADE** no schema (`Comment.authorId`), divergindo do racional `SET NULL` abaixo — comentários de um autor dur-deltado são removidos junto (o fluxo de exclusão real do app é soft-delete via `User.deletedAt`; hard-delete só no job LGPD T16).
 
 **Racional das decisões**:
 
 - **CASCADE**: Dados que pertencem exclusivamente ao usuário ou não fazem sentido sem ele (leituras, notificações, perfil)
-- **SET NULL**: Dados que podem ter valor histórico ou de auditoria (comentários de autores deletados, pedidos, pagamentos)
+- **SET NULL**: Dados que podem ter valor histórico ou de auditoria (pedidos, pagamentos)
 - **RESTRICT**: Prevenção de perda de dados importantes (excluir produto com pedidos ativos, excluir carta já usada em DailyCard)
 
 ---
@@ -331,10 +341,10 @@ Todas as colunas de foreign key possuem índice automático no PostgreSQL (criad
 | Relacionamento | Índice Composto | Consulta Otimizada |
 |----------------|-----------------|-------------------|
 | User → Reading | `@@index([userId, createdAt])` | "Leituras mais recentes do usuário" |
-| User → Post | `@@index([authorId, isPublic, createdAt])` | "Postagens públicas por autor, ordenadas" |
+| User → Post | `@@index([authorId, createdAt])` | "Postagens por autor, ordenadas" (`audience` é filtro, não índice — `isPublic` do alvo não existe) |
 | User → Product | `@@index([sellerId, isActive])` | "Produtos ativos de um vendedor" |
 | Post → Comment | `@@index([postId, createdAt])` | "Comentários de um post, mais recentes" |
-| User → Notification | `@@index([userId, isRead])` parcial | "Notificações não lidas" |
+| User → Notification | `@@index([userId, isRead, createdAt])` | "Notificações não lidas" (parcial `WHERE isRead = false` é opcional/ainda não criado) |
 | User → Follow | `@@index([followerId])` + `@@index([followingId])` | "Quem eu sigo" / "Quem me segue" |
 | DailyCard → date | `@@unique([date])` | "Carta do dia de hoje" |
 

@@ -1,10 +1,10 @@
 # Definição de Entidades — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-23
+> Versão: 1.3 | Última atualização: 2026-09-28
 
 ---
 
-> **Status:** **11 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`) — migrations aplicadas em dev PostgreSQL. As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, `HoroscopeEntry`, social, marketplace, notificações) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. **As seções §7/§9/§10/§11/§15/§16 abaixo são o formato alvo do ERD** — os models homônimos já existem no schema com campos diferentes (as notas de status de cada seção apontam o desvio); os models novos sem seção (`PostLike`, `CommentLike`, `PostHashtag`, `ContentReport`, `HoroscopeContent`, `HoroscopeLog`, `HoroscopeNotification`) estão definidos só em `prisma/schema.prisma`. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
@@ -22,9 +22,14 @@ Entidade principal de autenticação e identidade do usuário.
 | `avatar` | `String?` | nullable | URL do avatar (Cloudflare R2) |
 | `role` | `UserRole` | NOT NULL, default `USER` | Papel no sistema |
 | `plan` | `UserPlan` | NOT NULL, default `FREE` | Plano de assinatura |
+| `subscriptionTier` | `UserPlan` | NOT NULL, default `FREE` | Tier usado pelo limite de posts (`checkPostLimit`, T027) — **campo distinto de `plan`** (Sprint 2, T014/SC17). ⚠️ **Contrato de sincronização (review data I7 / simpc N13)**: hoje **nada escreve** `subscriptionTier` (todo consumidor existente lê `plan`); a primeira integração de billing **deve atualizar as duas colunas no mesmo `$transaction`** (ou o plano adotar uma única fonte) — senão um PLUS vira FREE no cap de posts (ou vice-versa) de forma invisível |
+| `isBanned` | `Boolean` | NOT NULL, default `false` | Banimento de moderação (Sprint 2, T014) |
+| `bannedAt` | `DateTime?` | nullable | Data/hora do banimento |
+| `banReason` | `String?` | nullable | Motivo do banimento |
+| `maxFollowing` | `Int` | NOT NULL, default `5000` | Limite de "seguindo" por usuário (`checkFollowLimit`, T043) |
 | `birthDate` | `DateTime?` | nullable | Data de nascimento |
 | `astrologicalSign` | `String?` | nullable | Signo do zodíaco ocidental |
-| `mayanKin` | `String?` | nullable | Kin maia (Tzolkin) |
+| `mayanKin` | `String?` | nullable | Kin maia (Tzolkin). Cálculo = **correlação GMT 584283** (`GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts`; `calculateKinMaya` delega — decisão Phase 0 Sprint 2, AC-11/RF-HORO-004). Valores gravados antes do Sprint 2 estão stale → backfill `prisma/backfill-mayankin.ts` |
 | `personalArcana` | `Int?` | nullable | Número do arcano pessoal (range **1–22**, `0` não é emitido pelo cálculo). Escrito por **três** caminhos: (1) `GET /api/v1/arcana/calculate` — best-effort, só quando `null`; **self-heal CAS** no read: se cache `observed` ≠ `recomputed`, executa `updateMany({ where: { id, personalArcana: observed }, data: { personalArcana: recomputed } })` para curar stale cache; (2) `PATCH /api/v1/users/me/profile` — recalculado quando `birthDate` chega com data válida; **null-out explícito** se `name` vazio (`personalArcana: null` no update); (3) `birthDate: ""` — único caminho de reset completo (zera `birthDate`, `astrologicalSign`, `mayanKin`, `personalArcana`). Enrichment OAuth (Google) invalida `personalArcana` **apenas quando** nome muda **E** `birthDate` presente. |
 | `provider` | `AuthProvider` | NOT NULL | Provedor de autenticação |
 | `providerId` | `String` | NOT NULL, **UQ comp.** with provider | ID do provedor OAuth (convenção: EMAIL → email normalizado lowercase, GOOGLE/FACEBOOK → OAuth subject ID) |
@@ -34,6 +39,8 @@ Entidade principal de autenticação e identidade do usuário.
 | `deletedAt` | `DateTime?` | nullable | Timestamp para soft delete LGPD (30-day restoration window). Após 30 dias, o job T16 (`src/jobs/hard-delete-accounts.ts`) anonimiza a conta (inclui bump de `tokenVersion` e purga de `VerificationToken` por `identifier` — o e-mail original, sem FK para `User`) — `deletedAt` é **preservado** (não limpo) para auditoria |
 | `createdAt` | `DateTime` | NOT NULL, default `now()` | Data de criação |
 | `updatedAt` | `DateTime` | NOT NULL, `@updatedAt` | Data de atualização |
+
+> ⚠️ **Invariantes de contadores (review data I4)**: `Post.likeCount`/`Post.commentCount` e `Comment.likeCount` **não têm caminho de escrita ainda**. Quando as rotas de like/comment chegarem: (a) mutar `{ increment: 1 }`/`{ decrement: 1 }` **no mesmo `$transaction`** do insert/delete; (b) como `ON DELETE CASCADE` (hard-delete/anonimização) não roda código de app, os cascateamentos deixam drift **permanente** — manter com reconciliação periódica no cron (recompute `UPDATE ... SET likeCount = (SELECT count(*) ...)`) ou triggers de DB (único mecanismo que sobrevive a cascade/`deleteMany`). Documentado aqui como exigência de implementação (I4).
 
 **Enums**:
 - `UserRole`: `USER`, `PROFESSIONAL`, `ADMIN`
@@ -61,6 +68,9 @@ Perfil público extendido do usuário (1:1 com User). Criado automaticamente no 
 | `pricePerReading` | `Decimal?` | nullable, min 0 | Preço por leitura (profissionais) |
 | `available` | `Boolean` | default `true` | Disponível para leituras pagas |
 | `languages` | `String[]` | default `["pt-BR"]` | Idiomas de atendimento |
+| `versosBalance` | `Int` | NOT NULL, default `0` | Saldo da moeda **Versos** — fonte única, mutado só dentro de `$transaction` (Sprint 2, S2-17); invariante `>= 0` garantida no banco pelo CHECK `UserProfile_versosBalance_nonneg` (migration `20260927222620`) |
+| `versosStreak` | `Int` | NOT NULL, default `0` | Streak do claim diário (T122) |
+| `lastClaimAt` | `DateTime?` | nullable | Última claim diária — base da idempotência do claim (T122) |
 
 **Exemplo de `socialLinks`**:
 ```json
@@ -212,6 +222,10 @@ Cálculo do arcano pessoal do usuário baseado em data de nascimento e nome.
 
 Entrada de horóscopo para o usuário.
 
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (migration `20260926182325_sprint2_social_horoscopes`) — **shape diferente do alvo**: `id`, `userId`, `type String` (`'western'` \| `'chinese'` \| `'maya'`), `signId String`, `element String?`, `period String` (`'daily'` \| `'weekly'` \| `'monthly'`), `createdAt` + `@@index([userId, createdAt])` (RF-HORO-007). **Não existem** `zodiacSign`, `chineseAnimal`, `mayanKin`, `content` nem `sourceDate`. A tabela abaixo é o **formato alvo** (ainda plano); escrita/leitura acontecem nas fases 5/6 do plano Sprint 2.
+>
+> ⚠️ **Gap de design nível spec (review data N3)**: `HoroscopeEntry`/`HoroscopeLog` **não têm coluna de data civil** — só `createdAt` (UTC), enquanto todo o domínio usa data civil BRT (Q25). "Já buscou *hoje*?" derivado de `createdAt` erra entre 00:00–03:00 BRT. `.specs/006-horoscopes/design.md` §5 define assim, portanto é **gap do spec, não desvio do schema** — submeter ao design (adicionar `date String` + `@@unique([userId, type, period, date])` com as tabelas vazias é grátis) **sem alterar spec/ADR unilateralmente**.
+
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
 | `id` | `UUID` | **PK** | Identificador único |
@@ -289,6 +303,8 @@ Template de disposição de cartas (spread).
 
 Relação de seguir entre usuários (N:M via tabela juntura).
 
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`follows`) — campos conforme o alvo, com `String`/`cuid()` no lugar de `UUID` e `@@index([followerId])` + `@@index([followingId])` além do `@@unique([followerId, followingId])`. A regra `followerId ≠ followingId` **não tem constraint no banco** (só o unique): a validação é da aplicação, prevista em `POST /api/v1/social/follow/:userId` (T043 — **ainda não implementada**; Phase 0 entregou só o model).
+
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
 | `id` | `UUID` | **PK** | Identificador único |
@@ -305,6 +321,8 @@ Relação de seguir entre usuários (N:M via tabela juntura).
 ## 10. Post
 
 Postagem do feed social, opcionalmente vinculada a uma leitura.
+
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`posts`) — **shape divergente do alvo abaixo**: `id`, `authorId`, `type String` (`'text'` \| `'image'` \| `'reading'`), `content Text`, `imageUrls String[] @default([])`, `readingId String?` (**sem FK** — snapshot da tiragem, SPEC-007 §5), `audience String @default("public")` (`'public'` \| `'followers'`, S2-15), `isPinned`, `likeCount`, `commentCount`, `commentsDisabled`, `isHidden` (moderação T129), `createdAt`, `updatedAt` + `@@index([authorId, createdAt])` e `@@index([createdAt])`. Não existem `images Json?` nem `isPublic`; contadores são `likeCount`/`commentCount` (não `likesCount`/`commentsCount`). Domínio reforçado **no banco** pela migration `20260927222620_sprint2_review_fixes`: `posts_type_check` (`type IN ('text','image','reading')`) e `posts_audience_check` (`audience IN ('public','followers')`) — o Prisma não valida porque os campos são `String`, e as rotas `POST /posts`/`/posts/[id]` ainda não existem (Phase 2).
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -329,6 +347,8 @@ Postagem do feed social, opcionalmente vinculada a uma leitura.
 ## 11. Comment
 
 Comentário em uma postagem.
+
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`comments`) — `id`, `postId`, `authorId`, `content Text`, `parentCommentId String?` (**auto-relação** `CommentReplies`, `onDelete: Cascade` — respostas encadeadas), `likeCount Int @default(0)`, `createdAt` + `@@index([postId, createdAt])`. **Não existem** `updatedAt` nem FK para `Post` com `SET NULL`: `postId` e `authorId` são `Cascade`.
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -419,6 +439,8 @@ Registro de pagamento processado via Mercado Pago.
 
 Presente virtual enviado entre usuários.
 
+> **Status (Sprint 2, Phase 0):** ✅ **implementado** (`gifts`) — **shape divergente do alvo abaixo**: `id`, `fromUserId`, `toUserId`, `giftId String` (id no **catálogo fixo** SPEC-007 — catálogo implementado em `src/lib/social/gifts.ts`, T036), `coinCost Int` (**custo em Versos**; "Moedas" do S2-4 = Versos), `recipientEarnsHalf Boolean @default(false)` (+50% p/ destinatário PROFESSIONAL, T120), `createdAt` + `@@index([toUserId, createdAt])`. Não existem `senderId`/`receiverId`/`giftType`/`message`.
+
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
 | `id` | `UUID` | **PK** | Identificador único |
@@ -435,6 +457,8 @@ Presente virtual enviado entre usuários.
 ## 16. Notification
 
 Notificação para o usuário.
+
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`notifications`) — `id`, `userId`, `type String` (`'follow'` \| `'like'` \| `'comment'` \| `'gift'` \| `'mention'` \| `'horoscope'`), `message String` (**não** `title`/`body`), `data Json?`, `isRead Boolean @default(false)`, `createdAt` + `@@index([userId, isRead, createdAt])`. Não existem `title`, `body` nem o enum `NotificationType` do alvo — a lista de categorias abaixo é o formato planejado. As 6 categorias estão agora **DB-enforced** por `notifications_type_check` (`type IN ('follow','like','comment','gift','mention','horoscope')`, migration `20260927222620_sprint2_review_fixes`); escrever uma 7ª categoria viola a constraint (não há rota de escrita de notificações ainda).
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|

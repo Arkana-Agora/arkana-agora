@@ -10,6 +10,7 @@ Campos derivados (`personalArcana`, `astrologicalSign`, `mayanKin`) são calcula
 2. **User limpa `birthDate`** via `PATCH /me/profile` com `birthDate: ""` — zera os derivados, mas o código antigo apenas zerava sem recalcular.
 3. **Recálculo falha** por `name` vazio — o código antigo **preservava** o valor anterior (arcano "fantasma" baseado em nome que não existe mais).
 4. **Cache stale no read**: `GET /arcana/calculate` servia o `personalArcana` cacheado mesmo se ele divergisse do recalculado.
+5. **Mudança de algoritmo/epoch**: quando a regra de cálculo muda (ex.: troca do epoch do Kin Maya para a **correlação GMT 584283** no Sprint 2 Phase 0), **todos** os valores já persistidos ficam stale de uma vez — nenhum dos pontos de invalidação dispara, porque `birthDate`/`name` não mudaram.
 
 Não há trigger de banco de dados — a invalidação é **lógica de aplicação** e deve ser explícita em cada ponto de mutação/leitura.
 
@@ -76,13 +77,13 @@ if (observed !== null && observed !== recomputed) {
 
 **Por que CAS?** Garante atomicidade — só atualiza se o valor ainda for o `observed` (ninguém mais escreveu entre o read e o write). Evita race condition onde duas requests simultâneas tentam curar o mesmo cache.
 
-### 3. Enrichment OAuth (`events.signIn` + `enrichment-service`)
+### 3. Enrichment OAuth (`events.signIn` + `enrichUserFromOAuthProfile`)
 
 Invalida `personalArcana` **apenas quando** há base para recalcular:
 
 ```typescript
-// src/services/enrichment-service.ts
-export async function enrichFromGoogleProfile(
+// src/services/account-service.ts (excerto — função real: enrichUserFromOAuthProfile(userId, rawProfile, db))
+export async function enrichUserFromOAuthProfile(
   userId: string,
   googleProfile: GoogleProfile
 ): Promise<void> {
@@ -108,17 +109,28 @@ export async function enrichFromGoogleProfile(
 - Nome do Google muda **MAS** sem `birthDate` → **não toca** no arcano (evita nulagem espúria)
 - Nome não muda → não toca no arcano
 
+### 4. Backfill Pontual Quando o Algoritmo Muda
+
+Mudança de regra **não** é coberta pelos três pontos acima: o gatilho (`birthDate`/`name`) não mudou, então write/read/enrichment não rodam. A saída é um **script one-shot versionado**, com dry-run e idempotente:
+
+```bash
+npx tsx prisma/backfill-mayankin.ts          # dry-run (default — sem flag)
+npx tsx prisma/backfill-mayankin.ts --apply  # grava
+```
+
+`prisma/backfill-mayankin.ts` (Sprint 2 Phase 0) usa a **fonte única** `calculateKinMaya` e só atualiza quando o valor difere (rodar de novo não altera nada). Critério usado na validação: `1990-06-15 → Kin 255`. O mesmo vale para `personalArcana`/`astrologicalSign` se a regra de cálculo deles mudar um dia. Guard de execução direta (`argv[1]` vs `import.meta.url`) impede que importar o módulo dispare o backfill; e-mails no stdout são mascarados (LGPD).
+
 ## Implementation Files
 
 | File | Role |
 |------|------|
 | `src/app/api/v1/users/me/profile/route.ts` | PATCH — recálculo transacional + null-out + reset completo |
 | `src/app/api/v1/arcana/calculate/route.ts` | GET — self-heal CAS no read |
-| `src/services/enrichment-service.ts` | Validação OAuth + invalidação condicional |
-| `src/auth/auth.config.ts` | `events.signIn` handler (chama enrichment-service) |
+| `src/services/account-service.ts` | `enrichUserFromOAuthProfile` — validação OAuth (Zod) + invalidação condicional |
+| `src/auth/auth.config.ts` | `events.signIn` handler (chama `enrichUserFromOAuthProfile`) |
 | `tests/me-profile.test.ts` | Testes: recalcula, null-out, reset completo |
 | `tests/integration/arcana-calculate.test.ts` | Testes: self-heal CAS |
-| `tests/services/enrichment-service.test.ts` | Testes: invalidação condicional |
+| `tests/account-service.test.ts` | Testes: enriquecimento + invalidação condicional (`describe("enrichUserFromOAuthProfile")`) |
 
 ## Key Invariants
 
@@ -126,12 +138,13 @@ export async function enrichFromGoogleProfile(
 2. **Null-out explícito evita "arcano fantasma"** — quando a fonte (`name`) desaparece, o derivado é nulado, não preservado.
 3. **Reset completo é explícito e único** — `birthDate: ""` é o único caminho que zera todos os derivados de uma vez.
 4. **Invalidação OAuth é conservadora** — só invalida quando há `birthDate` para recalcular depois.
+5. **Mudança de algoritmo exige backfill** — invalidação de fonte não detecta regra nova; valores persistidos só corrigem com script one-shot (ex.: `prisma/backfill-mayankin.ts`).
 
 ## Verification
 
 - `npx vitest run tests/me-profile.test.ts` — recálculo, null-out, reset
 - `npx vitest run tests/integration/arcana-calculate.test.ts` — self-heal CAS
-- `npx vitest run tests/services/enrichment-service.test.ts` — invalidação condicional
+- `npx vitest run tests/account-service.test.ts` — enriquecimento + invalidação condicional
 
 ## Related Patterns
 
@@ -143,3 +156,4 @@ export async function enrichFromGoogleProfile(
 - ❌ Invalidar derivado sem verificar se há base para recalcular (ex.: nulificar `personalArcana` sem `birthDate`) — gera recálculo impossível
 - ❌ Não curar cache stale no read — usuário vê valor antigo até fazer write
 - ❌ Fazer invalidação em trigger de DB — não portável, acopla lógica de negócio ao schema
+- ❌ Assumir que invalidação de fonte cobre mudança de algoritmo — epoch/regra nova deixa todo o cache persistido stale e só um backfill corrige

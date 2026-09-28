@@ -1,6 +1,8 @@
 # Sistema de Presentes — Arkana Agora
 
 > **Identificador**: `arkana-agora` | **Módulo**: Sistema de Presentes | **Versão**: V1
+>
+> **Status (2026-09-26)**: **parcialmente implementado (Sprint 2 Phase 0.5).** O model `Gift` existe no schema desde o Sprint 2 Phase 0 (`fromUserId`, `toUserId`, `giftId`, `coinCost`, `recipientEarnsHalf`) e o **catálogo fixo SPEC-007 está em `src/lib/social/gifts.ts`** (T036: `GIFT_CATALOG` com `id` kebab-case + `getGiftCost()`/`validateGiftId()`/`getGiftById()`; testes `tests/gifts.test.ts`). **Não há rota de envio** (`POST /social/gifts` = Phase 7, T120), nem saldo/notificação/histórico — e o catálogo **não é semeado**: `prisma/seed.ts` só semeia usuários + fallbacks de horóscopos (decisão S2-4: catálogo fixo em código, sem env de preço; "Moedas" do SPEC-007 = **Versos**).
 
 ---
 
@@ -8,23 +10,22 @@
 
 O Sistema de Presentes do **Arkana Agora** permite que os usuários expressem apreço e reconhecimento enviando presentes virtuais animados. Os presentes podem ser enviados em publicações, leituras compartilhadas ou diretamente no perfil de outro usuário, criando uma economia interna de reconhecimento social. Cada presente possui um valor em **Versos**, a moeda virtual da plataforma, e gera uma notificação ao destinatário com uma animação de exibição.
 
-Os presentes variam desde opções acessíveis (Estrela, Lua) até itens raros e de alto valor (Fênix, Dragão Dourado), criando um sistema de expressão em camadas. O histórico de presentes enviados e recebidos fica disponível no perfil do usuário. Uma porcentagem dos Versos gastos em presentes é convertida em receita real para o destinatário (caso seja um profissional), incentivando a criação de conteúdo de qualidade.
+Os presentes variam desde opções acessíveis (Estrela Cadente, 10 Versos) até itens de alto valor (Coroa Astral 200, Dragão Dourado 500), criando um sistema de expressão em camadas. O histórico de presentes enviados e recebidos fica disponível no perfil do usuário. Uma porcentagem dos Versos gastos em presentes é convertida em receita real para o destinatário (caso seja um profissional), incentivando a criação de conteúdo de qualidade.
 
 ---
 
 ## Catálogo de Presentes
 
-| Presente | Ícone | Preço (Versos) | Raridade |
+> **Fonte canônica (Sprint 2 Phase 0.5 / T036)**: `src/lib/social/gifts.ts` — SPEC-007 RF-SOC-006 exato, **6 presentes**, preços fixos em Versos, `id` kebab-case (decisão de conteúdo). O id é o valor de `Gift.giftId`; "Moedas" do spec = **Versos**. A lista antiga de 9 itens (Estrela … Universo) e a coluna de **Raridade** não existem no código (o `GiftCatalogItem` tem só `id`, `name`, `cost`, `emoji`) — raridade, se retomada, é decisão de produto futura.
+
+| Presente | Ícone | Preço (Versos) | `giftId` |
 |---|---|---|---|
-| Estrela | ⭐ | 10 | Comum |
-| Lua | 🌙 | 20 | Comum |
-| Rosa | 🌹 | 30 | Comum |
-| Cristal | 💎 | 50 | Incomum |
-| Borboleta | 🦋 | 50 | Incomum |
-| Coroa | 👑 | 100 | Raro |
-| Fênix | 🔥 | 200 | Raro |
-| Dragão Dourado | 🐉 | 500 | Épico |
-| Universo | 🌌 | 1.000 | Lendário |
+| Estrela Cadente | 🌠 | 10 | `estrela-cadente` |
+| Rosa Mística | 🌹 | 25 | `rosa-mistica` |
+| Cristal de Quartzo | 💎 | 50 | `cristal-de-quartzo` |
+| Bola de Cristal | 🔮 | 100 | `bola-de-cristal` |
+| Coroa Astral | 👑 | 200 | `coroa-astral` |
+| Dragão Dourado | 🐉 | 500 | `dragao-dourado` |
 
 ---
 
@@ -32,7 +33,7 @@ Os presentes variam desde opções acessíveis (Estrela, Lua) até itens raros e
 
 - **Envio de presentes** em publicações, leituras compartilhadas e perfis
 - **Animação de exibição** ao receber presente (full-screen, 3 segundos)
-- **Catálogo de presentes** organizado por raridade e preço
+- **Catálogo de presentes** fixo em código (SPEC-007, 6 itens em `src/lib/social/gifts.ts`)
 - **Histórico de presentes** enviados e recebidos
 - **Conversão para receita** — profissionais recebem 70% do valor em Reais
 - **Moeda Versos** — pacotes de compra via Mercado Pago
@@ -65,6 +66,10 @@ Os presentes variam desde opções acessíveis (Estrela, Lua) até itens raros e
 8. O destinatário recebe uma notificação push e in-app
 9. Se o destinatário é profissional, 70% do valor é creditado em Reais
 10. O presente aparece no histórico de ambos os usuários
+
+> ⚠️ **Decisões abertas antes da T120 (Phase 7):**
+> - Passos 5–7 dependem do saldo `UserProfile.versosBalance`, que hoje só tem o utilitário `src/lib/social/versos.ts` (`earnVersos()` — T037); **claim diário/milestones (T122) e `GET /versos/balance` (T121) ainda não existem**, então não há como comprar/completar saldo.
+> - Passo 9 conflita com o campo real `Gift.recipientEarnsHalf` (`@default(false)` = "+50% em Versos para destinatário PROFESSIONAL", ver `docs/03-database/entities.md` §Gift): **70% em Reais vs +50% em Versos** — definição de produto pendente (o schema hoje só suporta a segunda).
 
 ---
 

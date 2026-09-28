@@ -1,6 +1,8 @@
 # API Social — arkana-agora
 
 > **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória | **Paginação**: Cursor-based
+>
+> **Status (2026-09-26)**: **contrato planejado — rotas ainda não implementadas** (o diretório `src/app/api/v1/social/` não existe e nenhum código chama `prisma.follow`/`prisma.post`/etc.). Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas vão usar já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
 
 ## Sumário
 
@@ -119,16 +121,27 @@ Authorization: Bearer <accessToken>
 | Parâmetro | Tipo | Padrão | Descrição |
 |-----------|------|--------|-----------|
 | `cursor` | string | — | Cursor para próxima página |
-| `limit` | number | 20 | Itens por página (máx 50) |
+| `limit` | number | 10 | Itens por página (máx 50) — `FEED_DEFAULT_LIMIT`/`FEED_MAX_LIMIT` em `src/lib/social/feed-algorithm.ts` |
 | `type` | string | Todos | `reading`, `text`, `all` |
 
 ### Algoritmo do Feed
 
+> **Implementado (Sprint 2 Phase 0.5, T026)** em `src/lib/social/feed-algorithm.ts` — ordenação **S2-5 em 4 níveis** (RF-SOC-002), substituindo o rascunho "70/20/10" que estava aqui:
+
 ```
-1. Posts de seguidos (70%)
-2. Posts em destaque da comunidade (20%)
-3. Posts de descoberta com base em interesses (10%)
+1. Post fixado (isPinned) — máx. 1 por página (applyPinnedCap)
+2. Engajamento das últimas 2h (likes + comments×2)
+3. Recência (createdAt desc)
+4. Desempate: interação prévia do viewer (PostLike/Comment) e depois id desc
+
+Candidatos: posts visíveis (S2-15) — audience='public' OU audience='followers'
+de quem eu sigo; perfis privados só aparecem para seguidores; isHidden=false.
+0 following → fallback para o conteúdo de explore (somente públicos).
+Cursor: base64url de {createdAt, id} = menor (createdAt, id) já lido
+(aproximação sobre o ranking — nunca repete nem pula candidatos).
 ```
+
+> **Cursor e envelope**: `decodeFeedCursor()` espera `{createdAt, id}` (o exemplo `eyJpZCI6MTIzfQ` acima = `{"id":123}` é o formato antigo/ilustrativo). A função `getFeed()` devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`/`pagination`) — a T052 decide se envolve no envelope `{ data, pagination }` de `docs/04-api/overview.md` §Paginação ou expõe o shape da lib. **Cursor inválido → contrato explícito**: `getFeed` devolve página **vazia** com `nextCursor: null` (nunca reinicia no topo — evitaria duplicar conteúdo em loop; review kieran N6).
 
 ### Resposta — 200 OK
 
@@ -248,7 +261,7 @@ Content-Type: application/json
   "type": "reading",
   "readingId": "rdg_x1y2z3",
   "text": "Acabei de fazer uma leitura sobre meu futuro profissional. O que vocês acham dessas cartas?",
-  "isPublic": true
+  "audience": "public"
 }
 ```
 
@@ -256,10 +269,12 @@ Content-Type: application/json
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `type` | string | Sim | `text`, `reading` |
+| `type` | string | Sim | `text`, `image`, `reading` |
 | `readingId` | string | Se type=`reading` | Tiragem do usuário |
 | `text` | string | Se type=`text` | 1–500 caracteres |
-| `isPublic` | boolean | Não | Padrão: `true` |
+| `audience` | string | Não | `public` (padrão) ou `followers` |
+
+> **Mapeamento para o schema real (Sprint 2 Phase 0 — `prisma/schema.prisma`)**: `text` → coluna `content`; `audience` → coluna `audience` (default `public`); `type` também aceita `image`, com as imagens em `imageUrls String[]`. Contagens vivem em `likeCount`/`commentCount` (denormalizadas).
 
 ### Resposta — 201 Created
 
@@ -452,23 +467,29 @@ Content-Type: application/json
 
 ```json
 {
-  "recipientId": "usr_b2c3d4",
-  "postId": "post_abc123",
-  "giftType": "crystal_ball",
-  "message": "Adorei sua leitura! Muito inspiradora 💎"
+  "toUserId": "usr_b2c3d4",
+  "giftId": "bola-de-cristal"
 }
 ```
 
 ### Presentes disponíveis
 
-| giftType | Nome | Custo (moedas) | Descrição |
-|----------|------|---------------|-----------|
-| `crystal_ball` | Bola de Cristal | 5 | Presente básico |
-| `tarot_deck` | Baralho Místico | 15 | Presente especial |
-| `moon` | Lua Prateada | 25 | Presente raro |
-| `star` | Estrela Dourada | 50 | Presente premium |
+> **Catálogo autoritativo (Sprint 2 Phase 0.5 / T036)**: `src/lib/social/gifts.ts` — SPEC-007 exato, ids kebab-case, preços fixos em **Versos** ("Moedas" do spec = Versos; a lista antiga com 4 itens/`crystal_ball` foi substituída). O id vai em `Gift.giftId`.
 
-> **Moedas**: Usuários recebem moedas diárias. Compras adicionais via marketplace.
+| giftId | Nome | Custo (Versos) |
+|--------|------|---------------|
+| `estrela-cadente` | Estrela Cadente | 10 |
+| `rosa-mistica` | Rosa Mística | 25 |
+| `cristal-de-quartzo` | Cristal de Quartzo | 50 |
+| `bola-de-cristal` | Bola de Cristal | 100 |
+| `coroa-astral` | Coroa Astral | 200 |
+| `dragao-dourado` | Dragão Dourado | 500 |
+
+> **Divergências contrato ↔ código (revisadas no Phase 0.5):**
+>
+> 1. **Catálogo — resolvido**: a fonte canônica é `src/lib/social/gifts.ts` (T036/SPEC-007, 6 gifts) e não mais esta tabela histórica; `docs/06-features/gifts.md` já foi sincronizado.
+> 2. **Ainda aberto (Phase 7, T120)**: rota/body — o plano prevê `POST /api/v1/social/gifts/send` com `{ toUserId, giftId }` (aqui documentado como `POST /social/gifts`); e o model `Gift` **não tem** `postId` nem `message` (colunas reais: `fromUserId`, `toUserId`, `giftId`, `coinCost`, `recipientEarnsHalf`) — gifting sobre um post precisa de decisão de modelagem.
+> 3. **Moeda — resolvida**: o saldo real é `UserProfile.versosBalance` (**Versos**); error code de saldo insuficiente = `INSUFFICIENT_VERSOS` (não `INSUFFICIENT_COINS`); `coinCost` guarda o custo em Versos.
 
 ### Resposta — 201 Created
 
@@ -477,15 +498,15 @@ Content-Type: application/json
   "data": {
     "gift": {
       "id": "gift_abc123",
-      "senderId": "usr_a1b2c3d4",
-      "recipientId": "usr_b2c3d4",
-      "postId": "post_abc123",
-      "giftType": "crystal_ball",
-      "message": "Adorei sua leitura! Muito inspiradora 💎",
+      "fromUserId": "usr_a1b2c3d4",
+      "toUserId": "usr_b2c3d4",
+      "giftId": "bola-de-cristal",
+      "coinCost": 100,
+      "recipientEarnsHalf": false,
       "createdAt": "2025-01-15T10:40:00Z"
     },
     "balance": {
-      "coins": 45
+      "versosBalance": 45
     }
   }
 }
@@ -495,7 +516,7 @@ Content-Type: application/json
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `INSUFFICIENT_COINS` | Moedas insuficientes |
+| 400 | `INSUFFICIENT_VERSOS` | Versos insuficientes |
 | 404 | `USER_NOT_FOUND` | Destinatário não encontrado |
 | 404 | `POST_NOT_FOUND` | Publicação não encontrada |
 | 409 | `CANNOT_GIFT_SELF` | Não é possível presentear a si mesmo |
@@ -531,6 +552,8 @@ Authorization: Bearer <accessToken>
 | `gift` | Alguém te enviou um presente |
 | `mention` | Alguém te mencionou |
 | `system` | Notificação do sistema |
+
+> **Tipos reais no schema (Sprint 2 Phase 0)**: `Notification.type` documenta `follow`, `like`, `comment`, `gift`, `mention` e **`horoscope`** — este contrato traz **`system`** em vez de `horoscope`, e `docs/06-features/notifications.md` descreve ainda **8 categorias** (inclui pagamento, leitura compartilhada, lembrete diário). Definir o conjunto canônico antes de implementar as rotas. Além disso, o payload `actor`/`resource` tem de caber em `data Json?` — as colunas reais são `userId`, `type`, `message`, `data`, `isRead`, `createdAt`.
 
 ### Resposta — 200 OK
 
@@ -573,6 +596,8 @@ Authorization: Bearer <accessToken>
   }
 }
 ```
+
+> **Contrato × hook (divergência conhecida, review Step 5)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md`; o T082 do plano especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) justamente porque nenhuma rota existe ainda — a rota da Phase 1 (T043+) define o vencedor e o hook pode ser estreitado. `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`).
 
 ---
 
