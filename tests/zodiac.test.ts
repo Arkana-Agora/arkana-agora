@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { calculateZodiacSign } from "@/lib/calculations/zodiac"
+import { getWesternSign, WESTERN_SIGNS } from "@/lib/horoscopes/western"
 
 describe("calculateZodiacSign", () => {
   const signs = [
@@ -49,5 +50,47 @@ describe("calculateZodiacSign", () => {
 
   it("handles leap year: Feb 29", () => {
     expect(calculateZodiacSign(new Date(Date.UTC(2000, 1, 29)))).toBe("Peixes")
+  })
+})
+
+describe("paridade WESTERN_SIGNS × calculateZodiacSign (lint #10)", () => {
+  it("os 366 dias do ano batem entre horoscopes/western e calculations/zodiac", () => {
+    const year = 2028 // bissexto: cobre 29/02
+    for (let month = 1; month <= 12; month++) {
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+      for (let day = 1; day <= daysInMonth; day++) {
+        const western = getWesternSign(day, month)
+        const zodiac = calculateZodiacSign(
+          new Date(Date.UTC(year, month - 1, day)),
+        )
+        expect(
+          zodiac,
+          `divergência em ${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`,
+        ).toBe(western.name)
+      }
+    }
+  })
+
+  it("mesmas 12 datas de início em ambos os catálogos", () => {
+    expect(WESTERN_SIGNS).toHaveLength(12)
+    const startDates = WESTERN_SIGNS.map(
+      (s) =>
+        `${String(s.startMonth).padStart(2, "0")}-${String(s.startDay).padStart(2, "0")}`,
+    ).sort()
+    // Catálogo canônico: datas de início idênticas às do Sprint 1 (zodiac.ts).
+    expect(startDates).toEqual([
+      "01-20",
+      "02-19",
+      "03-21",
+      "04-20",
+      "05-21",
+      "06-21",
+      "07-23",
+      "08-23",
+      "09-23",
+      "10-23",
+      "11-22",
+      "12-22",
+    ])
   })
 })

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { VersosSource } from "@/lib/social/versos"
+
+vi.mock("@/lib/prisma", () => ({ prisma: {} }))
+
 const init = vi.fn()
 const capture = vi.fn()
 const reset = vi.fn()
@@ -202,5 +206,111 @@ describe("consent-gated capture", () => {
     expect(localStorage.getItem("analytics-consent")).toBe("true")
     expect(init).toHaveBeenCalledTimes(1)
     expect(optInCapturing).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Sprint 2 typed events (T024)", () => {
+  beforeEach(() => {
+    clearMocks()
+    process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test_token"
+    process.env.NEXT_PUBLIC_POSTHOG_HOST = "https://us.i.posthog.com"
+    localStorage.clear()
+    localStorage.setItem("analytics-consent", "true")
+    setNodeEnv("test")
+  })
+
+  it("captura eventos sociais/horóscopos com payload tipado", async () => {
+    const {
+      initAnalytics,
+      trackPostCreate,
+      trackLike,
+      trackComment,
+      trackFollow,
+      trackGiftSend,
+      trackHoroscopeView,
+    } = await loadAnalytics()
+    initAnalytics()
+
+    trackPostCreate("text", false)
+    expect(capture).toHaveBeenCalledWith("post_create", {
+      postType: "text",
+      hasImages: false,
+    })
+
+    trackLike("post_1")
+    expect(capture).toHaveBeenCalledWith("like", { postId: "post_1" })
+
+    trackComment("post_1", true)
+    expect(capture).toHaveBeenCalledWith("comment", {
+      postId: "post_1",
+      isReply: true,
+    })
+
+    trackFollow("usr_2")
+    expect(capture).toHaveBeenCalledWith("follow", { targetUserId: "usr_2" })
+
+    trackGiftSend("estrela-cadente", 10, "usr_2")
+    expect(capture).toHaveBeenCalledWith("gift_send", {
+      giftId: "estrela-cadente",
+      cost: 10,
+      toUserId: "usr_2",
+    })
+
+    trackHoroscopeView("western", "daily")
+    expect(capture).toHaveBeenCalledWith("horoscope_view", {
+      type: "western",
+      period: "daily",
+    })
+  })
+
+  it("captura eventos de gamificação e limites", async () => {
+    const {
+      initAnalytics,
+      trackGiftClaimDaily,
+      trackVersosEarned,
+      trackPostLimitHit,
+      trackCsrfFailure,
+      trackRateLimiterBypass,
+    } = await loadAnalytics()
+    initAnalytics()
+
+    trackGiftClaimDaily(3, 50)
+    expect(capture).toHaveBeenCalledWith("gift_claim_daily", {
+      day: 3,
+      reward: 50,
+    })
+
+    trackVersosEarned(VersosSource.Comment, 5, 120)
+    expect(capture).toHaveBeenCalledWith("versos_earned", {
+      source: "comment",
+      amount: 5,
+      balance: 120,
+    })
+
+    trackPostLimitHit("FREE", 10)
+    expect(capture).toHaveBeenCalledWith("post_limit_hit", {
+      tier: "FREE",
+      limit: 10,
+    })
+
+    trackCsrfFailure("/api/v1/social/posts", "mismatch")
+    expect(capture).toHaveBeenCalledWith("csrf_failure", {
+      path: "/api/v1/social/posts",
+      reason: "mismatch",
+    })
+
+    trackRateLimiterBypass("like", "redis_down")
+    expect(capture).toHaveBeenCalledWith("rate_limiter_bypass", {
+      limit: "like",
+      reason: "redis_down",
+    })
+  })
+
+  it("não captura eventos sem consentimento", async () => {
+    localStorage.clear()
+    const { initAnalytics, trackPostCreate } = await loadAnalytics()
+    initAnalytics()
+    trackPostCreate("text", false)
+    expect(capture).not.toHaveBeenCalled()
   })
 })

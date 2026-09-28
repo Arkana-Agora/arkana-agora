@@ -46,7 +46,15 @@ describe("GET /api/v1/arcana/calculate", () => {
   })
 
   it("returns 404 when user not found", async () => {
-    mockUserFindUnique.mockResolvedValue(null)
+    // 1ª chamada = gate do requireAuth (conta existe); 2ª = lookup da rota que
+    // não encontra mais a linha (corrida hard-delete entre as duas queries).
+    // Se o usuário não existir já no gate, a resposta é 401 (ver require-auth.test).
+    mockUserFindUnique
+      .mockResolvedValueOnce({
+        isBanned: false,
+        deletedAt: null,
+      } as never)
+      .mockResolvedValueOnce(null)
     const res = await GET(makeRequest())
     expect(res.status).toBe(404)
   })

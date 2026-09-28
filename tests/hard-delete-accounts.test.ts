@@ -18,6 +18,17 @@ const prismaMock = vi.hoisted(() => ({
   subscription: { deleteMany: vi.fn() },
   arcanaCalculation: { deleteMany: vi.fn() },
   verificationToken: { deleteMany: vi.fn() },
+  follow: { deleteMany: vi.fn() },
+  post: { deleteMany: vi.fn() },
+  comment: { deleteMany: vi.fn() },
+  postLike: { deleteMany: vi.fn() },
+  commentLike: { deleteMany: vi.fn() },
+  gift: { deleteMany: vi.fn() },
+  notification: { deleteMany: vi.fn() },
+  contentReport: { deleteMany: vi.fn() },
+  horoscopeEntry: { deleteMany: vi.fn() },
+  horoscopeLog: { deleteMany: vi.fn() },
+  horoscopeNotification: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
 }))
 
@@ -33,14 +44,29 @@ const CUTOFF = new Date("2026-08-06T00:00:00.000Z")
 
 const expiredRow = { id: "usr_1", email: "maria@email.com" }
 
+const purgeModels = [
+  "session",
+  "userProfile",
+  "subscription",
+  "arcanaCalculation",
+  "verificationToken",
+  "follow",
+  "post",
+  "comment",
+  "postLike",
+  "commentLike",
+  "gift",
+  "notification",
+  "contentReport",
+  "horoscopeEntry",
+  "horoscopeLog",
+  "horoscopeNotification",
+] as const
+
 const txClient = {
   user: prismaMock.user,
-  session: prismaMock.session,
-  userProfile: prismaMock.userProfile,
-  subscription: prismaMock.subscription,
-  arcanaCalculation: prismaMock.arcanaCalculation,
-  verificationToken: prismaMock.verificationToken,
-}
+  ...Object.fromEntries(purgeModels.map((model) => [model, prismaMock[model]])),
+} as typeof prismaMock
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -49,11 +75,9 @@ beforeEach(() => {
     async (fn: (tx: unknown) => unknown) => fn(txClient),
   )
   prismaMock.user.updateMany.mockResolvedValue({ count: 1 })
-  prismaMock.session.deleteMany.mockResolvedValue({ count: 0 })
-  prismaMock.userProfile.deleteMany.mockResolvedValue({ count: 0 })
-  prismaMock.subscription.deleteMany.mockResolvedValue({ count: 0 })
-  prismaMock.arcanaCalculation.deleteMany.mockResolvedValue({ count: 0 })
-  prismaMock.verificationToken.deleteMany.mockResolvedValue({ count: 0 })
+  for (const model of purgeModels) {
+    prismaMock[model].deleteMany.mockResolvedValue({ count: 0 })
+  }
   mirrorTokenVersionMock.mockResolvedValue(undefined)
   sendAccountDeletedFinalEmailMock.mockResolvedValue({ data: { id: "em_1" } })
 })
@@ -107,7 +131,7 @@ describe("job hard-delete-accounts (T16)", () => {
     expect(summary.failed).toBe(0)
   })
 
-  it("anonimiza dados, incrementa tokenVersion e deleta sessao/perfil/assinatura/token de verificacao em transacao unica (callback style)", async () => {
+  it("anonimiza dados, incrementa tokenVersion e purga sessao/perfil/assinatura/tabelas sociais e de horoscopos em transacao unica (callback style)", async () => {
     await runJob()
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
@@ -154,6 +178,43 @@ describe("job hard-delete-accounts (T16)", () => {
     })
     expect(prismaMock.verificationToken.deleteMany).toHaveBeenCalledWith({
       where: { identifier: "maria@email.com" },
+    })
+
+    // LGPD Sprint 2 — purge das tabelas novas com ligação ao usuário
+    expect(prismaMock.follow.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ followerId: "usr_1" }, { followingId: "usr_1" }],
+      },
+    })
+    expect(prismaMock.post.deleteMany).toHaveBeenCalledWith({
+      where: { authorId: "usr_1" },
+    })
+    expect(prismaMock.comment.deleteMany).toHaveBeenCalledWith({
+      where: { authorId: "usr_1" },
+    })
+    expect(prismaMock.postLike.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
+    expect(prismaMock.commentLike.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
+    expect(prismaMock.gift.deleteMany).toHaveBeenCalledWith({
+      where: { fromUserId: "usr_1" },
+    })
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
+    expect(prismaMock.contentReport.deleteMany).toHaveBeenCalledWith({
+      where: { reporterId: "usr_1" },
+    })
+    expect(prismaMock.horoscopeEntry.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
+    expect(prismaMock.horoscopeLog.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+    })
+    expect(prismaMock.horoscopeNotification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
     })
   })
 
@@ -210,11 +271,9 @@ describe("job hard-delete-accounts (T16)", () => {
 
     expect(summary.processed).toBe(0)
     expect(summary.failed).toBe(0)
-    expect(prismaMock.session.deleteMany).not.toHaveBeenCalled()
-    expect(prismaMock.userProfile.deleteMany).not.toHaveBeenCalled()
-    expect(prismaMock.subscription.deleteMany).not.toHaveBeenCalled()
-    expect(prismaMock.arcanaCalculation.deleteMany).not.toHaveBeenCalled()
-    expect(prismaMock.verificationToken.deleteMany).not.toHaveBeenCalled()
+    for (const model of purgeModels) {
+      expect(prismaMock[model].deleteMany).not.toHaveBeenCalled()
+    }
     expect(mirrorTokenVersionMock).not.toHaveBeenCalled()
     expect(sendAccountDeletedFinalEmailMock).not.toHaveBeenCalled()
   })

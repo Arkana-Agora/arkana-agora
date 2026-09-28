@@ -51,6 +51,35 @@ describe("enrichUserFromOAuthProfile", () => {
     })
   })
 
+  it("processa o profile BRUTO do Auth.js (sub/email/given_name extras não quebram o .strict())", async () => {
+    mockDbRows({
+      name: null,
+      displayName: null,
+      avatar: null,
+      birthDate: null,
+    })
+
+    await enrichUserFromOAuthProfile("u1", {
+      sub: "108234567890123456789",
+      name: "Maria Silva",
+      given_name: "Maria",
+      family_name: "Silva",
+      email: "maria@gmail.com",
+      email_verified: true,
+      picture: "https://lh3.googleusercontent.com/avatar-1",
+      locale: "pt-BR",
+    })
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: {
+        name: "Maria Silva",
+        displayName: "Maria Silva",
+        avatar: "https://lh3.googleusercontent.com/avatar-1",
+      },
+    })
+  })
+
   it("does not overwrite name/displayName/avatar but invalidates personalArcana when name changes", async () => {
     mockDbRows({
       name: "Nome Original",

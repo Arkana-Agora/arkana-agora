@@ -9,6 +9,7 @@ vi.mock("@sentry/nextjs", () => ({
 }))
 
 import { register } from "@/instrumentation"
+import { resetEnvCache } from "@/lib/env"
 
 const ORIGINAL_NEXT_PUBLIC_SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN
 
@@ -24,6 +25,8 @@ describe("instrumentation.register", () => {
     } else {
       process.env.NEXT_PUBLIC_SENTRY_DSN = ORIGINAL_NEXT_PUBLIC_SENTRY_DSN
     }
+    delete process.env.REDIS_URL
+    resetEnvCache()
   })
 
   it("does not initialise Sentry without a DSN", async () => {
@@ -42,5 +45,13 @@ describe("instrumentation.register", () => {
       dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
       tracesSampleRate: 0.1,
     })
+  })
+
+  it("valida env no boot: falha fast com formato inválido (arch INFO-4)", async () => {
+    process.env.REDIS_URL = "not a valid url"
+    resetEnvCache()
+
+    await expect(register()).rejects.toThrow(/REDIS_URL/)
+    expect(sentryInitMock).not.toHaveBeenCalled()
   })
 })
