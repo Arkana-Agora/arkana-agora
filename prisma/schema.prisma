@@ -31,6 +31,11 @@ model User {
   avatar           String?
   role             UserRole     @default(USER)
   plan             UserPlan     @default(FREE)
+  subscriptionTier UserPlan     @default(FREE) // Sprint 2 (T014/SC17): tier usado por checkPostLimit (T027) — distinto de `plan`
+  isBanned         Boolean      @default(false)
+  bannedAt         DateTime?
+  banReason        String?
+  maxFollowing     Int          @default(5000)
   provider         AuthProvider @default(EMAIL)
   providerId       String       // EMAIL → email lowercase; GOOGLE/FACEBOOK → OAuth subject ID
   birthDate        DateTime?
@@ -54,6 +59,21 @@ model User {
   aiDailyUsage   AIDailyUsage[]
   arcanaCalculations ArcanaCalculation[]
 
+  // Sprint 2 — Social & Horoscopes (Phase 0, T001–T014)
+  following             Follow[]             @relation("UserFollowing")
+  followers             Follow[]             @relation("UserFollowers")
+  posts                 Post[]
+  comments              Comment[]
+  postLikes             PostLike[]
+  commentLikes          CommentLike[]
+  notifications         Notification[]
+  giftsSent             Gift[]                @relation("GiftsSent")
+  giftsReceived         Gift[]                @relation("GiftsReceived")
+  contentReports        ContentReport[]       @relation("ContentReportReporter")
+  horoscopeEntries      HoroscopeEntry[]
+  horoscopeLogs         HoroscopeLog[]
+  horoscopeNotification HoroscopeNotification?
+
   @@unique([provider, providerId])
 }
 
@@ -74,6 +94,9 @@ model UserProfile {
   pricePerReading Decimal? @db.Decimal(10, 2)
   available       Boolean  @default(true)
   languages       String[] @default(["pt-BR"])
+  versosBalance   Int      @default(0) // Sprint 2 (T014/S2-17): saldo Versos — fonte única, mutado só em $transaction
+  versosStreak    Int      @default(0) // streak do claim-daily (T122)
+  lastClaimAt     DateTime? // última claim diária (idempotência T122)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -245,4 +268,215 @@ model ArcanaCalculation {
 
   @@index([userId, createdAt])
   @@map("arcana_calculations")
+}
+
+// ─── Sprint 2 — Social (Phase 0, T001–T007, T012–T013) ─────────────────────
+// Source: .specs/007-social/design.md §5; plan Phase 0 (T001–T014).
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Post {
+  id               String   @id @default(cuid())
+  authorId         String
+  type             String   // 'text' | 'image' | 'reading' (SPEC-007 §4)
+  content          String   @db.Text
+  imageUrls        String[] @default([])
+  readingId        String?  // sem FK — snapshot da tiragem (SPEC-007 §5)
+  audience         String   @default("public") // 'public' | 'followers' (S2-15)
+  isPinned         Boolean  @default(false) // tier 1 do feed (S2-5); sem write-path no MVP
+  likeCount        Int      @default(0)
+  commentCount     Int      @default(0)
+  commentsDisabled Boolean  @default(false)
+  isHidden         Boolean  @default(false) // moderação (T129)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes    PostLike[]
+  comments Comment[]
+  hashtags PostHashtag[]
+
+  @@index([authorId, createdAt])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  postId          String
+  authorId        String
+  content         String   @db.Text
+  parentCommentId String?
+  likeCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment Comment? @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       Comment[] @relation("CommentReplies")
+  likes         CommentLike[]
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_likes")
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@map("comment_likes")
+}
+
+model PostHashtag {
+  id     String @id @default(cuid())
+  postId String
+  tag    String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([tag])
+  @@map("post_hashtags")
+}
+
+model Gift {
+  id                 String   @id @default(cuid())
+  fromUserId         String
+  toUserId           String
+  giftId             String   // id do catálogo fixo SPEC-007 (T036)
+  coinCost           Int      // custo em Versos (S2-4: "Moedas" = Versos)
+  recipientEarnsHalf Boolean  @default(false) // +50% p/ destinatário PROFESSIONAL (T120)
+  createdAt          DateTime @default(now())
+
+  fromUser User @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, createdAt])
+  @@index([fromUserId, createdAt]) // fallback do rate limit "20 gifts/dia" (T027/I5 da review)
+  @@map("gifts")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'follow' | 'like' | 'comment' | 'gift' | 'mention' | 'horoscope'
+  message   String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model ContentReport {
+  id         String    @id @default(cuid())
+  reporterId String
+  targetType String    // 'post' | 'comment' | 'user'
+  targetId   String
+  reason     String
+  status     String    @default("PENDING") // 'PENDING' | 'REVIEWED' | 'REJECTED' | 'ACTIONED'
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+
+  reporter User @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@map("content_reports")
+}
+
+// ─── Sprint 2 — Horóscopos (Phase 0, T008–T011) ────────────────────────────
+// Source: .specs/006-horoscopes/design.md §5; plan Phase 0.
+// `HoroscopeContent.date` = data civil America/Sao_Paulo (Q25/S2-2).
+
+model HoroscopeContent {
+  id        String   @id @default(cuid())
+  type      String   // 'western' | 'chinese' | 'maya'
+  signId    String   // 'aries', 'rato', número do kin, etc.
+  element   String?  // 'madeira', 'fogo' (chinês)
+  period    String   // 'daily' | 'weekly' | 'monthly'
+  date      String   // data civil BRT: '2026-09-26' | '2026-W39' | '2026-09' (Q25)
+  content   Json     // conteúdo estruturado validado por T035
+  createdAt DateTime @default(now())
+
+  @@unique([type, signId, element, period, date])
+  @@map("horoscope_contents")
+}
+
+model HoroscopeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'western' | 'chinese' | 'maya'
+  signId    String
+  element   String?
+  period    String   // 'daily' | 'weekly' | 'monthly'
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("horoscope_entries")
+}
+
+model HoroscopeLog {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'western' | 'chinese' | 'maya'
+  signId    String
+  element   String?
+  period    String   // 'daily' | 'weekly' | 'monthly'
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("horoscope_logs")
+}
+
+model HoroscopeNotification {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  westernEnabled  Boolean @default(true)
+  chineseEnabled  Boolean @default(false)
+  mayaEnabled     Boolean @default(false)
+  hour            Int     @default(7) // 0–23, BRT (RF-HORO-008)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("horoscope_notifications")
 }
