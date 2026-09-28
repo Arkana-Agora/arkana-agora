@@ -76,7 +76,14 @@ export async function enrichUserFromOAuthProfile(
   rawProfile: unknown,
   db: EnrichProfileDb = prisma,
 ): Promise<void> {
-  const parsed = oauthGoogleProfileSchema.safeParse(rawProfile ?? {})
+  // Auth.js entrega o profile BRUTO do Google (sub, email, given_name, …);
+  // com `.strict()` um parse direto falharia em `unrecognized_keys` e o
+  // enriquecimento viraria no-op silencioso. Projeta só os campos usados.
+  const source = (rawProfile ?? {}) as Record<string, unknown>
+  const parsed = oauthGoogleProfileSchema.safeParse({
+    name: source.name,
+    picture: source.picture,
+  })
   if (!parsed.success) {
     logger.info(
       { userId },
