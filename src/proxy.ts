@@ -33,5 +33,12 @@ export const config = {
     "/tiragem/:path*",
     "/minhas-tiragens",
     "/meu-arcano/:path*",
+    // Social/horóscopos (review S-I5): o (app)/layout já faz auth(), o
+    // matcher aqui é defesa em profundidade. `/post/[id]` ficou DE FORA de
+    // propósito — preview público para crawlers OG (rota T058), decisão
+    // pendente T131; se o preview passar a exigir login, adicionar aqui.
+    "/feed/:path*",
+    "/explorar/:path*",
+    "/horoscopos/:path*",
   ],
 }

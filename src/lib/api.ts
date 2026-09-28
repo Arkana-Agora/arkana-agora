@@ -14,6 +14,8 @@ import {
   refreshAccessTokenOnce,
   resolveAccessToken,
 } from "@/lib/auth-refresh"
+import { ensureCsrfCookie } from "@/lib/csrf-client"
+import { needsCsrf } from "@/lib/csrf-methods"
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
@@ -99,6 +101,15 @@ const authApi = axios.create({
 })
 
 authApi.interceptors.request.use(async (config) => {
+  // Double-submit CSRF para todos os métodos inseguros (padrão do store:
+  // ensureCsrfCookie() idempotente + header x-csrf-token). Não sobrescreve
+  // header já definido pelo chamador (login/register enviam o token explícito).
+  const method = (config.method ?? "get").toUpperCase()
+  if (needsCsrf(method) && !config.headers.get("x-csrf-token")) {
+    const csrfToken = ensureCsrfCookie()
+    if (csrfToken) config.headers.set("x-csrf-token", csrfToken)
+  }
+
   // Cache ownership lives in @/lib/auth-refresh (get/set/invalidate); never
   // write the token cache here. Only inject a Bearer token when the caller
   // did not provide one already.
