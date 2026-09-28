@@ -876,3 +876,58 @@ explícita do comportamento UTC (divergência BRT/UTC) **não foi adicionada**.
 - `tests/components/arcana-calculator.test.tsx` (dirty invariant test)
 - `tests/services/enrichment-service.test.ts` (new)
 - `tests/auth.test.ts` (authCallbacks usage)
+
+### 2026-09-26 — Cross-ref Sprint 2 Phase 0 (T001–T023): `kin-maya.ts` (T020) migrado para GMT 584283
+
+Entrada de **cross-reference** — o Sprint 1 está fechado; nenhuma task deste work-plan foi re-executada. O que muda aqui é a leitura do entregável T020.
+
+**Tasks completed (fully):** none (nenhuma task do Sprint 1 executada nesta rodada)
+**Tasks completed (partially):** none
+**Tasks not executed in this run:** T001–T119 (escopo do Sprint 1 fechado)
+
+**Unplanned changes (fora deste sprint, registradas por acurácia):**
+- `src/lib/calculations/kin-maya.ts` (entregável T020) — alterado pelo **Sprint 2 Phase 0** (`docs/plans/20260926120000-sprint2-execution-plan.md`): epoch **GMT 584283** (15/06/1990 → **Kin 255**; o epoch anterior resultava em 148) + inversão de dependência — o arquivo agora **delega** para a nova fonte `src/lib/horoscopes/maya.ts` (JDN/Contagem Longa)
+- `prisma/backfill-mayankin.ts` (novo) — backfill pontual de `User.mayanKin` com fonte única `calculateKinMaya` (dry-run → apply → idempotente; validado em dev e revertido)
+
+**Implementation deviations:**
+- T020 — o que mudou é o **epoch/valor resultante** e a localização da fonte do cálculo: epoch Sprint 1 (11/08/1993 = Kin 1) → **GMT 584283** (15/06/1990 = Kin 255; antes 148), com `kin-maya.ts` delegando para `src/lib/horoscopes/maya.ts`. Assinatura **compatível**: `calculateKinMaya(birthDate: Date): number` → `calculateKinMaya(birthDate: Date | null | undefined): number | null` (null-guard adicional; nenhum caller do Sprint 1 quebrou). Sprint 2 T023 = assertion do export. Valores persistidos em `User.mayanKin` ficam stale → backfill `prisma/backfill-mayankin.ts`.
+
+**Verification (gates reportados pela execução da Phase 0 — não re-executados neste plan-sync):**
+- Lint ✓ · `tsc --noEmit` ✓ · `vitest run` ✓ — **1781 testes** (baseline 1124; 658 em `tests/horoscopes.test.ts`)
+
+**Docs updated (esta rodada):**
+- `docs/plans/20260921120000-sprint1-completion-plan.md` (execution log entry de cross-ref)
+- `docs/08-sprints/sprint-2.md` (checklist de tasks 14/18–20/22–25/34–35 + execution log)
+- this work-plan (este entry)
+
+### 2026-09-28 — Cross-ref Sprint 2 review batch ("fix all issues"): entregáveis dos Sprints 0/1 tocados
+
+Entrada de **cross-reference** — o Sprint 1 segue fechado; nenhuma task deste work-plan foi re-executada. Registrada por acurácia: o batch de review do Sprint 2 (`docs/plans/20260926120000-sprint2-execution-plan.md`, Execution Log 2026-09-27/28 + regressão 2026-09-28) alterou arquivos entregues por sprints anteriores.
+
+**Tasks completed (fully):** none (nenhuma task do Sprint 1 executada nesta rodada)
+**Tasks completed (partially):** none
+**Tasks not executed in this run:** T001–T119 (escopo do Sprint 1 fechado)
+
+**Unplanned changes (fora deste sprint, registradas por acurácia):**
+- `src/jobs/hard-delete-accounts.ts` (job LGPD) — **purga social/horóscopos** adicionada à mesma transação de anonimização: `Follow` (ambas direções), `Post`, `Comment`, `PostLike`, `CommentLike`, `Gift` **enviado**, `Notification`, `ContentReport`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification`; gifts **recebidos** e `HoroscopeContent` permanecem (ledger do doador / catálogo global) + `tests/hard-delete-accounts.test.ts` (+76)
+- `src/app/api/v1/users/_helpers.ts` — `requireAuth` ganhou gate: `deletedAt` → 401 e `isBanned` → 403 `AUTH_ACCOUNT_SUSPENDED` (comportamento novo para rotas do Sprint 1); lookup isolado em try/catch com **fail-open** em falha de DB (a versão rígida quebrou 58 testes de mocks — corrigida no mesmo batch; contrato `tests/require-auth.test.ts` 4/4)
+- `src/instrumentation.ts` — `getEnv()` fail-fast no `register()` (boot)
+- `src/proxy.ts` — matcher + `/feed/:path*`, `/explorar/:path*`, `/horoscopos/:path*`
+- `next.config.ts` + `vercel.json` — CSP (`frame-ancestors 'none'; base-uri 'self'; object-src 'none'; img-src 'self' https: data:`) + cron `feed-cache-refresh` (`*/5`)
+- `src/app/global-error.tsx` — import de `./globals.css` (o error boundary raiz substitui o layout, sem isto renderizava sem estilos)
+- `src/lib/analytics.ts` — unions typed nos eventos (adição; assinaturas existentes preservadas)
+- `src/lib/api.ts` — interceptor envia `x-csrf-token` em métodos inseguros (`needsCsrf` vindo do novo `src/lib/csrf-methods.ts`)
+- `eslint.config.mjs` (`no-console` warn allow `error`/`warn` + override off `prisma/**`/`scripts/**`/`auth.config.ts`) e `.env.example` (+`CRON_SECRET`)
+- `tests/integration/arcana-calculate.test.ts` — teste "404 when user not found" sequenciado com `mockResolvedValueOnce` (corrida com o novo gate do `requireAuth`)
+
+**Implementation deviations:**
+- Nenhuma remoção de comportamento do Sprint 1 — só adições (gate de sessão, headers de segurança, purga social, fail-fast de env). Único efeito observável em contrato: banidos/soft-deleted agora recebem 401/403 no `requireAuth` (antes passavam).
+
+**Verification (gates reportados pela execução do batch — não re-executados neste plan-sync):**
+- prettier ✓ · eslint 0 warnings ✓ · `tsc` ✓ · suíte completa **2017 passed / 1 skipped** ✓ (recount local: **131** arquivos `tests/**/*.test.{ts,tsx}`)
+
+**Docs updated (pelo plan-sync desta rodada):**
+- `docs/plans/20260926120000-sprint2-execution-plan.md` (Execution Log 2026-09-28 — verificação do batch + omissões)
+- `docs/08-sprints/sprint-2.md` (Execution Log 2026-09-28)
+- this work-plan (este entry)
+- Atualizados **pelo batch** (não pelo plan-sync): `docs/04-api/authentication.md` e `docs/07-security/lgpd.md` (purga social do hard-delete)
