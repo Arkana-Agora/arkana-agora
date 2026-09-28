@@ -59,6 +59,15 @@ jobs:
       - uses: oven-sh/setup-bun@v1
       - run: bun install --frozen-lockfile
       - run: bunx prisma migrate deploy --schema=./prisma/schema.prisma
+      # Gate de drift (review data N12): migrations × schema × DB ao vivo.
+      # `--exit-code` → exit 2 quando há drift (schema não refletido em
+      # migration.sql, ou migration aplicada divergente do schema.prisma).
+      - run: bunx prisma migrate status --schema=./prisma/schema.prisma
+      - run: bunx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      # Gate cego do `migrate diff`: CHECKs e `NULLS NOT DISTINCT` não são
+      # modelados pelo schema.prisma — um drop manual de constraint deixa o
+      # diff verde. Assertion SQL cobre as constraints escritas à mão.
+      - run: bunx prisma db execute --file prisma/ci/assert-integrity.sql
       - run: bun run test:coverage
       - uses: codecov/codecov-action@v5
         with:
