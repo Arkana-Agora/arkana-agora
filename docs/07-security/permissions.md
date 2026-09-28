@@ -72,7 +72,7 @@ Plano (dimensão ortogonal ao role):
 | Permissão | FREE | PLUS | PRO | ADMIN | SUPER |
 |---|---|---|---|---|---|
 | `social.follow` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `social.post` | ✅ (5/dia) | ✅ (∞) | ✅ (∞) | ✅ (∞) | ✅ (∞) |
+| `social.post` | ✅ (10/dia) | ✅ (50/dia) | ✅ (∞) | ✅ (∞) | ✅ (∞) |
 | `social.comment` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `social.gift.send` | ❌ | ✅ | ✅ | ✅ | ✅ |
 | `social.gift.receive` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -145,10 +145,12 @@ Quotas diárias e rate limits (ADR-009 Gate C):
 | `POST /api/v1/*` (geral) | 50/min | 150/min | 150/min | 600/min | 600/min |
 | `POST /api/v1/readings` | 3/dia | 10/dia | Ilimitado* | Ilimitado* | Ilimitado* |
 | `POST /api/v1/ai/...` (interpretações IA) | 10/dia | Ilimitado* | Ilimitado* | Ilimitado* | Ilimitado* |
-| `POST /api/v1/social/posts` | 5/hora | Ilimitado* | Ilimitado* | 600/min | 600/min |
+| `POST /api/v1/social/posts` | 10/dia | 50/dia | Ilimitado* | 600/min | 600/min |
 | `POST /api/v1/auth/login` | 5/15min | 5/15min | 5/15min | 20/15min | 20/15min |
 
 > \* Ilimitado com soft limit de 100/min para proteção contra abuso.
+>
+> **Social (Sprint 2 Phase 0.5):** os valores FREE/PLUS de `social.post` e de `POST /api/v1/social/posts` vêm de `POST_LIMIT_BY_TIER` em `src/lib/social/limits.ts` (S2-10: **10/dia FREE, 50/dia PLUS**, janela UTC — `UserPlan` só tem FREE/PLUS; staff herda a linha acima). Os demais limites da mesma lib não são por role: likes 100/min, comments 30/min, follow 20/min, gifts 10/dia, uploads 20/dia (⚠️ o plano/clarificação S2-10 diz "Uploads 4/post" — ver nota em `docs/07-security/security.md` §Rate Limiting) → 429 `RATE_LIMITED` (`src/lib/middleware/rate-limit.ts`). Nenhuma rota aplica esses limites ainda (T043/T051/T064/T076/T077/T081/T120).
 
 ---
 

@@ -142,6 +142,36 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 - **`POST /api/v1/auth/reset-password` (T12)** — **não possui rate limit próprio**: a rota não usa `src/lib/rate-limit.ts`; a tentativa é protegida pelo token `PASSWORD_RESET` single-use (1h). O limite 3/h por e-mail **e** 5/h por IP é da **emissão** de tokens (`POST /api/v1/auth/forgot-password`).
 - `resetRateLimiter()` limpa o store (usado em testes).
 
+**Rate limits sociais (Sprint 2 Phase 0.5 — T027/T040):** sistema **separado** do `src/lib/rate-limit.ts` de auth (acima), com estado em Redis.
+
+- **Única casa dos limites sociais**: `src/lib/social/limits.ts` — núcleo único `checkSocialLimit(limit, userId, tier)` → `SocialLimitResult { allowed, remaining, resetAt, limit, max }` (`max` calculado uma vez, usado pelos headers); os wrappers `checkPostLimit()`/`checkLikeLimit()`/`checkCommentLimit()`/`checkFollowLimit()`/`checkGiftLimit()`/`checkUploadLimit()` do T027 são thin wrappers sobre o núcleo. Estado em sorted set por janela (`rl:<limit>:<userId>`) + TTL.
+- **Semântica attempt-vs-row**: o Redis conta **checks aprovados** (attempt) e o fallback Prisma conta **linhas persistidas** (sucessos) — uma ação que falha após o check aprovado consome cota só no Redis; divergência aceita e documentada no cabeçalho de `limits.ts`.
+- **Valores (S2-10)**: posts **10/dia FREE** e **50/dia PLUS** (`POST_LIMIT_BY_TIER`, lido de `User.subscriptionTier`), likes 100/min, comments 30/min, follow 20/min, gifts 10/dia, uploads **20/dia** (`FIXED_LIMITS.upload`, janela diária em **UTC**). ⚠️ **Divergência aberta**: o plano/clarificação S2-10 lista "**Uploads 4/post**" para `checkUploadLimit` — o cap de 4 imagens por post é a restrição de payload do S2-12/T064 (pendente, Phase 2), enquanto o código trata upload como cota diária de 20; confirmar qual é a intenção antes de ligar T064.
+- **Middleware**: `src/lib/middleware/rate-limit.ts` (`enforceSocialLimit()`) devolve 429 **`RATE_LIMITED`** com headers `Retry-After`, `X-RateLimit-Limit` e `X-RateLimit-Remaining`.
+- **Modo de falha (Q26) — fail-open**: Redis indisponível → o request **prossegue** com `logger.warn("rate_limiter_bypass")` (evento PostHog `rate_limiter_bypass` via `trackRateLimiterBypass()` em `src/lib/analytics.ts`, ligação prevista em T136); para os **daily** limits há fallback de contagem via Prisma **antes** de liberar. **Nunca respondemos 503 por causa do rate limit.**
+- **Status**: libs + middleware implementados e testados (`tests/social-limits.test.ts`, `tests/middleware-rate-limit.test.ts`) — **nenhuma rota os chama ainda** (aplicação em T043/T051/T064/T076/T077/T081/T120, fases posteriores).
+
+### CSRF (double-submit)
+
+> **Status (Sprint 2 Phase 0.5):** helpers e middleware prontos, **sem rota consumidora ainda**. O fluxo do Sprint 1 continua sendo o padrão descrito em `docs/solutions/patterns/auth/set-csrf-cookie-client-side.md` (cookie gravado client-side por `ensureCsrfCookie()`, validação server-side antes de qualquer efeito colateral).
+
+- `src/lib/csrf.ts`: `validateCsrfToken(request)` (cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`, `timingSafeEqual` sobre buffers UTF-8) e `csrfErrorResponse(reqId)` → 403 **`CSRF_TOKEN_INVALID`** (code canônico AC-20 — o middleware T041 emitia `CSRF_INVALID`; divergência **fechada na review Step 5**: `csrf.ts`, `middleware/csrf.ts`, testes e banners de `docs/04-api/overview.md` alinhados ao code das rotas de auth).
+- **Single-writer do cookie (LGPD/segurança)**: o Set-Cookie é feito **APENAS no client** via `ensureCsrfCookie()` (`src/lib/csrf-client.ts`) — não existe builder server-side de Set-Cookie para o CSRF (o `buildCsrfSetCookieHeader` da Phase 0.5 foi **removido na review**: code morto que, se ligado no middleware/rotas, quebraria o single-writer e duplicaria as flags `Secure`/`SameSite` em dois lugares). Cookie **não é `HttpOnly`** de propósito: double-submit exige o client ler o valor para ecoar no header.
+- `src/lib/middleware/csrf.ts` (T041): `enforceCsrf(request, reqId)` — para métodos inseguros (gate `needsCsrf()`, re-exportado de `src/lib/csrf-methods.ts`) checa **primeiro `Origin` same-origin**: se o header `Origin` vier e divergir de `new URL(request.url).origin` → 403 antes de olhar o token (defesa em profundidade; `reason: "origin_mismatch"`); depois `validateCsrfToken` (`reason: "token_mismatch"`). Ambos logam `csrf_failure` antes de devolver 403 `CSRF_TOKEN_INVALID`. O interceptor `src/lib/api.ts` envia `x-csrf-token` (via `ensureCsrfCookie()`) em todo método inseguro cujo chamador não enviou o header.
+
+### Guard de sessão (`requireAuth`) — banimento e soft-delete
+
+> **Status (Sprint 2 review — CHK008 parcial):** implementado em `src/app/api/v1/users/_helpers.ts` (`requireAuth`, usado por **todas** as rotas `/api/v1/users/me/*`, `/api/v1/ai/*`, `/api/v1/arcana/calculate`, `/api/v1/readings/*`). Antes da review, `User.isBanned` nunca era checado em nenhum guard.
+
+- Depois do `verifyAccessToken`, o guard consulta `prisma.user.findUnique({ select: { isBanned, deletedAt } })` e aplica:
+  - **linha inexistente (`null`)** → **401 `AUTH_TOKEN_INVALID`** (hard delete / id forjado);
+  - **`deletedAt` preenchido** (janela LGPD) → **401 `AUTH_TOKEN_INVALID`**;
+  - **`isBanned`** → **403 `AUTH_ACCOUNT_SUSPENDED`**;
+  - caso contrário → `{ userId }`.
+- **Semântica de falha — fail-closed**: se o lookup **lançar** (DB pool agotado/failover) → **503 `SERVICE_UNAVAILABLE`** (nunca 200: abriria o gate num pico de DB; nunca 401: dispararia o refresh loop do client). Branch `undefined` (model sem stub) é impossível em produção — o schema garante `User` — e existe só para mocks de teste. `verifyAccessToken` segue o contrato anterior: `AUTH_CONFIG_*` → 500, demais `AuthTokenError` → 401.
+- Testes: `tests/require-auth.test.ts` (5 casos: ativo/banida/soft-deleted/inexistente/lookup quebrado → 503).
+- **Escopo parcial (CHK008)**: o gate cobre só rotas `requireAuth` (API). `src/proxy.ts`, `(app)/layout.tsx` e o refresh `rotateRefresh` **não** checam `isBanned`, e **nada no repo ainda escreve `isBanned=true`** (endpoint de moderação/admin = fase posterior).
+
 ### CORS (Cross-Origin Resource Sharing)
 
 ```typescript
@@ -155,6 +185,10 @@ const corsOptions = {
 ```
 
 ### Helmet Middleware
+
+> **Implementado de verdade (Sprint 2 review S-I8)**: o Express acima é só o design original — no Next.js as diretrizes vivem em **`next.config.ts` (`headers()`)** e espelhadas em **`vercel.json`**:
+> `Content-Security-Policy: ...; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; img-src 'self' https: data:` (anti-clickjacking + anti-base-tag-hijack + sem plugins/object) + HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy` e `Cache-Control: private, no-store`.
+> ⚠️ **CSP parcial (realidade ≠ design)**: só essas 4 diretrizes estão implementadas — `default-src`/`script-src`/`connect-src`/`style-src` do bloco abaixo **ainda não existem no header** (débito de hardening, não há sink XSS aberto hoje). O gate `has` do bloco HTML usa `accept: text/html.*` porque `has.value` vira regex ancorada (`^…$`) em `prepare-destination` — com `text/html` puro o Accept real do browser (`text/html,application/xhtml+xml,…`) não casava e **nenhum header HTML era emitido** (corrigido na review 2026-09-28). Testes de header não existem (mudanças de CSP não quebram suíte).
 
 ```typescript
 app.use(helmet({
@@ -259,9 +293,9 @@ REDIS_URL=
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
-R2_BUCKET=
+R2_BUCKET_NAME=
 R2_PUBLIC_URL=https://assets.arkanaagora.com.br
-# Vercel Cron secret — protege rotas de cron (GET /api/cron/hard-delete)
+# Vercel Cron secret — protege as rotas GET /api/cron/hard-delete (0 3 * * *) e /api/cron/feed-cache-refresh (*/5) agendadas em vercel.json
 CRON_SECRET=
 ```
 
@@ -288,6 +322,7 @@ CRON_SECRET=
 - **Vulnerabilidades altas**: Corrigida em até 7 dias
 - **Vulnerabilidades médias**: Corrigida no próximo sprint
 - **Vulnerabilidades baixas**: Avaliada e corrigida conforme disponibilidade
+- **2026-09-27 (Sprint 2 review CRIT-3)**: `npm audit fix` **sem `--force`** resolveu **9 vulnerabilidades transitivas** trazidas pelas deps novas do changeset (`bullmq`, `@vercel/og`); nenhuma major forçada — majors continuam com o fluxo normal de política acima.
 
 ---
 
