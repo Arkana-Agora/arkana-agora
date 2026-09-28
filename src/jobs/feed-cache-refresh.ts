@@ -5,8 +5,13 @@ import {
 import { logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 
-/** CRON do feed cache (T042): "a cada 5 minutos" (`FEED_CACHE_REFRESH_CRON`). */
-export const FEED_CACHE_REFRESH_CRON = "*/5 * * * *"
+/**
+ * CRON do feed cache (T042/SC34): diário à meia-noite UTC (`0 0 * * *`).
+ * Vercel Hobby só permite cron ≥1 dia — a cadência de 5 min e a horária
+ * (`0 * * * *`) **falham o deploy**; miss do cache cai no materialize
+ * on-demand (TTL 5 min).
+ */
+export const FEED_CACHE_REFRESH_CRON = "0 0 * * *"
 
 export interface FeedCacheRefreshSummary {
   candidates: number

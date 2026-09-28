@@ -8,7 +8,11 @@
     },
     {
       "path": "/api/cron/feed-cache-refresh",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/counter-reconcile",
+      "schedule": "0 4 * * *"
     }
   ],
   "headers": [

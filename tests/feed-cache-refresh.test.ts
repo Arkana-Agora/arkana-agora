@@ -24,8 +24,8 @@ beforeEach(() => {
 })
 
 describe("runFeedCacheRefresh (T042)", () => {
-  it("cron de 5 minutos", () => {
-    expect(FEED_CACHE_REFRESH_CRON).toBe("*/5 * * * *")
+  it("cron diario (Hobby so permite >= 1 dia — SC34)", () => {
+    expect(FEED_CACHE_REFRESH_CRON).toBe("0 0 * * *")
   })
 
   it("refresca candidatos >1000 passing o COUNT(*) do SQL (sem recount)", async () => {
