@@ -116,6 +116,26 @@ async function anonymizeAccount(
     await tx.subscription.deleteMany({ where: { userId } })
     await tx.arcanaCalculation.deleteMany({ where: { userId } })
     await tx.verificationToken.deleteMany({ where: { identifier: email } })
+
+    // Sprint 2 — social/horóscopos (LGPD review): purga as tabelas novas com
+    // ligação ao usuário. `horoscope_contents` fica (catálogo global, sem
+    // userId); `post_hashtags`/`comment_likes` de posts/comentários do autor
+    // caem em cascade, os feitos em conteúdo de terceiros vão direto.
+    await tx.follow.deleteMany({
+      where: { OR: [{ followerId: userId }, { followingId: userId }] },
+    })
+    await tx.post.deleteMany({ where: { authorId: userId } })
+    await tx.comment.deleteMany({ where: { authorId: userId } })
+    await tx.postLike.deleteMany({ where: { userId } })
+    await tx.commentLike.deleteMany({ where: { userId } })
+    // Gifts enviados são ação do usuário; recebidos permanecem como ledger do
+    // doador (referência ao id já anonimizado — revisitar antes do launch).
+    await tx.gift.deleteMany({ where: { fromUserId: userId } })
+    await tx.notification.deleteMany({ where: { userId } })
+    await tx.contentReport.deleteMany({ where: { reporterId: userId } })
+    await tx.horoscopeEntry.deleteMany({ where: { userId } })
+    await tx.horoscopeLog.deleteMany({ where: { userId } })
+    await tx.horoscopeNotification.deleteMany({ where: { userId } })
     return true
   })
 
