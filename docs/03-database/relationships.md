@@ -4,13 +4,13 @@
 
 ---
 
-> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **25 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`), **`FollowReward`** (`20260928205906_follow_reward_marker`, Sprint 2 review 2026-09-29) — migrations aplicadas em dev PostgreSQL (12 na chain; `20260928210717_follow_keyset_indexes` e `20260929142921_secondary_indexes_review` só mexem em índices). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
 ## 1. Visão Geral dos Relacionamentos
 
-O banco de dados possui **24 models implementados** (o Sprint 2 Phase 0 adicionou 13 models sociais/horóscopos). A tabela abaixo cobre os relacionamentos do **ERD alvo** — inclusive os de entidades ainda planejadas (`TarotDeck`, `Card`, `Product`, `Order`, `Payment`, `DailyCard`) — e é distribuída entre relações **1:1**, **1:N** e **N:M** (via tabela juntura). A §5 marca o que já existe no schema.
+O banco de dados possui **25 models implementados** (o Sprint 2 Phase 0 adicionou 13 models sociais/horóscopos; a review do Phase 1, 2026-09-29, acrescentou `FollowReward`). A tabela abaixo cobre os relacionamentos do **ERD alvo** — inclusive os de entidades ainda planejadas (`TarotDeck`, `Card`, `Product`, `Order`, `Payment`, `DailyCard`) — e é distribuída entre relações **1:1**, **1:N** e **N:M** (via tabela juntura). A §5 marca o que já existe no schema.
 
 | # | Entidade A | Entidade B | Tipo | Descrição |
 |---|------------|------------|------|-----------|
@@ -253,6 +253,17 @@ User (receiver, 1) ──────── (N) Gift
 - **OnDelete**: `CASCADE`
 - **OnUpdate**: `CASCADE`
 
+### 3.17 User → ContentReport (polimórfico — padrão aceito)
+
+```
+User (reporter, 1) ──────── (N) ContentReport
+                                 │
+                                 └── targetId → Post | Comment (sem FK)
+```
+
+- **HasForeignKey**: apenas `ContentReport.reporterId` → `User.id`
+- **`targetId` é polimórfico** (aponta `Post` ou `Comment` conforme `targetType`) e **não tem FK** — padrão **aceito por design** (review data N5): dangling `targetId` (alvo já apagado) é **tolerado**: o report vira histórico de moderação, não vínculo vivo. Quem resolve é a leitura (mostrar "conteúdo removido"), **nunca** delete em cascata do report. Não criar tabela de junção para "resolver" isso — manter o padrão até uma ADR decidir o contrário.
+
 ---
 
 ## 4. Relacionamento N:M
@@ -289,6 +300,8 @@ model Follow {
   @@unique([followerId, followingId])
 }
 ```
+
+- **Marker de recompensa (Sprint 2 review, 2026-09-29)**: `FollowReward` (`follow_rewards`) guarda **uma linha por par** (`@@unique([followerId, followingId])`) registrando que os +5 Versos daquele par já foram pagos — é **imutável** (nunca é apagada no unfollow, por isso re-follow não recompensa de novo). ⚠️ **Não é FK**: `followerId`/`followingId` são `String` puro **sem `@relation`** — logo **sem `onDelete: Cascade`** e **não é alcançada pelo job de hard-delete** (`src/jobs/hard-delete-accounts.ts` não purga `FollowReward`). Detalhes: `prisma/schema.prisma` (sem seção própria em `entities.md`).
 
 ---
 
@@ -336,7 +349,7 @@ model Follow {
 
 ### 6.1 Índices de Foreign Key
 
-Todas as colunas de foreign key possuem índice automático no PostgreSQL (criado pelo Prisma). Entretanto, para consultas compostas frequentes, índices adicionais são necessários:
+Colunas de foreign key **não** recebem índice automático no PostgreSQL (o Prisma **não** cria índice de FK por conta própria) — cada índice de FK é **explícito** no schema (`@@index`/`@@unique` em `prisma/schema.prisma`, inventário real em `docs/03-database/indexing.md` §7.1). Entretanto, para consultas compostas frequentes, índices adicionais são necessários:
 
 | Relacionamento | Índice Composto | Consulta Otimizada |
 |----------------|-----------------|-------------------|
@@ -345,7 +358,7 @@ Todas as colunas de foreign key possuem índice automático no PostgreSQL (criad
 | User → Product | `@@index([sellerId, isActive])` | "Produtos ativos de um vendedor" |
 | Post → Comment | `@@index([postId, createdAt])` | "Comentários de um post, mais recentes" |
 | User → Notification | `@@index([userId, isRead, createdAt])` | "Notificações não lidas" (parcial `WHERE isRead = false` é opcional/ainda não criado) |
-| User → Follow | `@@index([followerId])` + `@@index([followingId])` | "Quem eu sigo" / "Quem me segue" |
+| User → Follow | `@@index([followingId, createdAt, id])` + `@@index([followerId, createdAt, id])` | "Quem eu sigo" / "Quem me segue" — **substituem** os `@@index([followerId])`/`@@index([followingId])` de coluna única (migration `20260928210717_follow_keyset_indexes`, keyset das listas T044/T045) |
 | DailyCard → date | `@@unique([date])` | "Carta do dia de hoje" |
 
 ### 6.2 Índices para Joins Frequentes

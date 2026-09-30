@@ -10,7 +10,7 @@ Operational runbooks catalog for Arkana Agora.
 | `vercel-deploy-github-token.md` | Deploy staging Vercel - Missing GitHub Token | DevOps | 2026-08-24 |
 | `vercel-deploy-project-settings.md` † | Deploy staging Vercel - "Could not retrieve Project Settings" | DevOps | 2026-08-24 |
 | `vercel-build-nft-enoent.md` * | Deploy staging Vercel - "ENOENT .next/next-server.js.nft.json" (standalone + adapter) | DevOps | 2026-08-24 |
-| `turbopack-postcss-oom.md` * | Local build - Zone Allocation OOM / exit 134 on `globals.css` | DevOps | 2026-09-23 |
+| `turbopack-postcss-oom.md` * | Local build **and full test suite** - Zone Allocation OOM (exit 134 on `globals.css`; tinypool worker `ERR_IPC_CHANNEL_CLOSED` mid-suite) | DevOps | 2026-09-29 |
 | `local-jwt-session-decryption.md` | Local runtime - JWTSessionError no matching decryption secret | Dev | 2026-09-23 |
 | `jwt-public-key-missing-all-401.md` | Runtime - all API calls 401 / infinite refresh / login flicker (JWT_PUBLIC_KEY ausente) | Dev/DevOps | 2026-09-24 |
 

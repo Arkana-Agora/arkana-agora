@@ -12,6 +12,9 @@ import {
  * endpoints sociais com headers `Retry-After`/`X-RateLimit-Remaining`.
  * Fail-open propagado do T027 (Q26): quando o Redis cai o check libera —
  * nunca respondemos 503 por causa do limit.
+ *
+ * Node runtime: roda dentro dos Route Handlers (via `enforceSocialLimit`).
+ * NUNCA wire em `src/proxy.ts` (Edge — Redis/Prisma incompativeis).
  */
 
 export function rateLimitHeaders(

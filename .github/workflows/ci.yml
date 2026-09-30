@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx prisma generate
       - run: bun run lint
@@ -28,7 +28,7 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx prisma generate
       - run: bun run type-check
@@ -56,7 +56,7 @@ jobs:
       AUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx prisma migrate deploy --schema=./prisma/schema.prisma
       # Gate de drift (review data N12): migrations × schema × DB ao vivo.
@@ -80,7 +80,7 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx prisma generate
       - run: bun run build
@@ -124,11 +124,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - env:
-          AUTH_URL: https://arkanaagora.com.br
+          # Use preview URL for staging deploys, not production URL
+          AUTH_URL: https://${{ github.repository }}-${{ github.run_id }}.vercel.app
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           AUTH_TRUST_HOST: true
         run: |
-          echo "AUTH_URL is set to production"
+          echo "AUTH_URL set to preview deployment"
       - uses: amondnet/vercel-action@v25
         with:
           github-token: ${{ github.token }}

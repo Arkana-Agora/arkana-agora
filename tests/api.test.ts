@@ -248,6 +248,39 @@ describe("authApi — Axios instance (T26)", () => {
     expect(refreshCalls.length).toBe(0)
   })
 
+  it("serializes config.params into the request URL (cursor/q reach the server)", async () => {
+    getSessionMock.mockResolvedValue(null)
+    mockFetchWithRefresh()
+
+    const { default: authApi } = await import("@/lib/api")
+    await authApi.get("/users/alice/followers", {
+      params: { cursor: "abc", q: "ali" },
+    })
+
+    const fetchCall = vi.mocked(globalThis.fetch).mock.calls[0]!
+    const url = new URL(String(fetchCall[0]))
+    expect(url.pathname).toBe("/api/v1/users/alice/followers")
+    expect(url.searchParams.get("cursor")).toBe("abc")
+    expect(url.searchParams.get("q")).toBe("ali")
+  })
+
+  it("skips null/undefined params and repeats array params", async () => {
+    getSessionMock.mockResolvedValue(null)
+    mockFetchWithRefresh()
+
+    const { default: authApi } = await import("@/lib/api")
+    await authApi.get("/search", {
+      params: { tag: ["a", "b"], empty: null, missing: undefined, n: 5 },
+    })
+
+    const fetchCall = vi.mocked(globalThis.fetch).mock.calls[0]!
+    const url = new URL(String(fetchCall[0]))
+    expect(url.searchParams.getAll("tag")).toEqual(["a", "b"])
+    expect(url.searchParams.has("empty")).toBe(false)
+    expect(url.searchParams.has("missing")).toBe(false)
+    expect(url.searchParams.get("n")).toBe("5")
+  })
+
   it("concurrent 401s trigger only one refresh", async () => {
     let resourceCallCount = 0
     vi.stubGlobal(

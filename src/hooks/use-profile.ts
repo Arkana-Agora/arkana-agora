@@ -13,6 +13,9 @@ const publicProfileSchema = z.object({
   avatarUrl: z.string().nullable().optional(),
   plan: z.string(),
   location: z.string().nullable().optional(),
+  followersCount: z.number().optional(),
+  followingCount: z.number().optional(),
+  isFollowing: z.boolean().optional(),
   astrology: z
     .object({
       sunSign: z.string().nullable().optional(),

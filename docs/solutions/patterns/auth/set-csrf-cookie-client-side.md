@@ -41,13 +41,13 @@ Reach for this pattern whenever a cookie-based endpoint in this project needs th
 - `src/app/(auth)/login/page.tsx` and `register/page.tsx` are **plain Server Components** — the illegal `cookies().set()` calls were removed; they only render metadata + `<LoginForm />` / `<RegisterForm />`.
 - Server validation: `validateCsrfToken(request)` in `src/lib/csrf.ts` reads cookie by the shared `csrfCookieName()` and compares to `x-csrf-token` with `timingSafeEqual` on **UTF-8 byte buffers** (string `.length` pre-check would throw `RangeError` on multi-byte pairs) → 403 `CSRF_TOKEN_INVALID`.
 - Tests: `tests/csrf-client.test.ts` covers create / reuse / clear / non-browser `""` / round-trip vs `validateCsrfToken`; E2E/direct POSTs must attach `...csrfHeaders()` from `tests/e2e/helpers.ts` (same token in `Cookie` and `x-csrf-token`; cookie name derived from `NODE_ENV`).
-- Scope: only `POST /api/v1/auth/login` and `POST /api/v1/auth/register` validate CSRF today. Refresh, logout, magic-link, verify do **not** (Bearer/cookie-only, per design §7.1) — do not conflate.
+- Scope: `POST /api/v1/auth/login` and `POST /api/v1/auth/register` validate CSRF via `validateCsrfToken()`; refresh, logout, magic-link, verify do **not** (Bearer/cookie-only, per design §7.1) — do not conflate. **Sprint 2 Phase 1 (2026-09-29)**: first consumer *outside* auth is `POST /api/v1/social/follow/:userId`, which calls the middleware wrapper `enforceCsrf()` (`src/lib/middleware/csrf.ts`, T041) at the top of the handler — same `CSRF_TOKEN_INVALID` code, emitted **before** the rate limit (so it carries no `rate.headers`). It is a Bearer route, so the header arrives via the `x-csrf-token` injection in `src/lib/api.ts` (defesa em profundidade, not a CSRF-required path).
 - Middleware (`src/proxy.ts`, matcher `/dashboard/:path*`, `/perfil/:path*`, `/tirar`, `/tiragem/:path*`, `/minhas-tiragens`, `/meu-arcano/:path*`) was deliberately left untouched for CSRF (smaller blast radius); it only redirects unauthenticated users to `/login?callbackUrl=`.
 
 ## Planned / Optional Extensions (If Applicable)
 
 - **Alternative (not implemented):** set the cookie server-side from a **Route Handler** or from **`src/proxy.ts`** (Next 16's middleware equivalent) — both are legal `cookie()` mutation contexts. The sprint-1 work plan explicitly chose client-side over middleware; revisit only with a reason, and keep the cookie attributes identical.
-- Possibly extend `validateCsrfToken` to additional cookie-based state-changing routes if design §7.1 changes.
+- Extend `enforceCsrf()`/`validateCsrfToken` to the remaining cookie-based state-changing routes (next: `POST /api/v1/social/posts`, T051) if design §7.1 changes — `enforceCsrf` already has one consumer (`social/follow`), so new social writers should reuse it instead of calling `validateCsrfToken` directly.
 
 ## Pattern Overview
 

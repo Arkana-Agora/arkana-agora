@@ -51,24 +51,26 @@ export const updateProfileSchema = z
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 
-export const privacySchema = z
-  .object({
-    profileVisibility: z.enum(["public", "private"]).optional(),
-    statsVisibility: z.enum(["public", "private"]).optional(),
-    arcanaVisibility: z.enum(["public", "private"]).optional(),
-    whoCanFollow: z.enum(["all", "following", "nobody"]).optional(),
-    whoCanComment: z.enum(["all", "following", "nobody"]).optional(),
-  })
-  .strict()
+const privacyShape = {
+  profileVisibility: z.enum(["public", "private"]).optional(),
+  statsVisibility: z.enum(["public", "private"]).optional(),
+  arcanaVisibility: z.enum(["public", "private"]).optional(),
+  whoCanFollow: z.enum(["all", "following", "nobody"]).optional(),
+  whoCanComment: z.enum(["all", "following", "nobody"]).optional(),
+}
+
+// Escrita (PUT /users/me/privacy): strict — chave desconhecida = 422.
+export const privacySchema = z.object(privacyShape).strict()
+
+// Leitura de JSON persistido: chaves desconhecidas (legado/forward-compat)
+// sao ignoradas; valores de enum invalidos continuam falhando (fail-closed).
+export const privacyReadSchema = z.object(privacyShape)
 
 export type PrivacyInput = z.infer<typeof privacySchema>
 
-export interface PrivacySettings {
-  profileVisibility?: "public" | "private"
-  statsVisibility?: "public" | "private"
-  arcanaVisibility?: "public" | "private"
-  whoCanFollow?: "all" | "following" | "nobody"
-  whoCanComment?: "all" | "following" | "nobody"
+export function parsePrivacy(json: unknown): PrivacyInput | null {
+  const parsed = privacyReadSchema.safeParse(json ?? {})
+  return parsed.success ? parsed.data : null
 }
 
 export const avatarPresignSchema = z

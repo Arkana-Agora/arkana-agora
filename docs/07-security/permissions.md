@@ -150,7 +150,7 @@ Quotas diárias e rate limits (ADR-009 Gate C):
 
 > \* Ilimitado com soft limit de 100/min para proteção contra abuso.
 >
-> **Social (Sprint 2 Phase 0.5):** os valores FREE/PLUS de `social.post` e de `POST /api/v1/social/posts` vêm de `POST_LIMIT_BY_TIER` em `src/lib/social/limits.ts` (S2-10: **10/dia FREE, 50/dia PLUS**, janela UTC — `UserPlan` só tem FREE/PLUS; staff herda a linha acima). Os demais limites da mesma lib não são por role: likes 100/min, comments 30/min, follow 20/min, gifts 10/dia, uploads 20/dia (⚠️ o plano/clarificação S2-10 diz "Uploads 4/post" — ver nota em `docs/07-security/security.md` §Rate Limiting) → 429 `RATE_LIMITED` (`src/lib/middleware/rate-limit.ts`). Nenhuma rota aplica esses limites ainda (T043/T051/T064/T076/T077/T081/T120).
+> **Social (Sprint 2 Phase 0.5):** os valores FREE/PLUS de `social.post` e de `POST /api/v1/social/posts` vêm de `POST_LIMIT_BY_TIER` em `src/lib/social/limits.ts` (S2-10: **10/dia FREE, 50/dia PLUS**, janela UTC — `UserPlan` só tem FREE/PLUS; staff herda a linha acima). Os demais limites da mesma lib não são por role: likes 100/min, comments 30/min, follow 20/min, gifts 10/dia, uploads 20/dia (⚠️ o plano/clarificação S2-10 diz "Uploads 4/post" — ver nota em `docs/07-security/security.md` §Rate Limiting) → 429 `RATE_LIMITED` (`src/lib/middleware/rate-limit.ts`). **Consumidor desde o Sprint 2 Phase 1 (T043)**: `POST /api/v1/social/follow/:userId` aplica `enforceSocialLimit({ limit: "follow" })` (20/min) antes de qualquer lookup do alvo (ver `docs/07-security/security.md` §Rate Limiting); as demais rotas desses limites ainda não existem (T051/T064/T076/T077/T081/T120).
 
 ---
 

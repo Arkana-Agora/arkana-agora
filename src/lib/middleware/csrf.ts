@@ -8,6 +8,10 @@ import { logger } from "@/lib/logger"
  * `Origin`, que ele seja same-origin (defesa em profundidade da review).
  * `null` = OK; Response = 403 `CSRF_TOKEN_INVALID` (canônico AC-20, padrão
  * `set-csrf-cookie-client-side` do Sprint 1).
+ *
+ * Node runtime: roda dentro dos Route Handlers (via `enforceCsrf`).
+ * NUNCA wire em `src/proxy.ts` (Edge — `validateCsrfToken` usa Web Crypto
+ * via Node APIs incompativeis com o runtime de proxy).
  */
 
 export { needsCsrf }

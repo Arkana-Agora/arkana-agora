@@ -39,7 +39,7 @@ PostHog boot) and the client/server CSRF double-submit contract used by login/re
 | `src/lib/analytics.ts` | Consent-gated PostHog init/track + `setAnalyticsConsent()` (localStorage key `analytics-consent` — exported as `ANALYTICS_CONSENT_STORAGE_KEY`, imported by the banner) |
 | `src/components/analytics/consent-banner.tsx` | LGPD analytics consent dialog (`applyConsent` → `setAnalyticsConsent`) |
 | `src/components/providers.tsx` | App shell — boots analytics via dynamic `initAnalyticsWithConsent()`, mounts `AnalyticsConsentBanner` |
-| `tests/csrf-client.test.ts`, `tests/analytics.test.ts` (11), `tests/auth-config.test.ts` | Contract tests for CSRF client/server round-trip, analytics guards, auth-config production guard |
+| `tests/csrf-client.test.ts`, `tests/analytics.test.ts` (14), `tests/auth-config.test.ts` | Contract tests for CSRF client/server round-trip, analytics guards, auth-config production guard |
 | `tests/login-form.test.tsx` (21), `tests/consent-banner.test.tsx` (5), `tests/auth-guard.test.tsx` (7) | LoginForm submit/redirect/error mapping + Google `callbackUrl` + mount-only session-redirect guard; consent dialog hydrate/no-reload/dismiss-without-persist; AuthGuard post-mount validation |
 | `tests/safe-callback-url.test.ts` (29), `tests/auth-helpers.test.ts` (5), `tests/components/logout-button.test.tsx` (4) | Open-redirect bypass matrix + AuthSessionBridge stash lifecycle; `maskEmail` LGPD masking; LogoutButton pending/navigate lifecycle |
 
@@ -162,7 +162,7 @@ Client-side route protection (`"use client"`), matching `src/components/auth/aut
 | File | Covers |
 |------|--------|
 | `tests/csrf-client.test.ts` | `ensureCsrfCookie()` create/reuse/clear, `""` outside the browser, dev cookie name, client→server round-trip (`validateCsrfToken === true`) |
-| `tests/analytics.test.ts` (11) | dev gate, consent gate, pinned init options, missing key, track no-op/capture, consent grant/revoke order (`reset` before `opt_out`), revoke→re-grant, `resetUser` consent re-assert |
+| `tests/analytics.test.ts` (14) | dev gate, consent gate, pinned init options, missing key, track no-op/capture, consent grant/revoke order (`reset` before `opt_out`), revoke→re-grant, `resetUser` consent re-assert, Sprint 2 typed events (T024) |
 | `tests/login-form.test.tsx` (21) | rendering, password toggle, client validation, submit success (default `/dashboard`) + error mapping, Google `signIn` with dynamic `callbackUrl`, mount-only session-redirect guard (redirects only when `refreshSession()` returns `ok`) |
 | `tests/consent-banner.test.tsx` (5) | auto-open without a stored decision, persist reject/accept **without reload**, hydrate switch on reopen, Escape/backdrop dismiss persists nothing |
 | `tests/auth-guard.test.tsx` (7) | post-mount `refreshSession` validation, skeleton while checking, `/login` redirect on fail/role mismatch, single refresh call |

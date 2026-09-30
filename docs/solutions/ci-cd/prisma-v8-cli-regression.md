@@ -60,7 +60,7 @@ node -e "console.log(require('./package.json').devDependencies.prisma)"   # ^7.1
 .\node_modules\.bin\prisma generate                                       # exit 0
 .\node_modules\.bin\prisma migrate status                                 # up to date
 npx tsc --noEmit                                                          # exit 0
-npx vitest run                                                            # green
+bun run test                                                              # green (full suite via the flagged `test` script; bare `npx vitest run` can zone-OOM under low free RAM - docs/solutions/ci-cd/turbopack-postcss-oom.md)
 npm run build                                                             # exit 0 (full route table)
 ```
 

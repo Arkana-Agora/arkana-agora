@@ -9,6 +9,7 @@
 - [PATCH /users/me/profile](#patch-usersmeprofile)
 - [PATCH /users/me/privacy](#patch-usersmeprivacy)
 - [GET /users/:username/profile](#get-usersusernameprofile)
+- [GET /users/:username/followers](social.md#get-usersusernamefollowers) · [GET /users/:username/following](social.md#get-usersusernamefollowing) — rotas deste módulo entregues no Sprint 2 Phase 1, **contrato documentado em `docs/04-api/social.md`**
 - [Avatar (presign → upload → confirm → delete)](#avatar-presign--upload--confirm--delete)
 - [GET /users/:id/readings](#get-usersidreadings)
 - [GET /users/:id/stats](#get-usersidstats)
@@ -184,14 +185,47 @@ Content-Type: application/json
 ## GET /users/:username/profile
 
 Perfil público por username (implementado: `src/app/api/v1/users/[username]/profile/route.ts`).
-Respeita `privacy.profileVisibility` — perfil com `profileVisibility === "private"` oculta dados
-estatísticos/visíveis do dono para visitantes não autorizados.
+Respeita `privacy.profileVisibility` — perfil com `profileVisibility === "private"` responde 404
+(anti-timing). O mesmo 404 vale para username inexistente, usuário **banido**, **soft-deleted** ou **inativo** (`isActive: false`).
+Consulta **única** ao banco (sem `findVisibleProfile` + 2ª query) — validação de username **antes** do DB (anti-oráculo 422/404).
+**Headers anti-cache**: `Cache-Control: private, no-store` + `Vary: Authorization` (resposta depende do viewer).
 
 ### Requisição
 
 ```http
 GET /api/v1/users/mariatarot/profile
+Authorization: Bearer <accessToken>   # opcional — habilita isFollowing
 ```
+
+### Resposta — 200 OK (Sprint 2 Phase 1, T046)
+
+```json
+{
+  "id": "usr_a1b2c3d4",
+  "name": "Maria Silva",
+  "username": "mariatarot",
+  "bio": "Apaixonada por tarot desde 2018",
+  "avatarUrl": "/avatars/usr_a1b2c3d4.jpg",
+  "plan": "PLUS",
+  "location": "São Paulo",
+  "followersCount": 156,
+  "followingCount": 89,
+  "isFollowing": false
+}
+```
+
+> **Nomes de campos decididos (Phase 1)**: `followersCount`/`followingCount`/`isFollowing` no **root**
+> do objeto (task T046 do plano) — divergência do design `stats.{followers,following}` da seção
+> `GET /users/:id` abaixo, resolvida com o dono em 2026-09-28. **Direção de `isFollowing`: viewer segue o perfil alvo** (mesma semântica das listas). `isFollowing` só aparece com Bearer válido (e o viewer precisa passar o gate ban/soft-delete/inativo do `optionalAuth` — sem token, token inválido ou conta inativa, o campo **não vem**). O bloco `astrology` continua condicionado a `arcanaVisibility !== "private"`.
+>
+> **`statsVisibility` (SC38/Q1, implementado 2026-09-29)**: com `statsVisibility === "private"` a rota **omite** `followersCount`/`followingCount` de todo viewer, **exceto o próprio dono autenticado** (`viewerId === profile.id` → vê). As rotas de lista respondem **404 para não-dono** no mesmo cenário (ver `docs/04-api/social.md` §followers). Contadores, quando visíveis, vêm de **`readFollowCounts()`** (`src/lib/social/follow-lists.ts`) e filtram seguidores banidos/soft-deleted/inativos (Q2/SC39) — fonte única compartilhada com as listas e com o toggle.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 404 | `USER_NOT_FOUND` | Username inexistente, perfil privado, banido, soft-deleted ou inativo |
+| 422 | `VALIDATION_ERROR` | Username inválido (3–30, `[a-zA-Z0-9_]`) |
 
 ---
 
@@ -199,6 +233,9 @@ GET /api/v1/users/mariatarot/profile
 
 > **Status: não implementado.** Use `GET /users/:username/profile` (acima).
 > Seção abaixo é design de produto, não contrato em produção.
+> **Nota Phase 1**: os nomes de contadores de follow decididos para o produto são
+> `followersCount`/`followingCount` (root), não `stats.followers`/`stats.following` — ver seção
+> implementada acima.
 
 Retorna o perfil público de um usuário.
 

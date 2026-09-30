@@ -1,13 +1,14 @@
 # API Social — arkana-agora
 
-> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória | **Paginação**: Cursor-based
+> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória nas rotas de escrita (`POST /social/follow/:userId` exige Bearer; as listas `GET /users/:username/{followers,following}` usam **auth opcional** — `optionalAuth`, o Bearer só habilita `isFollowing`) | **Paginação**: Cursor-based
 >
-> **Status (2026-09-26)**: **contrato planejado — rotas ainda não implementadas** (o diretório `src/app/api/v1/social/` não existe e nenhum código chama `prisma.follow`/`prisma.post`/etc.). Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas vão usar já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
+> **Status (2026-09-29)**: **follow implementado (Sprint 2 Phase 1, T043–T050; revisado 2026-09-29)** — `POST /social/follow/:userId` (toggle), `GET /users/:username/followers` e `GET /users/:username/following` existem em `src/app/api/v1/social/follow/[userId]/route.ts` e `src/app/api/v1/users/[username]/{followers,following}/route.ts` (+ lib `src/lib/social/{privacy,follow-lists}.ts`); testes em `tests/integration/social-follow.test.ts` (31 casos, incl. 3 de corrida), `tests/social-privacy.test.ts` e `tests/find-visible-profile.test.ts` (9 — `findVisibleProfile`/SC38). As **demais rotas deste documento continuam planejadas** (o diretório `src/app/api/v1/social/` só contém `follow/`; nenhum código chama `prisma.post`/`prisma.comment`/etc.). Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas vão usar já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
 
 ## Sumário
 
 - [POST /social/follow/:userId](#post-socialfollowuserid)
-- [DELETE /social/follow/:userId](#delete-socialfollowuserid)
+- [GET /users/:username/followers](#get-usersusernamefollowers)
+- [GET /users/:username/following](#get-usersusernamefollowing)
 - [GET /social/feed](#get-socialfeed)
 - [GET /social/explore](#get-socialexplore)
 - [POST /social/posts](#post-socialposts)
@@ -23,7 +24,9 @@
 
 ## POST /social/follow/:userId
 
-Seguir um usuário.
+**Toggle de follow** (SC35, decidido na execução da Phase 1): o mesmo endpoint **segue** (201) ou **deixa de seguir** (200). O contrato antigo deste documento com DOIS endpoints (POST + DELETE, erros `ALREADY_FOLLOWING`/`NOT_FOLLOWING`) foi substituído pela task T043 do plano — **não existe `DELETE /social/follow`**.
+
+> **Implementado (Sprint 2 Phase 1, T043)** em `src/app/api/v1/social/follow/[userId]/route.ts`.
 
 ### Requisição
 
@@ -34,26 +37,49 @@ Authorization: Bearer <accessToken>
 
 ### Comportamento
 
-1. Não permite seguir a si mesmo
-2. Se já segue → retorna 409
-3. Se usuário privado → cria solicitação pendente
-4. Dispara notificação ao seguido
+Ordem exata do handler (importada de `src/app/api/v1/social/follow/[userId]/route.ts`):
 
-### Resposta — 201 Created
+1. **CSRF** — `enforceCsrf(request, reqId)` no topo (primeira rota consumidora do `src/lib/middleware/csrf.ts`, T041; review security I3) → 403 `CSRF_TOKEN_INVALID` **sem** rate headers. A rota é `Bearer` + cookie CSRF (o interceptor `src/lib/api.ts` injeta `x-csrf-token`) — defesa em profundidade
+2. **`requireAuth`** (`src/app/api/v1/users/_helpers.ts`) → 401 `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED`
+3. Rate limit social `follow` = 20/min — `enforceSocialLimit({ limit: "follow" })` (middleware T040; núcleo/wrapper `checkFollowLimit` T027), **antes de qualquer lookup do alvo** (anti-oráculo, padrão `docs/solutions/patterns/security/rate-limit-before-user-lookup.md`) → 429 `RATE_LIMITED` + headers `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`Retry-After`
+4. Não permite seguir a si mesmo → 409 `CANNOT_FOLLOW_SELF`
+5. Lookup do alvo (`prisma.user.findUnique`): **inexistente, `isBanned`, `deletedAt` preenchido ou `isActive: false` → 404 `USER_NOT_FOUND`** (mesmo código para os quatro, anti-timing; TOCTOU: revalidação dentro da tx no passo 8)
+6. Lookup do viewer (se sumiu por hard-delete → 401 `AUTH_TOKEN_INVALID`)
+7. **Privacidade do alvo UMA vez** (`prisma.userProfile.findUnique`): lê `privacy` → **gate do response SC38** (omitir contadores se `statsVisibility === "private"`) + **preloaded para `canFollow`** (evita 2ª query)
+8. **Direção decide ANTES do gate (review 2026-09-29, I1)** — `prisma.follow.findUnique` do par `followerId: viewer, followingId: alvo`: **se o link já existe, o unfollow segue direto para o tx sem passar por `canFollow`** (revogação é sempre possível — sem isso, um alvo que virasse `whoCanFollow: "nobody"` prenderia o ex-seguidor no toggle). **Só sem link existente** o handler chama `canFollow` (T049, S2-14, lê `UserProfile.privacy.whoCanFollow` com profile pré-carregado) → 403 `FOLLOW_NOT_ALLOWED`; **sem fluxo de solicitação pendente** (SC36 — negação é definitiva). ⚠️ Nesse branch de follow novo, a checagem de `whoCanFollow` ocorre **antes** da de `maxFollowing`
+9. `prisma.$transaction` (serializa toggles concorrentes do **mesmo follower**):
+   - **TOCTOU**: revalida alvo dentro da tx (`isBanned`, `deletedAt`, `isActive: false`) → `TargetUnavailableError` → 404
+   - **Lock FOR UPDATE** do viewer: `tx.$queryRaw\`SELECT "maxFollowing" FROM "User" WHERE id = ${viewerId} FOR UPDATE\`` — cap lido sob lock, sem corrida
+   - Já segue → **remove o follow** (200, `following: false` — **também remove notificação do par** via `notification.deleteMany`, anti-flood); segue → conta `follow` do viewer **dentro do tx** (filtro `following: { isActive: true, isBanned: false, deletedAt: null }`) contra `maxFollowing` lido no lock → 409 `MAX_FOLLOWING_REACHED` com `details.max`
+   - **Notificação**: dedupe do par **ANTES de criar** (`notification.deleteMany` no mesmo tx, anti-flood) + `notification.create` com `data.followerId`
+   - **+5 Versos são uma vez por par** (Sprint 2 review): o marker `FollowReward` (`follow_rewards`, `@@unique([followerId, followingId])`, migration `20260928205906_follow_reward_marker`) só é criado na primeira vez que A segue B — unfollow seguido de re-follow **não** paga de novo; `earnVersos(follower, Follow)` roda **dentro do tx** (atomicidade total) e, se retornar `null` (usuário sem `UserProfile`), a rota **lança e aborta a transação** — o marker nunca é commitado sem pagamento (rollback)
+   - **Analytics** (T136 no-op server-side até deploy): `trackFollow(targetId)` no follow; `trackVersosEarned(Follow, amount)` no pagamento
+10. Contagens `followingCount`/`followersCount` lidas **dentro do tx** por **`readFollowCounts(tx, targetId, targetId)`** — **subject change SC39**: contagens **sempre escopadas no ALVO** (não no viewer), com o **mesmo filtro das listas e do profile** (`isActive: true, isBanned: false, deletedAt: null`), então contador e lista concordam por construção
+11. Todas as respostas de erro pós-rate-limit (incl. o 401 do lookup do viewer e o 500 final) e o sucesso levam `rate.headers`; corridas são resolvidas pela **fonte de verdade**: o catch de `P2002`/`P2025` **não infere qual constraint falhou** — re-quer `prisma.follow.findUnique` e responde conforme o estado real do banco (`link != null` → **201** `following: true`; senão → **200** `following: false`), com contagens frescas via `readFollowCounts(prisma, targetId, targetId)`; try/catch interno: se a **re-query falhar → 500 `INTERNAL_ERROR` JSON com `rate.headers`** (nunca HTML)
+12. Emit WS `follow-update`/`notification` (room `user:{targetId}`) fica para **T088** — não implementado nesta fase
+
+### Resposta — 201 Created (novo follow)
 
 ```json
 {
   "data": {
-    "following": {
-      "userId": "usr_target123",
-      "name": "João Tarólogo",
-      "avatar": "/avatars/usr_target123.jpg",
-      "followedAt": "2025-01-15T10:30:00Z"
-    },
-    "stats": {
-      "followingCount": 90,
-      "followersCount": 156
-    }
+    "following": true,
+    "followingCount": 90,
+    "followersCount": 156
+  }
+}
+```
+
+> **SC38 (`statsVisibility: "private"`)**: quando o perfil alvo tem `statsVisibility: "private"`, a resposta **omite** `followingCount` e `followersCount` — apenas `{ "data": { "following": true } }` (201) ou `{ "data": { "following": false } }` (200). O **dono autenticado** (quem visualiza o próprio perfil) **continua vendo os contadores** (Q1).
+
+### Resposta — 200 OK (unfollow)
+
+```json
+{
+  "data": {
+    "following": false,
+    "followingCount": 89,
+    "followersCount": 155
   }
 }
 ```
@@ -62,46 +88,81 @@ Authorization: Bearer <accessToken>
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 404 | `USER_NOT_FOUND` | Usuário não encontrado |
-| 409 | `ALREADY_FOLLOWING` | Já segue este usuário |
-| 409 | `CANNOT_FOLLOW_SELF` | Não é possível seguir a si mesmo |
+| 403 | `CSRF_TOKEN_INVALID` | `enforceCsrf` rejeitou cookie/header (code canônico AC-20) — etapa 1, **antes** do rate limit, portanto sem `rate.headers` |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | Falha do `requireAuth` (etapa 2, também **antes** do rate limit — sem `rate.headers`) |
+| 401 | `AUTH_TOKEN_INVALID` | Viewer autenticado no token sumiu do DB **depois** do rate limit (lookup do viewer dentro do handler) — leva `rate.headers` |
+| 404 | `USER_NOT_FOUND` | Usuário não encontrado, **banido, soft-deleted, ou inativo** (`isActive: false`) |
+| 409 | `CANNOT_FOLLOW_SELF` | Não é possível seguir a si mesmo (`details.reason: "self_follow"`) |
+| 409 | `MAX_FOLLOWING_REACHED` | `maxFollowing` do viewer atingido — `details.max` = limite configurado (lido sob lock FOR UPDATE) |
+| 403 | `FOLLOW_NOT_ALLOWED` | `whoCanFollow` negou — `details.reason` = `privacy_nobody` \| `privacy_following` (SC36) — **só no branch de follow novo** (unfollow nunca passa pelo gate) |
+| 429 | `RATE_LIMITED` | Limite follow 20/min — `details.limit: "follow"` |
+| 500 | `INTERNAL_ERROR` | Falha interna ou falha na re-query de corrida (`follow.findUnique`) — sempre JSON com `rate.headers`, nunca HTML |
+
+> **Garantias**: toggle idempotente — as corridas **re-querem `follow.findUnique`** e respondem 201/200 coerente com o banco (uma corrida em si **não** vira 500; só uma falha de DB na re-query vira 500 JSON com `rate.headers`) e **+5 Versos uma única vez por par** (`FollowReward`), não a cada re-follow.
 
 ---
 
-## DELETE /social/follow/:userId
+## GET /users/:username/followers
 
-Deixa de seguir um usuário.
+Lista de seguidores de um usuário (público; **404 anti-timing** para perfil privado e para alvo banido/soft-deleted — `findVisibleProfile` em `src/app/api/v1/users/_helpers.ts`).
+
+> **Implementado (Sprint 2 Phase 1, T044)** em `src/app/api/v1/users/[username]/followers/route.ts` (+ lib `src/lib/social/follow-lists.ts`).
 
 ### Requisição
 
 ```http
-DELETE /api/v1/social/follow/usr_target123
-Authorization: Bearer <accessToken>
+GET /api/v1/users/mariatarot/followers?cursor=...&q=ali&limit=20
+Authorization: Bearer <accessToken>   # opcional — habilita isFollowing por item
 ```
 
-### Resposta — 200 OK
+### Parâmetros de Query
+
+| Parâmetro | Tipo | Padrão | Descrição |
+|-----------|------|--------|-----------|
+| `cursor` | string | — | Cursor keyset base64url de `{createdAt, id}` (reutiliza `encodeFeedCursor`/`decodeFeedCursor` do feed); inválido → página vazia |
+| `q` | string | — | Busca case-insensitive por nome ou username do seguidor — **filtra antes** do keyset (q + cursor é AND sobre o mesmo `where`, não um índice dedicado; `?q=` ainda não tem trigram, ver `docs/03-database/indexing.md` §7.1 "Consultas sem índice dedicado") |
+| `limit` | number | 20 | Itens por página (máx 50) |
+
+### Resposta — 200 OK (envelope S2-18/SC30)
 
 ```json
 {
-  "data": {
-    "unfollowed": {
-      "userId": "usr_target123",
-      "name": "João Tarólogo"
-    },
-    "stats": {
-      "followingCount": 89,
-      "followersCount": 155
+  "data": [
+    {
+      "userId": "usr_a1b2c3d4",
+      "name": "Alice",
+      "username": "alice",
+      "avatarUrl": null,
+      "isFollowing": false
     }
-  }
+  ],
+  "pagination": { "nextCursor": "eyJjcmVhdGVkQXQiOi..." }
 }
 ```
+
+> `isFollowing` presente apenas com Bearer válido (auth opcional via `optionalAuth`, que **também descarta viewer banido/soft-deleted** → `isFollowing` ausente). **Direção: viewer segue o item listado** (mesmo `followerId: viewerId, followingId: item.userId` do perfil público). Ordenação `createdAt desc, id desc`; usuários banidos/soft-delete são filtrados.
+>
+> **SC38 (`statsVisibility`) — implementado (T044/T045; escopo do dono fechado 2026-09-29)**: `_follow-list.ts` chama `findVisibleProfile` com `requireStatsVisibility: true` e, quando `showStats` é `false` (`statsVisibility: "private"`), responde **404 `USER_NOT_FOUND` para todo viewer exceto o próprio dono** (`viewerId === profile.userId`). O `GET /users/:username/profile` no mesmo cenário responde **200 omitindo** `followersCount`/`followingCount` **para não-dono**; o **dono autenticado continua vendo os contadores** (Q1 "só o dono vê", implementado 2026-09-29 — contrato em `docs/04-api/users.md`). Contadores visíveis usam `readFollowCounts` (SC39/Q2: excluem `isBanned`/`deletedAt`).
 
 ### Erros
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 404 | `USER_NOT_FOUND` | Usuário não encontrado |
-| 404 | `NOT_FOLLOWING` | Não segue este usuário |
+| 404 | `USER_NOT_FOUND` | Username inexistente, perfil privado, alvo banido/soft-deleted ou `statsVisibility: "private"` para não-dono (SC38) |
+| 422 | `VALIDATION_ERROR` | Username inválido (3–30, `[a-zA-Z0-9_]`) |
+
+### Limitações conhecidas (revisão 2026-09-29 — aguardam decisão do dono)
+
+- **`profileVisibility` não vale no write path do toggle**: `POST /social/follow/:userId` responde 404/403 com base em `User` (inexistente/banido/soft-deleted), mas **não** checa `profileVisibility: "private"` do alvo — seguir um perfil privado responde 201, enquanto o `GET profile` do mesmo usuário responde 404 para não-dono (anti-timing). Pendência de design: decidir se o write path também responde 404 ou se seguir perfil privado é permitido por concepção.
+- **Sem rate limit nas listas GET**: `followers`/`following` são públicos e não passam por `enforceSocialLimit` (só o POST usa o limite `follow` 20/min). Pendência: política/valores de rate limit de leitura social ainda não decididos.
+
+---
+
+## GET /users/:username/following
+
+Mesmo contrato de `/followers` para a lista de **seguindo** (T045): `data[]` com `{ userId, name, username, avatarUrl, isFollowing? }` + `pagination.nextCursor`, mesmos `q`/`cursor`/`limit` e mesmos erros.
+
+> **Implementado (Sprint 2 Phase 1, T045)** em `src/app/api/v1/users/[username]/following/route.ts`.
 
 ---
 
@@ -141,7 +202,7 @@ Cursor: base64url de {createdAt, id} = menor (createdAt, id) já lido
 (aproximação sobre o ranking — nunca repete nem pula candidatos).
 ```
 
-> **Cursor e envelope**: `decodeFeedCursor()` espera `{createdAt, id}` (o exemplo `eyJpZCI6MTIzfQ` acima = `{"id":123}` é o formato antigo/ilustrativo). A função `getFeed()` devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`/`pagination`) — a T052 decide se envolve no envelope `{ data, pagination }` de `docs/04-api/overview.md` §Paginação ou expõe o shape da lib. **Cursor inválido → contrato explícito**: `getFeed` devolve página **vazia** com `nextCursor: null` (nunca reinicia no topo — evitaria duplicar conteúdo em loop; review kieran N6).
+> **Cursor e envelope**: `decodeFeedCursor()` espera `{createdAt, id}` (o exemplo `eyJpZCI6MTIzfQ` acima = `{"id":123}` é o formato antigo/ilustrativo). A função `getFeed()` devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`/`pagination`) — o envelope `{ data, pagination }` de `docs/04-api/overview.md` §Paginação **é o vencedor fixado pelo S2-18/SC30** (a primeira rota social a existir, `GET /users/:username/{followers,following}` T044/T045 no Phase 1, já responde nele), logo a **T052 deve envolver** o retorno da lib em `{ data, pagination }` em vez de expor `{ posts, nextCursor }` cru. **Cursor inválido → contrato explícito**: `getFeed` devolve página **vazia** com `nextCursor: null` (nunca reinicia no topo — evitaria duplicar conteúdo em loop; review kieran N6).
 
 ### Resposta — 200 OK
 
@@ -597,7 +658,7 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-> **Contrato × hook (divergência conhecida, review Step 5)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md`; o T082 do plano especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) justamente porque nenhuma rota existe ainda — a rota da Phase 1 (T043+) define o vencedor e o hook pode ser estreitado. `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`).
+> **Contrato × hook (divergência conhecida, review Step 5; nota atualizada no Phase 1, 2026-09-28)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md` e **é o vencedor fixado pelo S2-18/SC30** — a primeira rota social existente (`GET /users/:username/{followers,following}`, T044/T045) já responde nele. O T082 do plano ainda especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) porque **a rota de notificações continua inexistente** (Phase 6/T082 — a Phase 1 entregou follow, não notifications); quando T082 chegar, entregar no envelope e **estreitar o hook** (union pode ser removida). `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`).
 
 ---
 

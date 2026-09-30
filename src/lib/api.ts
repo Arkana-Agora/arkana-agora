@@ -33,7 +33,22 @@ const SENSITIVE_HEADERS = new Set(["set-cookie", "x-request-id"])
 const fetchAdapter: AxiosAdapter = async (config) => {
   const baseURL = config.baseURL ?? ""
   const path = config.url ?? ""
-  const url = new URL(baseURL + path, window.location.origin).href
+  const target = new URL(baseURL + path, window.location.origin)
+  // Serialização de params é responsabilidade do adapter (axios só chama
+  // buildURL nos adapters próprios) — sem isso ?cursor/?q nunca chegam ao server.
+  const params = config.params
+  if (params && typeof params === "object") {
+    for (const [key, value] of Object.entries(
+      params as Record<string, unknown>,
+    )) {
+      if (value === undefined || value === null) continue
+      for (const item of Array.isArray(value) ? value : [value]) {
+        if (item === undefined || item === null) continue
+        target.searchParams.append(key, String(item))
+      }
+    }
+  }
+  const url = target.href
 
   const headers: Record<string, string> = {}
   if (config.headers) {

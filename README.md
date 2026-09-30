@@ -106,7 +106,7 @@ A minimal skeleton is runnable (see Current Status); most feature work is still 
 4. `docs/environments.md` — environment matrix and domains (English).
 5. `docs/02-architecture/deployment.md` — deployment plan (pt-BR, planned; no pipeline exists yet).
 
-Local skeleton commands (repo root, `bun`): `docker compose up -d postgres` → `bun install` → copy `.env.example` → `.env` → `bunx prisma migrate dev` (applies `20260813000605_init`) → `bun run seed` → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun test` (vitest). `/api/health` returns 200 when the DB check passes, 503 only on DB failure (`src/app/api/health/route.ts`). Login: `/login` (magic link + Google; in dev, `AUTH_EMAIL_SKIP_SEND=true` logs the link to the console).
+Local skeleton commands (repo root, `bun`): `docker compose up -d postgres` → `bun install` → copy `.env.example` → `.env` → `bunx prisma migrate dev` (applies `20260813000605_init`) → `bun run seed` → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun run test` (vitest — run the `test` **script**, not bare `bun test`/`npx vitest run`: only the script carries the `node --max-old-space-size=4096` heap flag that the full suite needs on constrained RAM, see `docs/solutions/ci-cd/turbopack-postcss-oom.md`). `/api/health` returns 200 when the DB check passes, 503 only on DB failure (`src/app/api/health/route.ts`). Login: `/login` (magic link + Google; in dev, `AUTH_EMAIL_SKIP_SEND=true` logs the link to the console).
 
 Before any implementation work, load the mandatory baseline per `AGENTS.md`: `docs/`, `.specs/`, and the ADRs in `docs/02-architecture/decisions.md`. Never implement requirements that are not documented.
 

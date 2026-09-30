@@ -149,11 +149,12 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 - **Valores (S2-10)**: posts **10/dia FREE** e **50/dia PLUS** (`POST_LIMIT_BY_TIER`, lido de `User.subscriptionTier`), likes 100/min, comments 30/min, follow 20/min, gifts 10/dia, uploads **20/dia** (`FIXED_LIMITS.upload`, janela diária em **UTC**). ⚠️ **Divergência aberta**: o plano/clarificação S2-10 lista "**Uploads 4/post**" para `checkUploadLimit` — o cap de 4 imagens por post é a restrição de payload do S2-12/T064 (pendente, Phase 2), enquanto o código trata upload como cota diária de 20; confirmar qual é a intenção antes de ligar T064.
 - **Middleware**: `src/lib/middleware/rate-limit.ts` (`enforceSocialLimit()`) devolve 429 **`RATE_LIMITED`** com headers `Retry-After`, `X-RateLimit-Limit` e `X-RateLimit-Remaining`.
 - **Modo de falha (Q26) — fail-open**: Redis indisponível → o request **prossegue** com `logger.warn("rate_limiter_bypass")` (evento PostHog `rate_limiter_bypass` via `trackRateLimiterBypass()` em `src/lib/analytics.ts`, ligação prevista em T136); para os **daily** limits há fallback de contagem via Prisma **antes** de liberar. **Nunca respondemos 503 por causa do rate limit.**
-- **Status**: libs + middleware implementados e testados (`tests/social-limits.test.ts`, `tests/middleware-rate-limit.test.ts`) — **nenhuma rota os chama ainda** (aplicação em T043/T051/T064/T076/T077/T081/T120, fases posteriores).
+  - ⚠️ **Fronteira de captura server-side (review nextjs IMP-2)**: `trackRateLimiterBypass()`/`trackCsrfFailure()` vivem num módulo `"use client"` cujo `hasConsent()` devolve `false` em `typeof window === "undefined"` — chamá-los do servidor é **no-op silencioso**. Hoje os dois eventos disparam **só `logger.warn` no servidor** (os middlewares são Node-side); o consumo PostHog real acontece quando houver implementação server-side (PostHog Node/HTTP com política de consentimento LGPD — previsto em **T136**). Cliente só pode consumir estes eventos se o sinal for exposto num endpoint.
+- **Status**: libs + middleware implementados e testados (`tests/social-limits.test.ts`, `tests/middleware-rate-limit.test.ts`) — **primeira rota consumidora desde o Sprint 2 Phase 1 (T043)**: `POST /api/v1/social/follow/:userId` chama `enforceSocialLimit({ limit: "follow" })` **antes** de qualquer lookup **do usuário-alvo** (anti-oráculo, padrão `docs/solutions/patterns/security/rate-limit-before-user-lookup.md`; na ordem real da rota ele vem **depois** de `enforceCsrf` e `requireAuth`, que olham só a sessão/identidade do viewer e nunca o alvo). Faltam os consumidores T051/T064/T076/T077/T081/T120 (posts, upload, like, comentário, gifts).
 
 ### CSRF (double-submit)
 
-> **Status (Sprint 2 Phase 0.5):** helpers e middleware prontos, **sem rota consumidora ainda**. O fluxo do Sprint 1 continua sendo o padrão descrito em `docs/solutions/patterns/auth/set-csrf-cookie-client-side.md` (cookie gravado client-side por `ensureCsrfCookie()`, validação server-side antes de qualquer efeito colateral).
+> **Status (Sprint 2 Phase 1 — atualizado 2026-09-29):** helpers e middleware prontos e **primeira rota consumidora ligada**: `POST /api/v1/social/follow/:userId` (T043) chama `enforceCsrf(request, reqId)` no topo — correção da review security I3 (era Bearer-only; com o interceptor `x-csrf-token` do `src/lib/api.ts` o header viaja e o gate passou a valer). Bearer puro (sem cookie) continua não sendo alvo de CSRF, mas a rota valida mesmo assim (defesa em profundidade). `login`/`register` seguem usando `validateCsrfToken` direto. O próximo consumidor previsto é `POST /api/v1/social/posts` (T051, Phase 2). O fluxo do Sprint 1 continua sendo o padrão descrito em `docs/solutions/patterns/auth/set-csrf-cookie-client-side.md` (cookie gravado client-side por `ensureCsrfCookie()`, validação server-side antes de qualquer efeito colateral).
 
 - `src/lib/csrf.ts`: `validateCsrfToken(request)` (cookie `csrf-token`/`__Host-csrf-token` vs header `x-csrf-token`, `timingSafeEqual` sobre buffers UTF-8) e `csrfErrorResponse(reqId)` → 403 **`CSRF_TOKEN_INVALID`** (code canônico AC-20 — o middleware T041 emitia `CSRF_INVALID`; divergência **fechada na review Step 5**: `csrf.ts`, `middleware/csrf.ts`, testes e banners de `docs/04-api/overview.md` alinhados ao code das rotas de auth).
 - **Single-writer do cookie (LGPD/segurança)**: o Set-Cookie é feito **APENAS no client** via `ensureCsrfCookie()` (`src/lib/csrf-client.ts`) — não existe builder server-side de Set-Cookie para o CSRF (o `buildCsrfSetCookieHeader` da Phase 0.5 foi **removido na review**: code morto que, se ligado no middleware/rotas, quebraria o single-writer e duplicaria as flags `Secure`/`SameSite` em dois lugares). Cookie **não é `HttpOnly`** de propósito: double-submit exige o client ler o valor para ecoar no header.
@@ -161,7 +162,7 @@ flat (sem wrapper `data`), com `Cache-Control: no-store`.
 
 ### Guard de sessão (`requireAuth`) — banimento e soft-delete
 
-> **Status (Sprint 2 review — CHK008 parcial):** implementado em `src/app/api/v1/users/_helpers.ts` (`requireAuth`, usado por **todas** as rotas `/api/v1/users/me/*`, `/api/v1/ai/*`, `/api/v1/arcana/calculate`, `/api/v1/readings/*`). Antes da review, `User.isBanned` nunca era checado em nenhum guard.
+> **Status (Sprint 2 review — CHK008; Phase 1 2026-09-29):** implementado em `src/app/api/v1/users/_helpers.ts` (`requireAuth`, usado por **todas** as rotas `/api/v1/users/me/*`, `/api/v1/ai/*`, `/api/v1/arcana/calculate`, `/api/v1/readings/*` **e, desde o Phase 1, `POST /api/v1/social/follow/:userId`**). Antes da review, `User.isBanned` nunca era checado em nenhum guard. **Mesmo arquivo (Phase 1)**: `optionalAuth(request)` — auth opcional que devolve `userId` só com Bearer válido e **`null` sem token/token inválido (nunca 401)**; usado pelas listas `GET /api/v1/users/:username/{followers,following}` (`_follow-list.ts`) e por `GET /api/v1/users/:username/profile` para habilitar `isFollowing`. ✅ **Desde a review de Phase 1 (C3)**: `optionalAuth` **também aplica** o gate `isBanned`/`deletedAt` (consulta `prisma.user.findUnique` pós-token: banida/soft-deleted/inexistente → `null`, sem identificação) — contrato em `tests/optional-auth.test.ts` (10 casos).
 
 - Depois do `verifyAccessToken`, o guard consulta `prisma.user.findUnique({ select: { isBanned, deletedAt } })` e aplica:
   - **linha inexistente (`null`)** → **401 `AUTH_TOKEN_INVALID`** (hard delete / id forjado);
@@ -249,6 +250,15 @@ const cleanInput = DOMPurify.sanitize(userInput, {
 });
 ```
 
+- **Guardrail do linkify (review security N6)**: `src/lib/social/mentions.ts` gera HTML com links pré-construídos (menções/hashtags). **Nunca** renderizar esse output via `dangerouslySetInnerHTML` sem sanitizer — e mais importante: o consumo previsto é como **peças estruturadas** (React elements), não string HTML. Enforce quando o rendering de posts chegar (T057); até lá `mentions.ts` não tem consumidor de produção.
+
+### Moderação de conteúdo (fail-open + exposição)
+
+> **Status (review security I4/N13):** `src/lib/moderation.ts` implementa `checkContent()` (NFKC + remoção de zero-width, palavras bloqueadas de `MODERATION_BLOCKED_WORDS`, compilação única, Unicode `\b`) — mas **nenhuma rota de escrita consome ainda** (posts/comments = Phase 2).
+
+- **Modo de falha — fail-open com sinal**: `MODERATION_BLOCKED_WORDS` ausente → **não** derruba o boot — `logger.warn` **uma vez** (fail-open deliberado: moderação desligada é melhor que app fora). ⚠️ Ausência em **produção** hoje **não é asserted no boot** (`src/lib/env.ts` é `optionalText`); a assertion `NODE_ENV=production` foi **avaliada e adiada** — decisão de infra do dono (exigir a env derruba deploy onde ela não está provisionada); revisitar quando a primeira rota de escrita de posts ligar o `checkContent`.
+- **`flaggedWords` nunca volta para o cliente**: a lista de palavras que casou é **interna** (log server-side apenas) — contrato sem ponto de enforce hoje (sem rota consumidora); aplicar no primeiro handler de escrita (post/comment) e cobrir com teste de resposta.
+
 ---
 
 ## Segurança de Transporte
@@ -298,6 +308,8 @@ R2_PUBLIC_URL=https://assets.arkanaagora.com.br
 # Vercel Cron secret — protege as rotas GET /api/cron/hard-delete (0 3 * * *), GET /api/cron/feed-cache-refresh (0 0 * * *, SC34) e GET /api/cron/counter-reconcile (0 4 * * *, T147) agendadas em vercel.json
 CRON_SECRET=
 ```
+
+> ⚠️ **Assertions de produção (review security N19/I4 — decisão registrada 2026-09-29)**: `REDIS_URL` e `MODERATION_BLOCKED_WORDS` são **opcionais no schema** (`src/lib/env.ts`); em produção a ausência de `REDIS_URL` degrada para o fallback Prisma daily (Q26) e a de `MODERATION_BLOCKED_WORDS` deixa a moderação off com `logger.warn`. **Não há boot assertion** hoje — adicionar `NODE_ENV=production → throw` foi avaliado e **adiado como decisão do dono** (provisionamento de infra: exigir no boot derruba qualquer ambiente production-like sem as envs). O fail-fast atual cobre apenas **formato inválido** (`getEnv()` no `register()` de `src/instrumentation.ts`).
 
 ### Verificação em CI/CD
 

@@ -168,9 +168,9 @@ GET /api/v1/social/feed?cursor=eyJpZCI6MTIzfQ&limit=20
 }
 ```
 
-> **Usado em**: Feed social, notificações, histórico de tiragens.
+> **Usado em**: Feed social, listas de followers/following (T044/T045), notificações, histórico de tiragens.
 >
-> **Implementado (Sprint 2 Phase 0.5)**: o único cursor real hoje é o de feed — `src/lib/social/feed-algorithm.ts` (`encodeFeedCursor`/`decodeFeedCursor` = base64url de `{createdAt, id}`; `FEED_DEFAULT_LIMIT=10`, `FEED_MAX_LIMIT=50`) e a lib devolve **`{ posts, nextCursor }`**, sem `prevCursor`/`hasMore`. O envelope `{ data, pagination }` acima é o contrato de rota — a T052 decide adaptá-lo ou expor o shape da lib.
+> **Implementado**: existem hoje **dois** cursores reais que reutilizam o mesmo encoder `encodeFeedCursor`/`decodeFeedCursor` (base64url de `{createdAt, id}`): (1) o de feed — `src/lib/social/feed-algorithm.ts` (`FEED_DEFAULT_LIMIT=10`, `FEED_MAX_LIMIT=50`), cuja lib devolve **`{ posts, nextCursor }`**, sem `prevCursor`/`hasMore`; e (2) as listas `GET /api/v1/users/:username/{followers,following}` (**Sprint 2 Phase 1**, T044/T045; `limit` default 20, máx 50, cursor inválido → página vazia), que **já respondem no envelope `{ data, pagination: { nextCursor } }`** (S2-18/SC30 — primeira rota a fixar o shape). O envelope `{ data, pagination }` acima é o contrato vencedor: a T052 deve envolver o retorno da lib; **`prevCursor`/`hasMore`/`limit` do exemplo não são emitidos por nenhuma rota hoje** (só `nextCursor`, que é `null` no fim).
 
 ### Offset-based (Listas paginadas simples)
 
@@ -278,7 +278,7 @@ HTTP 429 Too Many Requests
 | Negócio | `DECK_NOT_AVAILABLE` | Baralho não disponível |
 | Rate Limit | `RATE_LIMIT_EXCEEDED` | Limite excedido **[contrato genérico — ainda não emitido]** |
 | Rate Limit | `RATE_LIMITED` | Limite social excedido (posts/likes/comentários/follow/gifts/uploads) — **implementado** em `src/lib/middleware/rate-limit.ts` (T040) |
-| Segurança | `CSRF_TOKEN_INVALID` | CSRF inválido — code **canônico AC-20** emitido hoje pelas rotas de auth do Sprint 1 (`validateCsrfToken` direto em login/register). O helper `enforceCsrf` (`src/lib/middleware/csrf.ts`, T041) emite o mesmo code, mas **ainda não tem rota consumidora** (wiring = fase das rotas sociais, ver `docs/07-security/security.md` §CSRF); o `CSRF_INVALID` intermediário do T041 foi alinhado na review Step 5 |
+| Segurança | `CSRF_TOKEN_INVALID` | CSRF inválido — code **canônico AC-20** emitido pelas rotas de auth do Sprint 1 (`validateCsrfToken` direto em login/register) **e pelo `enforceCsrf`** (`src/lib/middleware/csrf.ts`, T041) — desde o Sprint 2 Phase 1 **1ª rota consumidora: `POST /api/v1/social/follow/:userId`** (emite antes do rate limit, sem rate headers). Próximos consumidores: demais rotas de escrita sociais (T051+, ver `docs/07-security/security.md` §CSRF); o `CSRF_INVALID` intermediário do T041 foi alinhado na review Step 5 |
 | AI | `AI_SERVICE_UNAVAILABLE` | Serviço de IA indisponível |
 | AI | `AI_DAILY_LIMIT_REACHED` | Limite diário de IA atingido |
 | Sistema | `INTERNAL_ERROR` | Erro interno do servidor |

@@ -121,12 +121,8 @@ export function trackGiftClaimDaily(day: number, reward: number) {
   track("gift_claim_daily", { day, reward })
 }
 
-export function trackVersosEarned(
-  source: VersosSource,
-  amount: number,
-  balance: number,
-) {
-  track("versos_earned", { source, amount, balance })
+export function trackVersosEarned(source: VersosSource, amount: number) {
+  track("versos_earned", { source, amount })
 }
 
 export function trackPostLimitHit(tier: UserPlan, limit: number) {

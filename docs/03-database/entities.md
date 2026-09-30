@@ -4,7 +4,7 @@
 
 ---
 
-> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. **As seções §7/§9/§10/§11/§15/§16 abaixo são o formato alvo do ERD** — os models homônimos já existem no schema com campos diferentes (as notas de status de cada seção apontam o desvio); os models novos sem seção (`PostLike`, `CommentLike`, `PostHashtag`, `ContentReport`, `HoroscopeContent`, `HoroscopeLog`, `HoroscopeNotification`) estão definidos só em `prisma/schema.prisma`. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **25 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`), **`FollowReward`** (`20260928205906_follow_reward_marker`, Sprint 2 review 2026-09-29) — migrations aplicadas em dev PostgreSQL (12 na chain; `20260928210717_follow_keyset_indexes` e `20260929142921_secondary_indexes_review` só mexem em índices). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. **As seções §7/§9/§10/§11/§15/§16 abaixo são o formato alvo do ERD** — os models homônimos já existem no schema com campos diferentes (as notas de status de cada seção apontam o desvio); os models novos sem seção (`PostLike`, `CommentLike`, `PostHashtag`, `ContentReport`, `HoroscopeContent`, `HoroscopeLog`, `HoroscopeNotification`, `FollowReward`) estão definidos só em `prisma/schema.prisma`. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
@@ -26,7 +26,7 @@ Entidade principal de autenticação e identidade do usuário.
 | `isBanned` | `Boolean` | NOT NULL, default `false` | Banimento de moderação (Sprint 2, T014) |
 | `bannedAt` | `DateTime?` | nullable | Data/hora do banimento |
 | `banReason` | `String?` | nullable | Motivo do banimento |
-| `maxFollowing` | `Int` | NOT NULL, default `5000` | Limite de "seguindo" por usuário (`checkFollowLimit`, T043) |
+| `maxFollowing` | `Int` | NOT NULL, default `5000` | Limite de "seguindo" por usuário — checado **dentro do `$transaction`** da rota de follow (`src/app/api/v1/social/follow/[userId]/route.ts`, T043/review 2026-09-29) com count de `Follow` do viewer → 409 `MAX_FOLLOWING_REACHED` com `details.max` (**não** é o rate limit `checkFollowLimit`, que é 20/min; a checagem de `whoCanFollow` vem antes — **só no branch de follow novo**: unfollow nunca passa pelo gate, revisão 2026-09-29/I1) |
 | `birthDate` | `DateTime?` | nullable | Data de nascimento |
 | `astrologicalSign` | `String?` | nullable | Signo do zodíaco ocidental |
 | `mayanKin` | `String?` | nullable | Kin maia (Tzolkin). Cálculo = **correlação GMT 584283** (`GMT_CORRELATION_JDN` em `src/lib/horoscopes/maya.ts`; `calculateKinMaya` delega — decisão Phase 0 Sprint 2, AC-11/RF-HORO-004). Valores gravados antes do Sprint 2 estão stale → backfill `prisma/backfill-mayankin.ts` |
@@ -68,7 +68,7 @@ Perfil público extendido do usuário (1:1 com User). Criado automaticamente no 
 | `pricePerReading` | `Decimal?` | nullable, min 0 | Preço por leitura (profissionais) |
 | `available` | `Boolean` | default `true` | Disponível para leituras pagas |
 | `languages` | `String[]` | default `["pt-BR"]` | Idiomas de atendimento |
-| `versosBalance` | `Int` | NOT NULL, default `0` | Saldo da moeda **Versos** — fonte única, mutado só dentro de `$transaction` (Sprint 2, S2-17); invariante `>= 0` garantida no banco pelo CHECK `UserProfile_versosBalance_nonneg` (migration `20260927222620`) |
+| `versosBalance` | `Int` | NOT NULL, default `0` | Saldo da moeda **Versos** — fonte única, mutado só dentro de `$transaction` (Sprint 2, S2-17); invariante `>= 0` garantida no banco pelo CHECK `UserProfile_versosBalance_nonneg` (migration `20260927222620`). ⚠️ **Padrão obrigatório de débito (review data I3)**: como não existe `spendVersos`/decrement hoje, qualquer futuro débito (gifts T120, claim T122) **deve** ser escrita condicional única — `updateMany({ where: { userId, versosBalance: { gte: cost } }, data: { versosBalance: { decrement: cost } } })` dentro do `$transaction`, com `count === 0` → aborta (saldo insuficiente); **nunca** read-then-write (corrida gera saldo negativo estourando o CHECK) |
 | `versosStreak` | `Int` | NOT NULL, default `0` | Streak do claim diário (T122) |
 | `lastClaimAt` | `DateTime?` | nullable | Última claim diária — base da idempotência do claim (T122) |
 
@@ -225,6 +225,8 @@ Entrada de horóscopo para o usuário.
 > **Status (Sprint 2, Phase 0):** ✅ **implementada** (migration `20260926182325_sprint2_social_horoscopes`) — **shape diferente do alvo**: `id`, `userId`, `type String` (`'western'` \| `'chinese'` \| `'maya'`), `signId String`, `element String?`, `period String` (`'daily'` \| `'weekly'` \| `'monthly'`), `createdAt` + `@@index([userId, createdAt])` (RF-HORO-007). **Não existem** `zodiacSign`, `chineseAnimal`, `mayanKin`, `content` nem `sourceDate`. A tabela abaixo é o **formato alvo** (ainda plano); escrita/leitura acontecem nas fases 5/6 do plano Sprint 2.
 >
 > ⚠️ **Gap de design nível spec (review data N3)**: `HoroscopeEntry`/`HoroscopeLog` **não têm coluna de data civil** — só `createdAt` (UTC), enquanto todo o domínio usa data civil BRT (Q25). "Já buscou *hoje*?" derivado de `createdAt` erra entre 00:00–03:00 BRT. `.specs/006-horoscopes/design.md` §5 define assim, portanto é **gap do spec, não desvio do schema** — submeter ao design (adicionar `date String` + `@@unique([userId, type, period, date])` com as tabelas vazias é grátis) **sem alterar spec/ADR unilateralmente**.
+>
+> ⚠️ **`HoroscopeContent` — contrato de escrita (review data N4)**: todo writer de `horoscope_contents` **deve** rodar `validateHoroscopeContent()` (`src/lib/horoscopes/validation.ts` — faixas RF-HORO-001 + shape zod) antes do upsert; os CHECKs de DB (`type`, `period`, `hour` — migrations `20260927222620`/`20260928004004`) são a última linha de defesa, **não** substituem a validação. Fallbacks do seed ficam fora da faixa por decisão (documentado em `docs/03-database/migrations.md`).
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -303,7 +305,7 @@ Template de disposição de cartas (spread).
 
 Relação de seguir entre usuários (N:M via tabela juntura).
 
-> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`follows`) — campos conforme o alvo, com `String`/`cuid()` no lugar de `UUID` e `@@index([followerId])` + `@@index([followingId])` além do `@@unique([followerId, followingId])`. A regra `followerId ≠ followingId` **não tem constraint no banco** (só o unique): a validação é da aplicação, prevista em `POST /api/v1/social/follow/:userId` (T043 — **ainda não implementada**; Phase 0 entregou só o model).
+> **Status (Sprint 2, Phase 0; revisado 2026-09-29):** ✅ **implementada** (`follows`) — campos conforme o alvo, com `String`/`cuid()` no lugar de `UUID` e **`@@index([followingId, createdAt, id])` + `@@index([followerId, createdAt, id])`** (keyset das listas T044/T045 — a migration `20260928210717_follow_keyset_indexes` **substituiu** os índices de coluna única `@@index([followerId])`/`@@index([followingId])` que constavam aqui) além do `@@unique([followerId, followingId])`. A regra `followerId ≠ followingId` **não tem constraint no banco** (só o unique): a validação é da aplicação — **implementada no Sprint 2 Phase 1 (T043)** em `src/app/api/v1/social/follow/[userId]/route.ts` (409 `CANNOT_FOLLOW_SELF`, validado antes do toggle). Phase 0 tinha entregado só o model. **Companheira**: `FollowReward` (`follow_rewards`, migration `20260928205906_follow_reward_marker`) — marker imutável `@@unique([followerId, followingId])` que faz os +5 Versos serem pagos **uma única vez por par** (o unfollow **não** apaga a linha; ver `relationships.md` §4.1).
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -348,7 +350,7 @@ Postagem do feed social, opcionalmente vinculada a uma leitura.
 
 Comentário em uma postagem.
 
-> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`comments`) — `id`, `postId`, `authorId`, `content Text`, `parentCommentId String?` (**auto-relação** `CommentReplies`, `onDelete: Cascade` — respostas encadeadas), `likeCount Int @default(0)`, `createdAt` + `@@index([postId, createdAt])`. **Não existem** `updatedAt` nem FK para `Post` com `SET NULL`: `postId` e `authorId` são `Cascade`.
+> **Status (Sprint 2, Phase 0; índices revistos 2026-09-29):** ✅ **implementada** (`comments`) — `id`, `postId`, `authorId`, `content Text`, `parentCommentId String?` (**auto-relação** `CommentReplies`, `onDelete: Cascade` — respostas encadeadas), `likeCount Int @default(0)`, `createdAt` + `@@index([postId, createdAt])` **e `@@index([authorId])`** (migration `20260929142921_secondary_indexes_review`). **Não existem** `updatedAt` nem FK para `Post` com `SET NULL`: `postId` e `authorId` são `Cascade`.
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|
@@ -440,6 +442,8 @@ Registro de pagamento processado via Mercado Pago.
 Presente virtual enviado entre usuários.
 
 > **Status (Sprint 2, Phase 0):** ✅ **implementado** (`gifts`) — **shape divergente do alvo abaixo**: `id`, `fromUserId`, `toUserId`, `giftId String` (id no **catálogo fixo** SPEC-007 — catálogo implementado em `src/lib/social/gifts.ts`, T036), `coinCost Int` (**custo em Versos**; "Moedas" do S2-4 = Versos), `recipientEarnsHalf Boolean @default(false)` (+50% p/ destinatário PROFESSIONAL, T120), `createdAt` + `@@index([toUserId, createdAt])`. Não existem `senderId`/`receiverId`/`giftType`/`message`.
+>
+> ⚠️ **Decisão de cascade/ledger (review data N6)**: gifts recebidos são **preservados** no hard-delete do doador (ledger do doador) enquanto o restante cascateia — decisão mantida **enquanto Versos não virar equivalente monetário**; quando virar, a matriz de cascade muda para `SetNull` + snapshots imutáveis do ledger (nada de cascade que apaga histórico financeiro). Nenhuma ação agora; revisitar na integração de billing.
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|

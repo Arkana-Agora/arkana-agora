@@ -280,11 +280,10 @@ describe("Sprint 2 typed events (T024)", () => {
       reward: 50,
     })
 
-    trackVersosEarned(VersosSource.Comment, 5, 120)
+    trackVersosEarned(VersosSource.Comment, 5)
     expect(capture).toHaveBeenCalledWith("versos_earned", {
       source: "comment",
       amount: 5,
-      balance: 120,
     })
 
     trackPostLimitHit("FREE", 10)
