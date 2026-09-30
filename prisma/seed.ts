@@ -328,9 +328,15 @@ if (invokedDirectly) {
   seed()
     .catch((error) => {
       console.error(error)
-      process.exit(1)
+      process.exitCode = 1
     })
     .finally(async () => {
       await prisma.$disconnect()
     })
+} else if (process.argv[1] !== undefined && !process.env.VITEST) {
+  // wrapper/exector disparou este módulo sem bater com o caminho direto —
+  // o seed NAO roda; deixa explicito para nao parecer sucesso silencioso
+  console.warn(
+    `[seed] ignorado: argv[1]=${process.argv[1]} nao corresponde a ${import.meta.url}`,
+  )
 }

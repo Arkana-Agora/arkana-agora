@@ -180,18 +180,61 @@
 - Impact on Plan: **T042 atualizado** (`*/5` → `0 * * * *`); `vercel.json` e banner de `docs/infrastructure.md` ajustados na execução
 - Execution Resolution (2026-09-28): a doc oficial da Vercel confirma que `0 * * * *` (per-hour) **também falha o deploy em Hobby** (`Hobby accounts are limited to daily cron jobs`) — contrariando a razão da própria decisão; na execução o dono foi consultado e confirmou **`0 0 * * *` (diário 00:00 UTC)** como schedule final. `vercel.json`, `FEED_CACHE_REFRESH_CRON`, testes e docs (`infrastructure.md`, `deployment.md`, `overview.md`, `social.md`, `security.md`) ajustados
 
+### Q35: Formato da API de follow (T043) - POST toggle ou POST + DELETE?
+- Recommendation: POST toggle (texto do plano)
+- Final Answer: **POST toggle unico** - mesmo endpoint segue (201) e deixa de seguir (200), resposta `{ data: { following, followingCount, followersCount } }`; **sem `DELETE /social/follow`**. O contrato antigo de `docs/04-api/social.md` (POST 201/409 `ALREADY_FOLLOWING` + DELETE 200/404 `NOT_FOLLOWING`) foi substituido e o doc reescrito
+- Impact on Plan: T043 mantida como esta; `docs/04-api/social.md` sincronizado na execucao da Phase 1
+
+### Q36: Solicitacao pendente quando `whoCanFollow` nega o follow?
+- Recommendation: bloquear sem solicitacao (escopo do plano)
+- Final Answer: **403 `FOLLOW_NOT_ALLOWED` com `details.reason` (`privacy_nobody` | `privacy_following`), negacao definitiva** - sem model `FollowRequest` (nao existe no schema) e sem fluxo de aprovacao, que estava num bullet de `docs/04-api/social.md` mas nao em nenhuma task do plano
+- Impact on Plan: T049/T043 implementadas com `canFollow` negando; bullet do doc removido; escopo de solicitacao (se algum dia quiser) fica Sprint 3+
+
+### Q37: Nomes dos contadores de follow no profile publico (T046)?
+- Recommendation: `followersCount`/`followingCount` (texto do plano)
+- Final Answer: **`followersCount`, `followingCount` e `isFollowing` no root** do response de `GET /users/:username/profile` - o design `stats.{followers,following}` de `docs/04-api/users.md` (secao `GET /users/:id`, marcada "design de produto, nao contrato") nao vale; `isFollowing` so com Bearer valido
+- Impact on Plan: T046 implementada com os nomes do plano; `docs/04-api/users.md` atualizado com o contrato implementado
+
+## Session 2026-09-29 (Review findings fix round — Phase 1 post-review clarifications)
+
+### Q1: `privacy.statsVisibility` ("Visibilidade das estatísticas" na UI, RF-PROF-005) não é lido por nenhum endpoint — Phase 1 foi o primeiro a expor dados novos (followersCount/followingCount + listas). Como tratar o toggle nos dados de follow?
+- Recommendation: Honrar só nos dados de follow (escopo mínimo alinhado ao RF-PROF-005)
+- Final Answer: **Honrar só nos dados de follow** — com `statsVisibility === "private"`, omitir `followersCount`/`followingCount` (só o dono vê) e as rotas de lista respondem 404 para não-dono. Demais estatísticas ficam para task própria depois. **(✅ implementado 2026-09-29 — dono vê os contadores, listas 404 p/ não-dono)**
+- Impact on Plan: `src/app/api/v1/users/[username]/profile/route.ts` (omitir contadores p/ não-dono), `src/app/api/v1/users/_follow-list.ts` (404 p/ não-dono quando privado), `docs/04-api/users.md` + `social.md` documentam a regra.
+
+### Q2: Hoje os contadores do profile e da resposta do toggle contam TODAS as rows de Follow, enquanto as listas filtram `isBanned`/`deletedAt` — contador pode dizer 156 e a lista renderizar 150. Qual regra vale?
+- Recommendation: Filtrar igual à lista (excluir banidos/soft-deleted)
+- Final Answer: **Filtrar igual à lista** — `followersCount`/`followingCount` passam a excluir `isBanned`/`deletedAt`; contador e lista concordam por construção; conta banida não infla o número. **(✅ implementado 2026-09-29 — o problema do enunciado acima não vale mais)**
+- Impact on Plan: `src/lib/social/follow-lists.ts` (counts com mesmo filtro — hoje o helper exportado **`readFollowCounts(db, viewerId, targetId)`**, fonte única usada por toggle, profile e handlers de corrida), `src/app/api/v1/users/[username]/profile/route.ts`, resposta do toggle em `src/app/api/v1/social/follow/[userId]/route.ts`.
+
+### Q3: O toggle paga +5 Versos a cada CRIAÇÃO de follow — follow→unfollow→follow repete a recompensa (farming limitado só pelo rate limit 20/min, que fica sem janela se o Redis falhar em fail-open). Como fechar isso?
+- Recommendation: Uma vez por par com marker durável
+- Final Answer: **Uma vez por par com marker durável** — nova tabela `FollowReward` (`followerId`, `followingId`, `rewardedAt`, `@@unique([followerId,followingId])`) inserida no mesmo `$transaction` do follow; `earnVersos` só roda se o insert do marker não violar unique (ou `ON CONFLICT DO NOTHING` + check). Fecha o farming de vez sem schema no `Follow` (que é deletado no unfollow).
+- Impact on Plan: `prisma/schema.prisma` (novo model `FollowReward`), migração `follow_reward_marker`, `src/lib/social/versos.ts` (checa marker antes de pagar), `src/app/api/v1/social/follow/[userId]/route.ts` (insere marker no mesmo `$transaction` do follow).
+
+### Q4: O POST toggle é read-then-write: duas chamadas simultâneas (double-click, retry pós-timeout) estouram P2002/P2025 → 500 INTERNAL_ERROR, e o retry do client num 500 desfaz o que acabou de dar certo (inverte o toggle). Qual o contrato de concorrência?
+- Recommendation: 1 transação + mapear P2002/P2025 para 2xx
+- Final Answer: **1 transação + mapear P2002/P2025 para 2xx** — existence-check + create/delete + checagem `maxFollowing` dentro de UM `$transaction`; P2002 (create perdedor) → responde 201 `following:true`; P2025 (delete perdedor) → 200 `following:false`; `earnVersos` + contadores pós-commit viram best-effort (log, não derrubam a resposta). A corrida sempre termina em 2xx coerente, nunca 500.
+- **Evolution (re-review 2026-09-29)**: o "best-effort pós-commit" foi superado — `earnVersos` e os contadores agora rodam **dentro** do `$transaction` (`earnVersos === null` aborta a tx; contadores via `readFollowCounts`) e os handlers de corrida **não inferem a constraint**: re-querem `follow.findUnique` e respondem pelo estado real (falha na re-query → 500 JSON com `rate.headers`, nunca HTML). Contrato 2xx por corrida permanece — ver Execution Log 2026-09-29 no plano.
+- Impact on Plan: `src/app/api/v1/social/follow/[userId]/route.ts` (refactor completo do POST), testes de concorrência em `tests/integration/social-follow.test.ts`.
+
+### Q5: As rotas de lista usam keyset `ORDER BY createdAt DESC, id DESC` sobre `Follow` — mas o schema só tem `@@unique([followerId,followingId])` + `@@index([followingId])` + `@@index([followerId])`. Sem índice composto, o Postgres faz full scan + sort O(followers) por página. Como proceder?
+- Recommendation: Adicionar agora via migrate dev padrão
+- Final Answer: **Adicionar agora via `prisma migrate dev`** — `@@index([followingId, createdAt, id])` (followers side, unbounded) + `@@index([followerId, createdAt, id])` (following side, ≤5000); dropar o redundante `@@index([followerId])` (coberto pelo `@@unique([followerId,followingId])`). Baixo risco — tabela pequena no MVP; `CREATE INDEX` padrão é aceitável.
+- Impact on Plan: `prisma/schema.prisma` (índices compostos + drop), migração `follow_keyset_indexes`, `docs/03-database/entities.md` atualiza linha do `Follow`.
+
 ## Coverage Summary
 
 | Category | Status | Notes |
 |----------|--------|-------|
-| 1. Functional scope & success criteria | **Resolved** | 24 ACs (AC-24 disponibilidade) cobrindo todos os módulos |
-| 2. Domain/data model & lifecycle | **Resolved** | 13 novos models + User/UserProfile additions (S2-17 saldo); migrations atômicas; `HoroscopeContent.date` = data civil BRT (Q25); **contadores = $transaction + reconciliação cron T147 (Q31/S2-19); purge de leituras 90d T148 (Q32/S2-20)** |
-| 3. UX/interaction flows | **Resolved** | Feed (pill "N novos posts" + slide-in, Q27), follow, post (+upload), like, comment (+like), gift, horoscopes, explore, notificações, history, AI interpret, settings |
-| 4. NFRs | **Resolved** | Metas + método de medição via bench automatizado `tests/bench/` (Q29); rate limits + modo de falha fail-open (Q26); **cron feed-cache horário × Vercel Hobby (Q34)** |
-| 5. Integration boundaries & failure modes | **Resolved** | WebSocket fallback polling; IA fallback template; presign R2; rate limiter fail-open com alerta (Q26); **429 social com `retryAfter` no body (Q33); deploy Vercel Hobby (Q34)** |
-| 6. Edge cases & concurrency | **Resolved** | Self-follow/auto-like bloqueados; self-gift 403; claim-daily idempotente (409); 404 uniforme em post oculto (Q28); streak reset; maxFollowing 5000; chars 500/300/200/300; **drift de contadores fechado por reconciliação (Q31)** |
-| 7. Terminology consistency | **Clear** | Moedas=Versos + `INSUFFICIENT_VERSOS` (S2-4); pt-BR usuário, inglês código/logs; US IDs = sprint-2.md; 429 code anotado em overview.md |
-| 8. Completion signals | **Clear** | Gates `lint`+`type-check`+`test` (com bench) por fase; unit ≥80%, integration ≥70%, E2E ≥10 critical paths |
+| 1. Functional scope & success criteria | **Resolved** | 24 ACs cobrindo todos os módulos; fix round escopo definido (Phase 1 crítico/importante) |
+| 2. Domain/data model & lifecycle | **Resolved** | 13 novos models + User/UserProfile + **FollowReward** (Q3); migrations atômicas; contadores = $transaction + reconciliação cron T147; purge de leituras 90d T148 |
+| 3. UX/interaction flows | **Resolved** | Feed (pill + slide-in), follow (idempotent toggle, statsVisibility honor), post, like, comment, gift, horoscopes, explore, notificações, history, AI interpret, settings |
+| 4. NFRs | **Resolved** | Metas + bench automatizado; rate limits fail-open; **cron feed-cache diário; índices keyset adicionados (Q5)** |
+| 5. Integration boundaries & failure modes | **Resolved** | WebSocket fallback polling; IA fallback template; presign R2; rate limiter fail-open; 429 social com `retryAfter`; **toggle idempotente (Q4)**; deploy Vercel Hobby |
+| 6. Edge cases & concurrency | **Resolved** | Self-follow/auto-like bloqueados; self-gift 403; claim-daily idempotente; 404 uniforme post oculto; streak reset; maxFollowing 5000; **farming Versos fechado (Q3); corrida toggle idempotente (Q4); contador/lista concordam (Q2)** |
+| 7. Terminology consistency | **Clear** | Moedas=Versos + `INSUFFICIENT_VERSOS`; pt-BR usuário, inglês código/logs; 429 code anotado |
+| 8. Completion signals | **Clear** | Gates `lint`+`type-check`+`test` (com bench) por fase; fix round → re-review → commit |
 
 ## Deferred Items
 

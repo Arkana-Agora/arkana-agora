@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 /**
  * Ganhos de Versos (T037/S2-17): fonte única de saldo é
@@ -7,6 +8,10 @@ import { prisma } from "@/lib/prisma"
  * (`UserProfile_versosBalance_nonneg`, migração review fixes) — não há
  * guard de app para manter. "Milestones" do MVP são os streaks do
  * claim-daily (T122) — não há outro tipo aqui.
+ *
+ * Para Follow (SC40): pagamento apenas se par nunca foi recompensado antes.
+ * A verificação/criação do marker `FollowReward` deve acontecer NO MESMO
+ * `$transaction` do follow — esta função aceita `tx` opcional para reuso.
  */
 export enum VersosSource {
   Like = "like",
@@ -34,16 +39,31 @@ function isProfileMissing(error: unknown): boolean {
 export async function earnVersos(
   userId: string,
   source: VersosSource,
+  tx?: Prisma.TransactionClient,
 ): Promise<number | null> {
-  // Record<VersosSource, number> é exaustivo (TS): fonte inválida não compila
-  // e rewards fixos são sempre >= 1 — sem guard em runtime.
   const amount = VERSOS_REWARDS[source]
+  const client = tx ?? prisma
 
-  return prisma.$transaction(async (tx) => {
+  // Se tx foi passado, usa o cliente diretamente (sem transação aninhada)
+  // Prisma não suporta transações aninhadas
+  if (tx) {
     try {
-      // update devolve o saldo novo em UMA query (review simpc: era
-      // updateMany + findUnique dentro da mesma transaction).
-      const profile = await tx.userProfile.update({
+      const profile = await client.userProfile.update({
+        where: { userId },
+        data: { versosBalance: { increment: amount } },
+        select: { versosBalance: true },
+      })
+      return profile.versosBalance
+    } catch (error) {
+      if (isProfileMissing(error)) return null
+      throw error
+    }
+  }
+
+  // Sem tx passado, usa a transação normal
+  return client.$transaction(async (t) => {
+    try {
+      const profile = await t.userProfile.update({
         where: { userId },
         data: { versosBalance: { increment: amount } },
         select: { versosBalance: true },

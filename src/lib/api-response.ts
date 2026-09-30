@@ -9,12 +9,15 @@ export function apiError(
   reqId: string,
   status: number,
   details?: unknown,
+  headers?: Record<string, string>,
 ): Response {
   const body: ApiError = {
     error: { code, message, ...(details ? { details } : {}) },
     meta: { requestId: reqId },
   }
-  return Response.json(body, { status })
+  const init: ResponseInit = { status }
+  if (headers) init.headers = headers
+  return Response.json(body, init)
 }
 
 export function apiSuccess(data: unknown, status = 200): Response {

@@ -75,4 +75,21 @@ describe("earnVersos (T037/S2-17)", () => {
       "db down",
     )
   })
+
+  it("usa o tx passado como parâmetro sem criar transação aninhada", async () => {
+    const balance = await earnVersos(
+      "usr_1",
+      VersosSource.Follow,
+      txClient as unknown as Parameters<typeof earnVersos>[2],
+    )
+
+    // Quando tx é passado, não deve chamar $transaction novamente
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(prismaMock.userProfile.update).toHaveBeenCalledWith({
+      where: { userId: "usr_1" },
+      data: { versosBalance: { increment: 5 } },
+      select: { versosBalance: true },
+    })
+    expect(balance).toBe(11)
+  })
 })

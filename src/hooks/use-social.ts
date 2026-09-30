@@ -95,3 +95,46 @@ export function useUnreadCount() {
     refetchInterval: 60_000,
   })
 }
+
+const followListItemSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  username: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  isFollowing: z.boolean().optional(),
+})
+
+const followListPageSchema = z.object({
+  data: z.array(followListItemSchema),
+  pagination: z.object({ nextCursor: z.string().nullable() }),
+})
+
+export type FollowListItem = z.infer<typeof followListItemSchema>
+export type FollowListSide = "followers" | "following"
+
+/**
+ * Listas de followers/following (T044/T045/T048) no envelope S2-18
+ * `{ data, pagination: { nextCursor } }`, com busca `?q=` e cursor.
+ */
+export function useFollowList(
+  username: string,
+  side: FollowListSide,
+  q: string,
+  enabled = true,
+) {
+  return useInfiniteQuery({
+    queryKey: ["follows", username, side, q],
+    enabled: enabled && !!username,
+    queryFn: async ({ pageParam }) => {
+      const res = await authApi.get(`/users/${username}/${side}`, {
+        params: {
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(q ? { q } : {}),
+        },
+      })
+      return followListPageSchema.parse(res.data)
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.pagination.nextCursor ?? undefined,
+  })
+}

@@ -16,6 +16,7 @@ O módulo inclui configurações de privacidade granulares — o usuário pode d
 
 - **Página "Meu perfil"** (`/perfil`) — página real (server component lendo o DB direto) + client `OwnProfile` (`src/app/(app)/perfil/own-profile.tsx`): ProfileHeader + ProfileStats + ProfileAstrology + links Editar/Privacidade/público
 - **Página de perfil público** (`/perfil/:username`) com avatar, biografia, estatísticas de leituras e arcanos calculados
+- **Contadores de follow no profile** (T046, Phase 1): `GET /api/v1/users/:username/profile` devolve `followersCount`/`followingCount` no root **quando `privacy.statsVisibility !== "private"`** (SC38; com `private`, a rota responde 200 **sem** os dois campos para **não-dono**, enquanto o **dono autenticado os vê** — Q1 "só o dono vê", implementado 2026-09-29; os contadores, quando visíveis, excluem seguidores banidos/soft-deleted — SC39/Q2) e `isFollowing` **somente** com Bearer válido (auth opcional via `optionalAuth` de `src/app/api/v1/users/_helpers.ts`, que também descarta viewer banido/soft-deleted; contrato em `docs/04-api/users.md`). **UI ainda não plugada (2026-09-28)**: `PublicProfileClient` (`src/app/(app)/perfil/[username]/client.tsx`) renderiza `<ProfileStats />` **sem props** (continua zerado) e nenhum page monta `FollowButton` nem `FollowersModal`/`FollowingModal` — os componentes existem e são testados (`src/components/social/{follow-button,followers-modal}.tsx`; o `FollowButton` faz optimistic update no cache `["profile", username]`), mas **o wiring na página é pendência da próxima fase** (ver §Pendente)
 - **Campos editáveis**: `displayName`, `bio`, `birthDate`, `birthPlace`, `location`, `website`, `username` (`updateProfileSchema` em `src/lib/validators/profile.ts` — **sem `gender`**) — `socialLinks` existe no model mas **não** é editável via PATCH
 - **Arcana Pessoal** — cálculo automático via numerologia pitagórica (nome + data de nascimento)
 - **Signo Zodiacal** — cálculo automático a partir da data de nascimento
@@ -112,7 +113,7 @@ Algoritmo (fonte única: src/lib/horoscopes/maya.ts — gregorianToMayanLongCoun
 ### Pendente (não implementado)
 
 - Active-state do MobileNav é **exact-match** enquanto o AppHeader é **prefix-match** (inconsistente); MobileNav tem 4 itens vs 5 no desktop.
-- `ProfileStats` exibe zeros fixos (seguidores/seguindo não implementados) — stats reais pendentes.
+- `ProfileStats` exibe zeros fixos: os campos **já existem na API** (`followersCount`/`followingCount` em `GET /api/v1/users/:username/profile`, T046/Phase 1) mas a página não os passa como props — **wiring pendente**, junto com o montar de `FollowButton`/`FollowersModal` em `/perfil/:username` (stats de leituras também pendentes). ⚠️ No wiring, tratar os contadores como **opcionais**: com `privacy.statsVisibility === "private"` a API **omite** os dois campos para **não-dono** (não manda `0`; o **dono** logado ainda os recebe — Q1, implementado 2026-09-29) — renderizar placeholder, não zero (`docs/04-api/users.md` §GET /users/:username/profile).
 - Normalização `birthDate` round-trip (ISO datetime vs `YYYY-MM-DD` no formulário de edição) — pre-existente.
 
 ---

@@ -25,6 +25,7 @@ describe("schema Sprint 2 — models (T001–T013)", () => {
     "HoroscopeNotification",
     "ContentReport",
     "CommentLike",
+    "FollowReward",
   ])("model %s existe", (name) => {
     expect(hasModel(name)).toBe(true)
   })
@@ -33,19 +34,24 @@ describe("schema Sprint 2 — models (T001–T013)", () => {
 describe("schema Sprint 2 — constraints e índices (T015/T016)", () => {
   it.each([
     ["Follow", "@@unique([followerId, followingId])"],
-    ["Follow", "@@index([followerId])"],
-    ["Follow", "@@index([followingId])"],
+    ["Follow", "@@index([followingId, createdAt, id])"],
+    ["Follow", "@@index([followerId, createdAt, id])"],
     ["Post", "@@index([authorId, createdAt])"],
     ["Post", "@@index([createdAt])"],
     ["Comment", "@@index([postId, createdAt])"],
+    ["Comment", "@@index([authorId])"],
     ["PostLike", "@@unique([postId, userId])"],
+    ["PostLike", "@@index([userId])"],
     ["CommentLike", "@@unique([commentId, userId])"],
     ["PostHashtag", "@@index([tag])"],
     ["Notification", "@@index([userId, isRead, createdAt])"],
     ["ContentReport", "@@index([targetType, targetId])"],
+    ["ContentReport", "@@index([reporterId])"],
     ["HoroscopeContent", "@@unique([type, signId, element, period, date])"],
+    ["HoroscopeContent", "@@index([type, period, date])"],
     ["HoroscopeEntry", "@@index([userId, createdAt])"],
     ["HoroscopeLog", "@@index([userId, createdAt])"],
+    ["FollowReward", "@@unique([followerId, followingId])"],
   ])("%s declara %s", (model, constraint) => {
     const block = schema.match(
       new RegExp(`^model ${model} \\{[\\s\\S]*?^\\}`, "m"),

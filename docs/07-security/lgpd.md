@@ -83,6 +83,11 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | Histórico de pagamentos | Obrigação legal, fiscal | Obrigação legal | 5 anos (fiscal) | Não |
 | Preferências de notificação | Funcionamento do serviço | Consentimento | Enquanto ativo | Não |
 | Dados de dispositivo | Push notifications | Consentimento | Enquanto ativo | Não |
+| Conteúdo de posts/comentários (`Post.content`, `Comment.content`) | Uso da plataforma, moderação | Execução de contrato | Enquanto ativo (+ purga no hard-delete) | Não |
+| Texto livre de notificações (`Notification.message`/`data`) | Push/in-app de atividade social | Execução de contrato | Purgado no hard-delete do destinatário/doador | Não |
+| Motivo de denúncia (`ContentReport.reason`) | Moderação, segurança da plataforma | Legítimo interesse | Histórico de moderação (dangling `targetId` aceito por design) | Não |
+
+> **Escopo do inventário (review data N11)**: campos *free-text* de usuário acima são os PII de escrita nova do Sprint 2; leitura deles é restrita ao dono (sessão), aos listadores públicos com `statsVisibility`/privacy e, no caso de reports, à moderação. E-mails/mascarados seguem a política de `maskEmail` do backfill. Estender esta tabela em **toda** nova coluna free-text.
 
 > \* Leituras de Tarot podem revelar crenças espirituais — tratado como dado sensível quando identificado.
 
@@ -112,7 +117,8 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | Dados da conta (ativo) | Enquanto a conta estiver ativa | Execução do contrato |
 | Dados da conta (excluída) | 30 dias após exclusão | Grace period para reativação |
 | Dados da conta (excluída definitiva) | Eliminados/anonimizados após 30 dias | Eliminação LGPD (T16 hard-delete job: `src/jobs/hard-delete-accounts.ts`, Vercel Cron 03:00 UTC) |
-| Dados sociais (posts, comentários, follows, likes, gifts enviados, notificações, entradas de horóscopo) | Purgados na mesma transação do T16 (após 30 dias) | Purga social Sprint 2 (review LGPD) — `HoroscopeContent` (catálogo) e gifts **recebidos** (ledger do doador) permanecem; revisitar gifts antes do launch |
+| Dados sociais (posts, comentários, follows, likes, gifts enviados, notificações, entradas de horóscopo) | Purgados na mesma transação do T16 (após 30 dias) | Purga social Sprint 2 (review LGPD) — `HoroscopeContent` (catálogo), gifts **recebidos** (ledger do doador) e **`follow_rewards`** permanecem; revisitar gifts e `follow_rewards` antes do launch |
+| Marker de recompensa de follow (`follow_rewards.followerId`/`followingId`) | Sem retenção definida — **não é purgado pelo T16** | Migration `20260928205906_follow_reward_marker` (Sprint 2 review): colunas são `String` **sem `@relation`**, então o `deleteMany` de `Follow` do job não as alcança — linhas ficam órfãs com os ids dos dois usuários após o hard-delete. Ids `cuid` não são reutilizados (dado inerte), **mas é retenção indesejada p/ LGPD** — decidir purge/anonimização no T16 junto com a revisão de gifts (ver `docs/03-database/relationships.md` §4.1) |
 | Histórico de leituras | 90 dias após exclusão da conta | Purga pelo mesmo job T16 (Sprint 2 T148/S2-20): `purgeExpiredReadings()` apaga `Interpretation` → `ReadingCard` → `Reading` na transação do tick — janela de 90d coexiste com a de 30d (anonimização) |
 | Dados financeiros | 5 anos | Obrigação fiscal (Lei 9.613/98) |
 | Logs de acesso | 90 dias | Segurança e auditoria |

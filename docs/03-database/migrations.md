@@ -1,6 +1,6 @@
 # Estratégia de Migrações — arkana-agora
 
-> Versão: 1.3 | Última atualização: 2026-09-28
+> Versão: 1.4 | Última atualização: 2026-09-29
 
 ---
 
@@ -30,8 +30,16 @@ prisma/
     │   └── migration.sql   # Índice gifts(fromUserId,createdAt) + unique NULLS NOT DISTINCT + 7 CHECKs de domínio — APLICADA (Sprint 2 / review Step 5, CRIT-2/I5)
     ├── 20260928004004_horoscope_contents_domain_checks/
     │   └── migration.sql   # CHECKs type/period de horoscope_contents — APLICADA (Sprint 2 / review Step 5, I6)
+    ├── 20260928205906_follow_reward_marker/
+    │   └── migration.sql   # Tabela follow_rewards (FollowReward) — marker de +5 Versos por par — APLICADA (Sprint 2 / review Phase 1, #10)
+    ├── 20260928210717_follow_keyset_indexes/
+    │   └── migration.sql   # Substitui follows(followerId)/follows(followingId) por (…, createdAt, id) — APLICADA (Sprint 2 / review Phase 1, #11)
+    ├── 20260929142921_secondary_indexes_review/
+    │   └── migration.sql   # comments(authorId), post_likes(userId), content_reports(reporterId), horoscope_contents(type,period,date) — APLICADA (Sprint 2 / review Phase 1, #12)
     └── migration_lock.toml  # provider = postgresql
 ```
+
+> **Chain atual: 12 migrations** (`prisma migrate status` → up-to-date em dev, 2026-09-29). As três últimas (#10–#12) nasceram da review do Phase 1 (follow); detalhes na §5.
 
 ---
 
@@ -52,6 +60,9 @@ YYYYMMDDHHMMSS_descriptive_name
 | `20260926182325` | `sprint2_social_horoscopes` | 13 models sociais/horóscopos + campos novos em `User`/`UserProfile` — **aplicada (Sprint 2 / Phase 0)** |
 | `20260927222620` | `sprint2_review_fixes` | Índice `gifts(fromUserId, createdAt)`, recriação da unique de `horoscope_contents` com `NULLS NOT DISTINCT` (dedupe prévio) e **7 CHECKs** (posts/notifications/content_reports/versosBalance/hour) — **aplicada (Sprint 2 / review Step 5)** |
 | `20260928004004` | `horoscope_contents_domain_checks` | CHECKs `type IN ('western','chinese','maya')` e `period IN ('daily','weekly','monthly')` em `horoscope_contents` — **aplicada (Sprint 2 / review Step 5, I6)** |
+| `20260928205906` | `follow_reward_marker` | Tabela `follow_rewards` (`FollowReward`): `@@unique([followerId, followingId])` — marker que faz os +5 Versos do follow serem pagos **uma única vez por par** — **aplicada (Sprint 2 / Phase 1 review, #10)** |
+| `20260928210717` | `follow_keyset_indexes` | **Dropa** `follows(followerId)`/`follows(followingId)` e cria `follows(followerId, createdAt, id)` + `follows(followingId, createdAt, id)` (keyset das listas T044/T045) — **aplicada (Sprint 2 / Phase 1 review, #11)** |
+| `20260929142921` | `secondary_indexes_review` | Índices secundários `comments(authorId)`, `post_likes(userId)`, `content_reports(reporterId)`, `horoscope_contents(type, period, date)` — **aplicada (Sprint 2 / Phase 1 review, #12)** |
 | `20250711010000` | `add_reading_tables` | Tabelas de leitura, cartas e baralhos |
 | `20250712000000` | `add_social_tables` | Tabelas de feed, follows, comentários |
 | `20250712010000` | `add_marketplace_tables` | Tabelas de produtos, pedidos e pagamentos |
@@ -221,14 +232,22 @@ CREATE TABLE "HoroscopeEntry" ( ... );
 
 ### Sprint 2 — Social & Horóscopos — ✅ APLICADA (2026-09-26, Phase 0)
 
-**Migration**: `20260926182325_sprint2_social_horoscopes` — aplicada em dev (`npx prisma migrate status` → up-to-date; **7 migrations** na chain **na data do Phase 0** — hoje são **9**: seguem `20260927222620_sprint2_review_fixes` e `20260928004004_horoscope_contents_domain_checks`, ver §11 e §1). Cria os **13 models** novos do Phase 0 (T001–T014): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport` (social) e `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (horóscopos), além de campos novos:
+**Migration**: `20260926182325_sprint2_social_horoscopes` — aplicada em dev (`npx prisma migrate status` → up-to-date; **7 migrations** na chain **na data do Phase 0** — hoje são **12**: seguem `20260927222620_sprint2_review_fixes` (#8), `20260928004004_horoscope_contents_domain_checks` (#9), `20260928205906_follow_reward_marker` (#10), `20260928210717_follow_keyset_indexes` (#11) e `20260929142921_secondary_indexes_review` (#12), ver §11, §1 e a subsection abaixo). Cria os **13 models** novos do Phase 0 (T001–T014): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport` (social) e `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (horóscopos), além de campos novos:
 
 - `User`: `subscriptionTier UserPlan @default(FREE)`, `isBanned`, `bannedAt`, `banReason`, `maxFollowing Int @default(5000)`
 - `UserProfile`: `versosBalance Int @default(0)`, `versosStreak Int @default(0)`, `lastClaimAt DateTime?`
 
-Gerada com `npx prisma migrate dev --name sprint2_social_horoscopes` (T015; sem `db push`); SQL real versionado em `prisma/migrations/20260926182325_sprint2_social_horoscopes/migration.sql`. Índices/úniques entregues junto (T016): `Post(authorId,createdAt)`, `Post(createdAt)`, `Follow(followerId)`, `Follow(followingId)`, `Notification(userId,isRead,createdAt)`, `PostHashtag(tag)`, `HoroscopeEntry(userId,createdAt)`, `HoroscopeLog(userId,createdAt)`, `Gift(toUserId,createdAt)`, `ContentReport(targetType,targetId)`, únicos `Follow(followerId,followingId)`, `PostLike(postId,userId)`, `CommentLike(commentId,userId)`, `HoroscopeContent(type,signId,element,period,date)`, `HoroscopeNotification(userId)`.
+Gerada com `npx prisma migrate dev --name sprint2_social_horoscopes` (T015; sem `db push`); SQL real versionado em `prisma/migrations/20260926182325_sprint2_social_horoscopes/migration.sql`. Índices/úniques entregues junto (T016): `Post(authorId,createdAt)`, `Post(createdAt)`, `Follow(followerId)`, `Follow(followingId)` (**ambos substituídos** pelos compostos do #11), `Notification(userId,isRead,createdAt)`, `PostHashtag(tag)`, `HoroscopeEntry(userId,createdAt)`, `HoroscopeLog(userId,createdAt)`, `Gift(toUserId,createdAt)`, `ContentReport(targetType,targetId)`, únicos `Follow(followerId,followingId)`, `PostLike(postId,userId)`, `CommentLike(commentId,userId)`, `HoroscopeContent(type,signId,element,period,date)`, `HoroscopeNotification(userId)`.
 
 > **Backfill de `User.mayanKin`**: a troca de epoch do Kin Maya para a **correlação GMT 584283** (Phase 0 — AC-11/RF-HORO-004) invalida valores calculados antes do Sprint 2. O script pontual `prisma/backfill-mayankin.ts` recalcula tudo a partir da fonte única `calculateKinMaya` — `npx tsx prisma/backfill-mayankin.ts` (**dry-run por padrão**, sem flag) → `npx tsx prisma/backfill-mayankin.ts --apply` (grava; idempotente — em dev foi validado com `1990-06-15 → Kin 255` e revertido). Guard de execução direta (importar o módulo não roda o backfill) e e-mails mascarados no stdout (LGPD, `maskEmail`). **Não é migration**: roda sob demanda em cada ambiente que tenha dados pré-existentes.
+
+### Sprint 2 — Follow (review Phase 1) — ✅ APLICADAS (2026-09-28/29, #10–#12)
+
+**Migrations**: `20260928205906_follow_reward_marker`, `20260928210717_follow_keyset_indexes`, `20260929142921_secondary_indexes_review` — as três da revisão do Phase 1 (rota `POST /api/v1/social/follow/:userId`). `prisma migrate status` (2026-09-29) → **12 migrations, up-to-date**.
+
+- **#10 `follow_reward_marker`**: cria `follow_rewards` com `@@unique([followerId, followingId])`. É o **marker de recompensa** lido dentro do tx da rota de follow — na primeira vez que A segue B cria a linha e paga +5 Versos; unfollow **não** apaga (re-follow não recompensa). Sem FK para `User` (ver `relationships.md` §4.1).
+- **#11 `follow_keyset_indexes`**: `DROP INDEX follows_followerId_idx`/`follows_followingId_idx` + `CREATE` dos compostos `(followerId, createdAt, id)` e `(followingId, createdAt, id)` — cobrem o keyset `{createdAt, id}` das listas T044/T045 com desempate por `id`. **Atenção**: qualquer doc/diagrama que ainda cite `@@index([followerId])`/`@@index([followingId])` de coluna única está desatualizado (§4.5 e §7 de `indexing.md` marcam isso).
+- **#12 `secondary_indexes_review`**: `comments(authorId)`, `post_likes(userId)`, `content_reports(reporterId)`, `horoscope_contents(type, period, date)` — só índices, nenhum tipo/coluna nova.
 
 ### Sprint 2 — Social (rascunho de planejamento — superado)
 

@@ -1,6 +1,6 @@
 # Turbopack/PostCSS Build OOM — `Zone Allocation failed - process out of memory` (exit 134)
 
-> **Category**: ci-cd / build · **Date**: 2026-09-23 · **Status**: solved
+> **Category**: ci-cd / build + test · **Date**: 2026-09-23 (test recurrence 2026-09-29) · **Status**: solved
 
 ## Problem
 
@@ -49,6 +49,27 @@ Same session: an earlier `npm run build` can succeed (exit 0) then the next fail
 
 4. **Vercel / CI** — production logs for this ticket were **runtime `AUTH_URL`**, not build OOM. The same `build` script (with the heap flag) already ships to Vercel and CI. If a platform build still OOMs under memory pressure, raise plan memory or set project env `NODE_OPTIONS=--max-old-space-size=4096`; a huge heap cap with almost no free physical memory will still fail zone allocations.
 
+## Recurrence: test suite (2026-09-29)
+
+Same signature, different entry — `bun run test` (at the time the script was plain `vitest run`; since the fix it pins the heap flag) over 139 files / ~2115 tests, jsdom, died mid-run:
+
+```
+FATAL ERROR: Zone Allocation failed - process out of memory
+Unhandled Rejection: Error: Channel closed (ERR_IPC_CHANNEL_CLOSED, tinypool ProcessWorker)
+Test Files 27 passed (139)   → exit 1
+```
+
+Zero assertion failures — a tinypool child (child_process fork) hit zone OOM at ~1 GB free RAM of 7.8 GB (Node v24) and broke IPC with the parent. Like `build`, it is **intermittent under memory pressure** (two clean `vitest run` runs passed without the flag before the fix).
+
+**Fix (same pattern as `build`, no `cross-env`):**
+
+```json
+"test": "node --max-old-space-size=4096 node_modules/vitest/vitest.mjs run",
+"test:coverage": "node --max-old-space-size=4096 node_modules/vitest/vitest.mjs run --coverage"
+```
+
+`child_process.fork` (tinypool `forks` pool) inherits the parent's `execArgv`, so workers get the raised cap too. Free RAM remains the primary mitigation — see the caveats above.
+
 ## Verification
 
 ```powershell
@@ -57,7 +78,8 @@ $os = Get-CimInstance Win32_OperatingSystem; [int]($os.FreePhysicalMemory/1024)
 
 npm run build          # exit 0, full route table
 npx tsc --noEmit
-npx vitest run tests/auth-config.test.ts
+bun run test           # full suite via the flagged script (exit 0; the 2026-09-29 recurrence check)
+npx vitest run tests/auth-config.test.ts   # targeted single-file runs are fine without the flag
 ```
 
 ## Gotchas / anti-patterns
@@ -69,11 +91,11 @@ npx vitest run tests/auth-config.test.ts
 
 ## Removal Condition
 
-Remove `--max-old-space-size` from `build` only if Vercel/Next ships a stable fix for Turbopack PostCSS worker zone OOM **and** local builds prove green at moderate free RAM without the flag.
+Remove `--max-old-space-size` from `build` / `test` / `test:coverage` only if Vercel/Next ships a stable fix for Turbopack PostCSS worker zone OOM **and** local builds and the full vitest suite both prove green at moderate free RAM without the flag.
 
 ## References
 
-- `package.json` (`build` script)
+- `package.json` (`build`, `test`, `test:coverage` scripts)
 - `postcss.config.mjs`, `src/app/globals.css`
 - `docs/runbooks/vercel-deploy-auth-url.md` (production AUTH_URL runtime — distinct failure)
 - `docs/solutions/ci-cd/prisma-v8-cli-regression.md` (prior build failure class)

@@ -1,6 +1,6 @@
 # Documentation Maintenance — Pattern Registry
 
-> **Date**: 2026-09-10 | **Updated**: 2026-09-24
+> **Date**: 2026-09-10 | **Updated**: 2026-09-29
 > **Session**: Documentation refresh to align pattern registry with current state
 
 ## Context
@@ -72,7 +72,7 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 10. **`docs/solutions/patterns/observability/gate-third-party-analytics-sdk-init.md`** (2026-09-24, Current)
    - Third-party analytics SDK (PostHog): early-return `NODE_ENV === "development"` inside `initAnalytics()` + pin remote-config-toggleable loaders (`disable_session_recording: true`, `capture_dead_clicks: false`, `autocapture: false`)
    - Consent gate (`analytics-consent`) checked **inside** `initAnalytics()` and at every capture site; revoke runs `resetUser()` (`posthog.reset()`) then re-asserts `posthog.opt_out_capturing()` (LGPD — orthogonal and mandatory)
-   - **Implemented**: `src/lib/analytics.ts`, `tests/analytics.test.ts` (11 tests)
+   - **Implemented**: `src/lib/analytics.ts`, `tests/analytics.test.ts` (14 tests)
 
 ### CI/CD Patterns
 
@@ -106,10 +106,10 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - Fix: pin `prisma@^7`, delete corrupt shims, keep pooled `DATABASE_URL` vs direct `DIRECT_URL` split for Prisma Postgres
     - **Status**: Solved; pin must stay until v8 restores classic verbs (or Platform-only migration)
 
-16. **`docs/solutions/ci-cd/turbopack-postcss-oom.md`** (2026-09-23, Resolved)
-    - Intermittent `Zone Allocation failed - process out of memory` / exit 134 + IPC `os error 10054` on `globals.css` (PostCSS worker) under low free RAM
-    - Fix: `node --max-old-space-size=4096` on `build` script; free RAM >1 GB before local builds; distinct from production `AUTH_URL` runtime guard
-    - **Status**: Solved for local; remove flag only after Turbopack PostCSS zone OOM is stable upstream
+16. **`docs/solutions/ci-cd/turbopack-postcss-oom.md`** (2026-09-23, Resolved; test-suite recurrence 2026-09-29)
+    - Intermittent `Zone Allocation failed - process out of memory` / exit 134 + IPC `os error 10054` on `globals.css` (PostCSS worker) under low free RAM; **recurred 2026-09-29 on the full vitest suite** — tinypool child OOM → `ERR_IPC_CHANNEL_CLOSED`, exit 1, zero assertion failures
+    - Fix: `node --max-old-space-size=4096` on the `build` script (2026-09-23) and on `test`/`test:coverage` (2026-09-29); run the full suite as `bun run test`, never bare `npx vitest run`/`bun test` (they skip the flag); free RAM >1 GB before local builds; distinct from production `AUTH_URL` runtime guard
+    - **Status**: Solved for local; remove flag only after Turbopack PostCSS zone OOM is stable upstream and the suite proves green at moderate free RAM without it
 
 ### Auth Patterns
 

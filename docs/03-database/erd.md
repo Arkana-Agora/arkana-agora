@@ -4,19 +4,19 @@
 
 ---
 
-> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **25 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`), **`FollowReward`** (`20260928205906_follow_reward_marker`, Sprint 2 review 2026-09-29) — migrations aplicadas em dev PostgreSQL (12 na chain; `20260928210717_follow_keyset_indexes` e `20260929142921_secondary_indexes_review` só mexem em índices). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
 ## 1. Visão Geral
 
-O banco de dados do arkana-agora possui **24 models implementados** organizados em **5 domínios**:
+O banco de dados do arkana-agora possui **25 models implementados** organizados em **5 domínios**:
 
 | Domínio | Entidades |
 |---------|-----------|
 | **Autenticação & Usuário** | User, UserProfile, Subscription |
 | **Leituras & Tarot** | Reading, Card, TarotDeck, Spread, ArcanaCalculation, HoroscopeEntry, HoroscopeContent, HoroscopeLog, HoroscopeNotification, DailyCard |
-| **Social** | Follow, Post, Comment, PostLike, CommentLike, PostHashtag, Notification, Gift, ContentReport |
+| **Social** | Follow, FollowReward, Post, Comment, PostLike, CommentLike, PostHashtag, Notification, Gift, ContentReport |
 | **Marketplace** | Product, Order, Payment |
 | **Sistema** | (entidades técnicas se necessário) |
 

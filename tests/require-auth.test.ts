@@ -31,6 +31,7 @@ beforeEach(() => {
   prismaMock.user.findUnique.mockResolvedValue({
     isBanned: false,
     deletedAt: null,
+    isActive: true,
   })
 })
 
@@ -40,8 +41,23 @@ describe("requireAuth (review: isBanned/deletedAt nunca checados)", () => {
     expect(result).toEqual({ userId: "usr_1" })
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
       where: { id: "usr_1" },
-      select: { isBanned: true, deletedAt: true },
+      select: { isBanned: true, deletedAt: true, isActive: true },
     })
+  })
+
+  it("conta inativa (isActive=false, sem deletedAt) → 401", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      isBanned: false,
+      deletedAt: null,
+      isActive: false,
+    })
+
+    const result = await requireAuth(requestWithToken(), "req-6")
+
+    expect(result).toBeInstanceOf(Response)
+    expect((result as Response).status).toBe(401)
+    const body = await (result as Response).json()
+    expect(body.error.code).toBe("AUTH_TOKEN_INVALID")
   })
 
   it("conta banida → 403 AUTH_ACCOUNT_SUSPENDED", async () => {

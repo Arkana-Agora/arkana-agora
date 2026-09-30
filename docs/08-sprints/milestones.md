@@ -120,7 +120,7 @@ Semana  1───3───5──────8──────13────
 ### Critérios de Conclusão
 
 - [ ] Feed timeline funcional com posts de seguidos
-- [ ] Sistema de follow/unfollow operacional
+- [ ] Sistema de follow/unfollow operacional (backend entregue no Sprint 2 Phase 1 — `POST /social/follow/:userId` + listas + contadores; **falta wiring de UI** em `/perfil/:username` para ser operacional ponta a ponta)
 - [ ] Likes e comentários funcionando em posts
 - [ ] Horóscopo Ocidental calculando e exibindo para os 12 signos
 - [ ] Horóscopo Chinês com animal e elemento corretos

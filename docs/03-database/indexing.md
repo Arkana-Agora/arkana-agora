@@ -4,7 +4,7 @@
 
 ---
 
-> **Status:** **24 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`) — migrations aplicadas em dev PostgreSQL (9 na chain). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
+> **Status:** **25 models implementados** — `User`, `UserProfile`, `Subscription`, `Session`, `VerificationToken` (init `20260813000605_init` + `20260902015420_add_token_version` + `20260921160000_add_username_birthplace_privacy`), `Reading`/`ReadingCard` (`20260921230000_add_reading_reading_card`), `Interpretation`/`FollowUpMessage`/`AIDailyUsage` (`20260922034000_add_ai_interpretations`), `ArcanaCalculation` (`20260923183900_add_arcana_calculations`), **Sprint 2 Phase 0 (2026-09-26)** `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`, `HoroscopeContent`, `HoroscopeEntry`, `HoroscopeLog`, `HoroscopeNotification` (`20260926182325_sprint2_social_horoscopes`), **`FollowReward`** (`20260928205906_follow_reward_marker`, Sprint 2 review 2026-09-29) — migrations aplicadas em dev PostgreSQL (12 na chain; `20260928210717_follow_keyset_indexes` e `20260929142921_secondary_indexes_review` só mexem em índices). As demais entidades do ERD alvo (`TarotDeck`, `Card`, `Spread`, `DailyCard`, marketplace `Product`/`Order`/`Payment`) permanecem planejadas e não existem no schema. `Session`/`VerificationToken` **não têm seção aqui** — são cópia de `.specs/001-auth/design.md` §4 (rotas custom `/api/v1/auth/*`, ADR-009). Consulte `prisma/schema.prisma` para o que está realmente implementado.
 
 ---
 
@@ -31,7 +31,7 @@ Consultas mais frequentes (ordenadas por impacto):
 
 ## 2. Índices Primários (PK)
 
-Todas as 24 models possuem índice primário automático via `@id`.
+Todas as 25 models possuem índice primário automático via `@id`.
 
 > **Nota (Sprint 2 Phase 0):** os `@id` reais são `String @default(cuid())` (não `UUID`) e a tabela abaixo é o **ERD alvo** — 7 models novos (`PostLike`, `CommentLike`, `PostHashtag`, `ContentReport`, `HoroscopeContent`, `HoroscopeLog`, `HoroscopeNotification`) ainda não têm linha aqui; os índices reais deles estão em §7.1. `Card`, `TarotDeck`, `Spread`, `Product`, `Order`, `Payment` e `DailyCard` seguem planejados.
 
@@ -215,6 +215,8 @@ WHERE "sellerId" = 'user_prof' AND "isActive" = true;
 ```
 
 ### 4.5 Follow(followerId)
+
+> ⚠️ **Atualizado (migration `20260928210717_follow_keyset_indexes`, 2026-09-28):** os `@indexed` de coluna única abaixo **não existem mais** no schema real — foram **substituídos** por `@@index([followerId, createdAt, id])` e `@@index([followingId, createdAt, id])` (keyset `createdAt, id` das listas `GET /users/:username/{followers,following}`, T044/T045). As consultas da §4.5 continuam as mesmas; a diferença é o plano (append por direção com cursor estável) e o `id` como desempate.
 
 ```prisma
 model Follow {
@@ -442,31 +444,39 @@ WHERE "isPublic" = true;
 | 29 | ArcanaCalculation | `(userId, createdAt)` | B-tree | ❌ | Histórico de arcanos do usuário |
 | 30 | HoroscopeEntry | `userId` | B-tree | ❌ | Horóscopos do usuário |
 
-### 7.1 Índices reais — Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`)
+### 7.1 Índices reais — Sprint 2 (migrations `20260926182325` → `20260929142921`)
 
-Índices efetivamente criados no schema (`prisma/schema.prisma` — fonte da verdade; as tabelas das §3–§7 acima são o **alvo** e ainda citam colunas que não existem, ex.: `Post.isPublic`, `Gift.senderId`).
+Índices efetivamente criados no schema (`prisma/schema.prisma` — fonte da verdade; as tabelas das §3–§7 acima são o **alvo** e ainda citam colunas que não existem, ex.: `Post.isPublic`, `Gift.senderId`). Linhas marcadas **#10/#11/#12** vieram das migrations do Sprint 2 Review/Phase 1 (2026-09-28/29).
 
 | Tabela | Coluna(s) | Tipo | Único | Uso principal |
 |--------|-----------|------|:-----:|---------------|
 | `follows` | `(followerId, followingId)` | B-tree | ✅ | Impedir follow duplicado |
-| `follows` | `followerId` | B-tree | | Lista de "seguindo" |
-| `follows` | `followingId` | B-tree | | Lista de seguidores |
+| `follows` | `(followingId, createdAt, id)` | B-tree | | Lista de seguidores (keyset T044/T045) **#11** |
+| `follows` | `(followerId, createdAt, id)` | B-tree | | Lista de "seguindo" (keyset T044/T045) **#11** |
+| `follow_rewards` | `(followerId, followingId)` | B-tree | ✅ | Marker "par já recompensado" (idempotência dos +5 Versos) **#10** |
 | `posts` | `(authorId, createdAt)` | B-tree | | Posts por autor (perfil) |
 | `posts` | `createdAt` | B-tree | | Feed global (cronológico) |
 | `comments` | `(postId, createdAt)` | B-tree | | Comentários de um post |
+| `comments` | `authorId` | B-tree | | Comentários de um autor (perfil/moderação) **#12** |
 | `post_likes` | `(postId, userId)` | B-tree | ✅ | Like idempotente |
+| `post_likes` | `userId` | B-tree | | Likes do usuário **#12** |
 | `comment_likes` | `(commentId, userId)` | B-tree | ✅ | Like de comentário idempotente |
 | `comment_likes` | `commentId` | B-tree | | Contagem/lookup por comentário |
 | `post_hashtags` | `tag` | B-tree | | Trending/lookup por hashtag |
 | `gifts` | `(toUserId, createdAt)` | B-tree | | Histórico de gifts recebidos |
+| `gifts` | `(fromUserId, createdAt)` | B-tree | | Fallback do rate limit 20 gifts/dia (T027/I5) |
 | `notifications` | `(userId, isRead, createdAt)` | B-tree | | Inbox + não-lidas |
 | `content_reports` | `(targetType, targetId)` | B-tree | | Fila de moderação por alvo |
+| `content_reports` | `reporterId` | B-tree | | Denúncias do denunciante **#12** |
 | `horoscope_contents` | `(type, signId, element, period, date)` | B-tree | ✅ | 1 conteúdo por combinação/date |
+| `horoscope_contents` | `(type, period, date)` | B-tree | | Lookup "conteúdo de hoje por signo" **#12** |
 | `horoscope_entries` | `(userId, createdAt)` | B-tree | | Histórico de horóscopos (RF-HORO-007) |
 | `horoscope_logs` | `(userId, createdAt)` | B-tree | | Logs de leitura |
 | `horoscope_notifications` | `userId` | B-tree | ✅ | 1 row de preferências por usuário |
 
-**Consultas sem índice dedicado ainda** (planejadas, ver plano Sprint 2): busca full-text de posts (`Post.content` GIN — §7 linha 15), contagem parcial de não-lidas (`WHERE isRead = false`), busca de seguidores por nome (`?q=` — T044).
+> **#11 substituiu** os `follows(followerId)` e `follows(followingId)` de coluna única criados no #7 — a matriz das §4.5/§7 ainda traz esses alvos; o real é o composto acima. Índices de **auth/AI** (`sessions`, `reading_cards`, `interpretations`, `follow_up_messages`, `readings(userId,createdAt)`, `arcana_calculations(userId,createdAt)`, `AIDailyUsage(userId,date)`) existem desde as migrations do Sprint 0/1 e ficam fora desta tabela.
+
+**Consultas sem índice dedicado ainda**: busca full-text de posts (`Post.content` GIN — §7 linha 15; rota `POST /social/posts`/feed ainda planejados, Phase 2), contagem parcial de não-lidas (`WHERE isRead = false` — opcional, a indexada `(userId, isRead, createdAt)` cobre), e a **busca por nome nas listas de follow (`?q=`)** — a rota existe (T044, implementada em `src/lib/social/follow-lists.ts`), mas o `?q=` é `contains` case-insensitive **sem trigram** (filtros `q` e cursor entram como `AND` no mesmo `where`, ver `docs/04-api/social.md`).
 
 ---
 

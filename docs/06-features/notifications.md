@@ -2,7 +2,7 @@
 
 > **Identificador**: `arkana-agora` | **Módulo**: Notificações | **Versão**: V1
 >
-> **Status (2026-09-26)**: **planejado.** O model `Notification` existe no schema desde o Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`) com as colunas reais `userId`, `type`, `message`, `data Json?`, `isRead`, `createdAt` — mas não há rota `/social/notifications`, serviço de push nem fila implementados. **Divergência conhecida**: este doc descreve **8 categorias** (curtida, comentário, novo seguidor, presente, pagamento, leitura compartilhada, atualização de sistema, lembrete diário) enquanto `Notification.type` documenta **6 valores** (`follow`, `like`, `comment`, `gift`, `mention`, `horoscope`) — alinhar quando as rotas forem implementadas.
+> **Status (2026-09-26; atualizado 2026-09-28)**: **parcialmente implementado.** O model `Notification` existe no schema desde o Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`) com as colunas reais `userId`, `type`, `message`, `data Json?`, `isRead`, `createdAt` — e **desde o Sprint 2 Phase 1 (T043) existe um writer**: a rota `POST /api/v1/social/follow/:userId` grava `Notification { type: "follow", data.followerId }` no mesmo `$transaction` do follow (sem emit WS — `follow-update`/`notification` ficaram para T088). **Ainda não existem** rota `GET /social/notifications`, serviço de push, fila nem UI de centro de notificações. **Divergência conhecida**: este doc descreve **8 categorias** (curtida, comentário, novo seguidor, presente, pagamento, leitura compartilhada, atualização de sistema, lembrete diário) enquanto `Notification.type` documenta **6 valores** (`follow`, `like`, `comment`, `gift`, `mention`, `horoscope`) — alinhar quando as rotas forem implementadas.
 
 ---
 

@@ -283,9 +283,19 @@ model Follow {
   following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
-  @@index([followerId])
-  @@index([followingId])
+  @@index([followingId, createdAt, id])
+  @@index([followerId, createdAt, id])
   @@map("follows")
+}
+
+model FollowReward {
+  id             String   @id @default(cuid())
+  followerId     String
+  followingId    String
+  rewardedAt     DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@map("follow_rewards")
 }
 
 model Post {
@@ -330,6 +340,8 @@ model Comment {
   likes         CommentLike[]
 
   @@index([postId, createdAt])
+  @@index([authorId])
+  @@index([parentCommentId])
   @@map("comments")
 }
 
@@ -343,6 +355,7 @@ model PostLike {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
+  @@index([userId])
   @@map("post_likes")
 }
 
@@ -367,6 +380,7 @@ model PostHashtag {
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
+  @@index([postId])
   @@index([tag])
   @@map("post_hashtags")
 }
@@ -417,6 +431,7 @@ model ContentReport {
   reporter User @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
 
   @@index([targetType, targetId])
+  @@index([reporterId])
   @@map("content_reports")
 }
 
@@ -435,6 +450,7 @@ model HoroscopeContent {
   createdAt DateTime @default(now())
 
   @@unique([type, signId, element, period, date])
+  @@index([type, period, date])
   @@map("horoscope_contents")
 }
 

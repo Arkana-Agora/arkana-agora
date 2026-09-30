@@ -4,13 +4,21 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
 import authApi from "@/lib/api"
-import { horoscopeContentShape } from "@/lib/horoscopes/validation"
+import {
+  HOROSCOPE_TYPES,
+  PROMPT_PERIODS,
+  type HoroscopeType,
+  type PromptPeriod,
+} from "@/lib/horoscopes/prompts"
+import {
+  horoscopeContentShape,
+  type HoroscopePeriod,
+} from "@/lib/horoscopes/validation"
 
-export const horoscopeTypeSchema = z.enum(["western", "chinese", "maya"])
-export const horoscopePeriodSchema = z.enum(["daily", "weekly", "monthly"])
+export type { HoroscopePeriod, HoroscopeType, PromptPeriod }
 
-export type HoroscopeType = z.infer<typeof horoscopeTypeSchema>
-export type HoroscopePeriod = z.infer<typeof horoscopePeriodSchema>
+export const horoscopeTypeSchema = z.enum(HOROSCOPE_TYPES)
+export const horoscopePeriodSchema = z.enum(PROMPT_PERIODS)
 
 const horoscopeSchema = z.object({
   type: horoscopeTypeSchema,
