@@ -2,11 +2,14 @@ import sharp from "sharp"
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
+import { enforceCsrf } from "@/lib/middleware/csrf"
+import { enforceSocialLimit } from "@/lib/middleware/rate-limit"
 import {
   getObjectBuffer,
   putObjectBuffer,
   deleteObject,
-  R2_PUBLIC_URL,
+  headObjectSize,
+  NEXT_PUBLIC_R2_PUBLIC_URL,
 } from "@/lib/r2"
 
 export const dynamic = "force-dynamic"
@@ -48,6 +51,10 @@ async function processWithRetry(buffer: Buffer) {
 
 export async function PATCH(request: Request): Promise<Response> {
   const reqId = newReqId()
+
+  const csrfError = enforceCsrf(request, reqId)
+  if (csrfError) return csrfError
+
   const auth = await requireAuth(request, reqId)
   if (auth instanceof Response) return auth
 
@@ -92,7 +99,31 @@ export async function PATCH(request: Request): Promise<Response> {
     )
   }
 
+  const rate = await enforceSocialLimit({
+    limit: "upload",
+    userId: auth.userId,
+    reqId,
+  })
+  if (!rate.allowed) return rate.response
+
   try {
+    // Head antes do download (review C3): rejeita uploads acima de 5MB sem
+    // bufferar o objeto inteiro em memória. `null` (objeto ausente / header
+    // sem tamanho) cai no Get, que valida de novo por segurança.
+    const headSize = await headObjectSize(body.fileKey)
+    if (headSize !== null && headSize > MAX_BYTES) {
+      return Response.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Arquivo muito grande. Maximo 5MB.",
+          },
+          meta: { requestId: reqId },
+        },
+        { status: 422 },
+      )
+    }
+
     const original = await getObjectBuffer(body.fileKey)
 
     if (original.length > MAX_BYTES) {
@@ -153,7 +184,7 @@ export async function PATCH(request: Request): Promise<Response> {
     void uploads
 
     const mainKey = `${baseKey}-400-${stamp}.webp`
-    const avatarUrl = `${R2_PUBLIC_URL}/${mainKey}`
+    const avatarUrl = `${NEXT_PUBLIC_R2_PUBLIC_URL}/${mainKey}`
 
     await prisma.user.update({
       where: { id: auth.userId },
@@ -176,7 +207,8 @@ export async function PATCH(request: Request): Promise<Response> {
     return Response.json({
       avatarUrl,
       variants: variants.map(
-        ({ size }) => `${R2_PUBLIC_URL}/${baseKey}-${size}-${stamp}.webp`,
+        ({ size }) =>
+          `${NEXT_PUBLIC_R2_PUBLIC_URL}/${baseKey}-${size}-${stamp}.webp`,
       ),
     })
   } catch (error) {

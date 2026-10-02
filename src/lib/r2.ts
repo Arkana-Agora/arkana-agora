@@ -2,9 +2,12 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+
+import { getR2PublicUrl } from "@/lib/r2-public-url"
 
 function getR2Config() {
   const accountId = process.env.R2_ACCOUNT_ID
@@ -42,8 +45,7 @@ export function getR2Bucket(): string {
   return getR2Config().bucketName
 }
 
-export const R2_PUBLIC_URL =
-  process.env.R2_PUBLIC_URL ?? `https://r2.arkanaagora.com`
+export const NEXT_PUBLIC_R2_PUBLIC_URL = getR2PublicUrl()
 
 export async function generatePresignedUrl(
   key: string,
@@ -76,6 +78,25 @@ export async function getObjectBuffer(key: string): Promise<Buffer> {
   }
   const bytes = await response.Body.transformToByteArray()
   return Buffer.from(bytes)
+}
+
+/**
+ * Tamanho do objeto sem baixá-lo (review C3): `HeadObject` antes de
+ * `GetObject` evita bufferar uploads gigantes em memória. Retorna `null`
+ * quando o objeto não existe ou o header não vem — o chamador cai no
+ * caminho de download (que valida o tamanho de novo por segurança).
+ */
+export async function headObjectSize(key: string): Promise<number | null> {
+  try {
+    const response = await getR2Client().send(
+      new HeadObjectCommand({ Bucket: getR2Bucket(), Key: key }),
+    )
+    return typeof response.ContentLength === "number"
+      ? response.ContentLength
+      : null
+  } catch {
+    return null
+  }
 }
 
 export async function putObjectBuffer(
