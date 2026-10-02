@@ -1,8 +1,8 @@
 # API Social — arkana-agora
 
-> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória nas rotas de escrita (`POST /social/follow/:userId` exige Bearer; as listas `GET /users/:username/{followers,following}` usam **auth opcional** — `optionalAuth`, o Bearer só habilita `isFollowing`) | **Paginação**: Cursor-based
+> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória em todas as rotas deste módulo **exceto** `GET /social/posts/:id/og-image` (`optionalAuth` — crawlers de preview chegam sem token) e as listas `GET /users/:username/{followers,following}` (auth opcional, o Bearer só habilita `isFollowing`); as rotas de escrita (`POST /social/follow/:userId`, `POST /social/posts`, `POST /social/posts/images/presign`) exigem Bearer **+ CSRF** (`enforceCsrf`) | **Paginação**: Cursor-based
 >
-> **Status (2026-09-29)**: **follow implementado (Sprint 2 Phase 1, T043–T050; revisado 2026-09-29)** — `POST /social/follow/:userId` (toggle), `GET /users/:username/followers` e `GET /users/:username/following` existem em `src/app/api/v1/social/follow/[userId]/route.ts` e `src/app/api/v1/users/[username]/{followers,following}/route.ts` (+ lib `src/lib/social/{privacy,follow-lists}.ts`); testes em `tests/integration/social-follow.test.ts` (31 casos, incl. 3 de corrida), `tests/social-privacy.test.ts` e `tests/find-visible-profile.test.ts` (9 — `findVisibleProfile`/SC38). As **demais rotas deste documento continuam planejadas** (o diretório `src/app/api/v1/social/` só contém `follow/`; nenhum código chama `prisma.post`/`prisma.comment`/etc.). Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas vão usar já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
+> **Status (2026-10-01)**: **implementado — follow (Sprint 2 Phase 1, T043–T050) + posts/feed/explore (Sprint 2 Phase 2, T051–T065)**. Rotas existentes hoje em `src/app/api/v1/social/`: `POST /social/follow/:userId` (toggle, `follow/[userId]/route.ts`), `POST /social/posts`, `GET /social/feed`, `GET /social/explore/{trending,hashtags,suggestions}`, `GET /social/search`, `GET /social/posts/:id`, `GET /social/posts/:id/og-image`, `POST /social/posts/images/presign` (+ `GET /users/:username/{followers,following}` em `src/app/api/v1/users/[username]/{followers,following}/route.ts`, libs `src/lib/social/{privacy,follow-lists,feed-algorithm,explore,search,post-visibility}.ts` e validadores `src/lib/validators/social.ts`). Testes: `tests/integration/social-follow.test.ts` (43 casos, incl. 3 de corrida), `tests/social-privacy.test.ts`, `tests/find-visible-profile.test.ts` (11 — `findVisibleProfile`/SC38), `tests/integration/social-feed.test.ts` (52) e `tests/integration/social-explore.test.ts` (20) — a cobertura da task T065 está **dividida entre esses dois arquivos + `tests/feed-algorithm.test.ts` (26)** em vez de um único `social-feed.test.ts` (desvio registrado na Phase 2). **Continuam planejados** os endpoints não listados acima (`DELETE /social/posts/:id`, `POST /social/posts/:id/like` T076, `POST|GET /social/posts/:id/comments` T077/T078, `POST /social/gifts` T120, `GET|PATCH /social/notifications*` T082) — nenhum deles existe em `src/app/api/v1/social/`. Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas usam já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
 
 ## Sumário
 
@@ -10,8 +10,15 @@
 - [GET /users/:username/followers](#get-usersusernamefollowers)
 - [GET /users/:username/following](#get-usersusernamefollowing)
 - [GET /social/feed](#get-socialfeed)
-- [GET /social/explore](#get-socialexplore)
+- [GET /social/explore (rascunho — adiado)](#get-socialexplore)
+- [GET /social/explore/trending](#get-socialexploretrending)
+- [GET /social/explore/hashtags](#get-socialexplorehashtags)
+- [GET /social/explore/suggestions](#get-socialexploresuggestions)
+- [GET /social/search](#get-socialsearch)
 - [POST /social/posts](#post-socialposts)
+- [GET /social/posts/:id](#get-socialpostsid)
+- [GET /social/posts/:id/og-image](#get-socialpostsidog-image)
+- [POST /social/posts/images/presign](#post-socialpostsimagespresign)
 - [DELETE /social/posts/:id](#delete-socialpostsid)
 - [POST /social/posts/:id/like](#post-socialpostsidlike)
 - [POST /social/posts/:id/comments](#post-socialpostsidcomments)
@@ -168,7 +175,9 @@ Mesmo contrato de `/followers` para a lista de **seguindo** (T045): `data[]` com
 
 ## GET /social/feed
 
-Feed principal com publicações de seguidos + conteúdo sugerido.
+Feed principal com publicações de seguidos + conteúdo sugerido (fallback explore em 0 following).
+
+> **Implementado (Sprint 2 Phase 2, T052)** em `src/app/api/v1/social/feed/route.ts` (`requireAuth`; cache Redis `src/lib/feed-cache.ts` é consultado primeiro — hit serve a página materializada **completa** (`nextCursor` = pivot do algoritmo, que já embute o `include`; `limit` vale só para a paginação ao vivo — review 2026-10-01 C1: cortar o cache reencodava o cursor pelo último do ranking e duplicava/pulava posts), miss cai no `getFeed` ao vivo). `POST /social/posts` chama `refreshFeedCache(authorId)` após criar, reconstruindo a página do autor sem esperar o TTL.
 
 ### Requisição
 
@@ -182,8 +191,8 @@ Authorization: Bearer <accessToken>
 | Parâmetro | Tipo | Padrão | Descrição |
 |-----------|------|--------|-----------|
 | `cursor` | string | — | Cursor para próxima página |
-| `limit` | number | 10 | Itens por página (máx 50) — `FEED_DEFAULT_LIMIT`/`FEED_MAX_LIMIT` em `src/lib/social/feed-algorithm.ts` |
-| `type` | string | Todos | `reading`, `text`, `all` |
+| `limit` | number | 10 | Itens por página (máx 50) — `FEED_DEFAULT_LIMIT`/`FEED_MAX_LIMIT` em `src/lib/social/feed-algorithm.ts`; fora da faixa 1–50 → 422 `VALIDATION_ERROR` |
+| `type` | string | — | **DEFERIDO — não implementado.** O filtro `reading`/`text`/`all` foi adiado por decisão do dono (registrada 2026-09-30/10-01); o `feedQuerySchema` (Zod) de `src/app/api/v1/social/feed/route.ts` só lê `cursor` e `limit`, então `?type=` é **ignorado** (não filtra) |
 
 ### Algoritmo do Feed
 
@@ -202,7 +211,9 @@ Cursor: base64url de {createdAt, id} = menor (createdAt, id) já lido
 (aproximação sobre o ranking — nunca repete nem pula candidatos).
 ```
 
-> **Cursor e envelope**: `decodeFeedCursor()` espera `{createdAt, id}` (o exemplo `eyJpZCI6MTIzfQ` acima = `{"id":123}` é o formato antigo/ilustrativo). A função `getFeed()` devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`/`pagination`) — o envelope `{ data, pagination }` de `docs/04-api/overview.md` §Paginação **é o vencedor fixado pelo S2-18/SC30** (a primeira rota social a existir, `GET /users/:username/{followers,following}` T044/T045 no Phase 1, já responde nele), logo a **T052 deve envolver** o retorno da lib em `{ data, pagination }` em vez de expor `{ posts, nextCursor }` cru. **Cursor inválido → contrato explícito**: `getFeed` devolve página **vazia** com `nextCursor: null` (nunca reinicia no topo — evitaria duplicar conteúdo em loop; review kieran N6).
+> **Cursor e envelope**: `decodeFeedCursor()` espera `{createdAt, id}` (o exemplo `eyJpZCI6MTIzfQ` acima = `{"id":123}` é o formato antigo/ilustrativo). A função `getFeed()` devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`/`pagination`) — o envelope `{ data, pagination }` de `docs/04-api/overview.md` §Paginação **é o vencedor fixado pelo S2-18/SC30** e a **T052 envolve sim o retorno da lib** (`{ data: page.posts, pagination: { nextCursor: page.nextCursor } }`) — **só `nextCursor` é emitido** (`null` no fim; `hasMore`/`limit`/`prevCursor` não existem na resposta real). **Cursor inválido → contrato explícito**: `getFeed` devolve página **vazia** com `nextCursor: null` (nunca reinicia no topo — evitaria duplicar conteúdo em loop; review kieran N6).
+>
+> **Headers**: a resposta sai sempre com `Cache-Control: private, no-store` + `Vary: Authorization` (feed é estritamente pessoal — nunca cache público). Os posts passam por `toPublicPost` (`src/lib/social/post-visibility.ts`): campos de predicado do autor (`isBanned`, `deletedAt`, `isActive`, `profile.privacy`) nunca saem na resposta (mesmo tratamento em trending/search — review Phase 2).
 
 ### Resposta — 200 OK
 
@@ -270,27 +281,36 @@ Cursor: base64url de {createdAt, id} = menor (createdAt, id) já lido
     }
   ],
   "pagination": {
-    "nextCursor": "eyJpZCI6MTAzfQ",
-    "hasMore": true,
-    "limit": 20
+    "nextCursor": "eyJpZCI6MTAzfQ"
   }
 }
 ```
+
+> **Shape real do item (T052)**: cada elemento de `data` é um `FeedPost` — a row de `Post` **flat** (`id`, `type`, `content`, `imageUrls`, `readingId`, `audience`, `commentsDisabled`, `likeCount`, `commentCount`, `isPinned`, `isHidden`, `createdAt`, …) + `author { id, name, displayName, avatar }` (`POST_INCLUDE` em `src/lib/social/feed-algorithm.ts`). Os objetos aninhados `content.{spreadName,cards,…}`, `stats` e `currentUserActions` do exemplo acima são o **contrato de produto aspiracional** e **não são emitidos hoje**; `likeCount`/`commentCount` vêm zerados na criação (S2-19 — os incrementos pertencem a T076/T077/T081).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` | Access token ausente/inválido (`requireAuth` — consultado **antes** de cache e algoritmo) |
+| 403 | `AUTH_ACCOUNT_SUSPENDED` | Conta suspensa (`requireAuth`) |
+| 422 | `VALIDATION_ERROR` | `limit` fora de 1–50 ou não-numérico (Zod) |
+| 500 | `INTERNAL_ERROR` | Falha no cache/algoritmo — sempre JSON, nunca HTML |
 
 ---
 
 ## GET /social/explore
 
-Explorar publicações populares e em destaque.
+> **RASCUNHO ADIADO / SUPERADO (2026-10-01)** — **esta rota `GET /social/explore` não existe** (`src/app/api/v1/social/explore/route.ts` não há — só os diretórios filhos). O que foi implementado na Sprint 2 Phase 2 (T053–T055) são **três rotas filhas** documentadas abaixo: `/social/explore/trending`, `/social/explore/hashtags` e `/social/explore/suggestions` (mais `GET /social/search`). A página **Explorar** (`src/app/(app)/explorar/page.tsx`, T126) continua **planejada** — hoje só existe `explorar/error.tsx`; o contrato offset+`category`+`period` abaixo ficou como registro do rascunho de produto e **não deve ser implementado sem decisão nova**.
 
-### Requisição
+### Requisição _(rascunho, não implementado)_
 
 ```http
 GET /api/v1/social/explore?page=1&limit=20&category=amor
 Authorization: Bearer <accessToken>
 ```
 
-### Parâmetros de Query
+### Parâmetros de Query _(rascunho, não implementado)_
 
 | Parâmetro | Tipo | Padrão | Descrição |
 |-----------|------|--------|-----------|
@@ -299,15 +319,205 @@ Authorization: Bearer <accessToken>
 | `category` | string | — | `amor`, `carreira`, `espiritual` |
 | `period` | string | `week` | `today`, `week`, `month`, `all` |
 
-### Resposta — 200 OK
+### Resposta — 200 OK _(rascunho, não implementado)_
 
 Mesmo formato do feed, sem `nextCursor` (usa offset).
 
 ---
 
+## GET /social/explore/trending
+
+Posts em alta — janela de **7 dias** (decisão do dono 2026-09-30), ordenados por `engagementScore = likeCount + commentCount×2` desc.
+
+> **Implementado (Sprint 2 Phase 2, T053)** em `src/app/api/v1/social/explore/trending/route.ts` (+ lib `src/lib/social/explore.ts` → `getTrendingPosts`).
+
+### Requisição
+
+```http
+GET /api/v1/social/explore/trending
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento
+
+1. `requireAuth` → 401/403.
+2. Candidatos: `audience='public'` + `isHidden=false` + autor não-banido/não-soft-deleted + `createdAt` nos últimos 7 dias; pré-seleção ordenada por `likeCount` com **cap de 100** (`TRENDING_CANDIDATE_CAP` — `engagementScore` não é expressível no `orderBy` do Prisma; aproximação documentada), rank exato em memória e corte em **20** (`TRENDING_LIMIT`).
+3. **Autores com `UserProfile.privacy.profileVisibility = "private"` são excluídos** (fail-closed — decisão do dono 2026-09-30).
+4. Headers `Cache-Control: private, no-store` + `Vary: Authorization`.
+
+### Resposta — 200 OK (envelope fixo — sem `pagination`)
+
+```json
+{
+  "data": {
+    "posts": [
+      {
+        "id": "post_abc123",
+        "type": "text",
+        "content": "Hoje fiz minha primeira leitura…",
+        "likeCount": 23,
+        "commentCount": 5,
+        "author": { "id": "usr_b2c3d4", "name": "Ana Costa", "displayName": "Ana", "avatar": null },
+        "createdAt": "2026-09-28T09:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 500 | `INTERNAL_ERROR` | Falha de DB — JSON, nunca HTML |
+
+---
+
+## GET /social/explore/hashtags
+
+Top 10 hashtags da semana — posts públicos da última semana com autor ativo.
+
+> **Implementado (Sprint 2 Phase 2, T054)** em `src/app/api/v1/social/explore/hashtags/route.ts` → `getTrendingHashtags` (`src/lib/social/explore.ts`).
+
+### Requisição
+
+```http
+GET /api/v1/social/explore/hashtags
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento
+
+Agrega `PostHashtag` de posts públicos/`isHidden=false`/autor ativo criados nos últimos 7 dias via `rankHashtags()`: conta por tag **descartando autores `private`**, ordena `count` desc com desempate alfabético e corta em **10** (`HASHTAG_LIMIT`). Tags são o lowercase canônico de `parseHashtags`.
+
+### Resposta — 200 OK
+
+```json
+{
+  "data": {
+    "hashtags": [
+      { "tag": "tarot", "count": 42 },
+      { "tag": "lenormand", "count": 17 }
+    ]
+  }
+}
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 500 | `INTERNAL_ERROR` | Falha de DB — JSON, nunca HTML |
+
+---
+
+## GET /social/explore/suggestions
+
+Perfis sugeridos para seguir.
+
+> **Implementado (Sprint 2 Phase 2, T055)** em `src/app/api/v1/social/explore/suggestions/route.ts` → `getExploreSuggestions(viewerId)`.
+
+### Requisição
+
+```http
+GET /api/v1/social/explore/suggestions
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento
+
+- Exclui no `where`: o próprio viewer, já-seguidos, `isBanned`, `isActive=false` e soft-deleted; depois filtra perfis `private` (fail-closed) em memória (pré-seleção `SUGGESTIONS_CANDIDATE_CAP = 200`).
+- Ordenação: **`UserRole.PROFESSIONAL` primeiro**, depois `followersCount` desc, depois `createdAt` desc (decisão do dono 2026-09-30), corte em **10** (`SUGGESTIONS_LIMIT`).
+- A privacy é lida **só para filtrar e nunca sai na resposta**.
+
+### Resposta — 200 OK
+
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": "usr_b2c3d4",
+        "name": "Ana Costa",
+        "username": "anatarot",
+        "avatar": null,
+        "role": "PROFESSIONAL",
+        "followersCount": 156
+      }
+    ]
+  }
+}
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 500 | `INTERNAL_ERROR` | Falha de DB — JSON, nunca HTML |
+
+---
+
+## GET /social/search
+
+Busca unificada (abas posts / usuários / hashtags) numa única chamada.
+
+> **Implementado (Sprint 2 Phase 2, T056)** em `src/app/api/v1/social/search/route.ts` → `searchSocial(viewerId, q)` (`src/lib/social/search.ts`).
+
+### Requisição
+
+```http
+GET /api/v1/social/search?q=amor
+Authorization: Bearer <accessToken>
+```
+
+### Parâmetros de Query
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `q` | string | Sim | Termo de busca — **mínimo 2, máximo 50 caracteres** (trim); fora da faixa → 422 `VALIDATION_ERROR` (mín. precedente do contrato `GET /users/search`; máx. precedente da lista de seguidores `GET /users/:id/follow-list`, `q ≤ 50`) |
+
+### Comportamento
+
+| Seção | Regra | Limite |
+|-------|-------|--------|
+| `posts` | `content` case-insensitive + **predicado S2-15** (público OU `followers` de quem o viewer segue; perfil `private` só para quem segue; `isHidden=false`, autor ativo) — ordenação por recência | 20 |
+| `users` | nome OU username case-insensitive, ativos/não-banidos/não-soft-deleted, perfis `private` excluídos — ordena por `followersCount` desc; item no shape das sugestões | 20 |
+| `hashtags` | `tag` lowercase em posts públicos com autor ativo — **sem janela de tempo** (diferente do trending), agregado por `rankHashtags` | 20 |
+
+Headers `Cache-Control: private, no-store` + `Vary: Authorization`.
+
+> **Implementação (review 2026-10-01, W4–W8)**: os `posts` são buscados em **lotes keyset** (`orderBy [{createdAt desc},{id desc}]` + `cursor/skip:1`, `take = SEARCH_LIMIT` por lote) porque o predicado de perfil `private` é aplicado **pós-fetch** — um `take: 20` único devolveria páginas curtas quando havia privados entre os 20 primeiros. As `hashtags` usam `take = SEARCH_LIMIT * 10` (headroom: `rankHashtags` descarta autores privados **sem** repor). Não voltar para um `take` único sem repor essas duas invariantes.
+
+### Resposta — 200 OK
+
+```json
+{
+  "data": {
+    "posts": [ { "id": "post_abc123", "type": "text", "content": "…", "author": { "id": "usr_b2c3d4", "name": "Ana Costa" } } ],
+    "users": [ { "id": "usr_e5f6g7", "name": "Pedro Luz", "username": "pedroluz", "avatar": null, "role": "USER", "followersCount": 12 } ],
+    "hashtags": [ { "tag": "tarot", "count": 42 } ]
+  }
+}
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 422 | `VALIDATION_ERROR` | `q` ausente, com menos de 2 ou mais de 50 caracteres (`details` por campo) |
+| 500 | `INTERNAL_ERROR` | Falha de DB — JSON, nunca HTML |
+
+---
+
 ## POST /social/posts
 
-Criar uma nova publicação (texto ou compartilhar tiragem).
+Criar uma nova publicação (texto, imagem ou compartilhar tiragem).
+
+> **Implementado (Sprint 2 Phase 2, T051)** em `src/app/api/v1/social/posts/route.ts` (Zod `createPostSchema` de `src/lib/validators/social.ts`).
 
 ### Requisição
 
@@ -315,27 +525,45 @@ Criar uma nova publicação (texto ou compartilhar tiragem).
 POST /api/v1/social/posts
 Authorization: Bearer <accessToken>
 Content-Type: application/json
+x-csrf-token: <csrf-token>
 ```
 
 ```json
 {
   "type": "reading",
+  "content": "Acabei de fazer uma leitura sobre meu futuro profissional. O que vocês acham dessas cartas?",
   "readingId": "rdg_x1y2z3",
-  "text": "Acabei de fazer uma leitura sobre meu futuro profissional. O que vocês acham dessas cartas?",
-  "audience": "public"
+  "audience": "public",
+  "commentsDisabled": false
 }
 ```
+
+### Comportamento (ordem exata do handler)
+
+1. **CSRF** — `enforceCsrf(request, reqId)` no topo → 403 `CSRF_TOKEN_INVALID` **sem** `rate.headers` (mesmo padrão de `POST /social/follow/:userId`).
+2. **`requireAuth`** → 401 `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED`.
+3. Corpo JSON + **Zod** (`createPostSchema`) → 422 `VALIDATION_ERROR` com `details[]` por campo — **antes** do rate limit.
+4. Lookup do tier do viewer (`User.subscriptionTier`) → `enforceSocialLimit({ limit: "post", tier })` = **10/dia FREE / 50/dia PLUS** (S2-10, janela UTC) → 429 `RATE_LIMITED`.
+5. Chave das imagens: cada `imageUrls[i]` **deve** casar exatamente o formato emitido pelo presign T064 — `posts/{userId}/{ts}-{i}.{jpg|png|webp}` (S2-12; `ts` em epoch-ms, `i` ∈ 0–3) — prefixo sozinho, traversal (`..`) ou extensão fora do conjunto → 422 (review Phase 2: `startsWith` aceitava `posts/{userId}/../…`).
+6. **Moderação** (`checkContent`, `src/lib/moderation.ts`; decisão do dono 2026-09-30/CHK011): conteúdo flaggado → **403 `CONTENT_BLOCKED` com `details.flaggedWords`**.
+7. `type=reading`: `Reading.userId` precisa ser do viewer → senão 403 `READING_ACCESS_DENIED` (uniforme, anti-oráculo).
+8. **1 `$transaction`**: `earnVersos(viewer, Reading)` **antes** de criar (só para `type=reading`; retorno `null` = sem `UserProfile` → lança e aborta a tx, padrão K2) → `post.create` → `postHashtag.createMany` (`parseHashtags`, dedupe case-insensitive) da mesma transação.
+9. **Contadores intocados**: a criação **não** escreve `likeCount`/`commentCount` (defaults 0) — incrementos pertencem a **T076/T077/T081** (S2-19).
+10. Emit `post:new` (rooms dos seguidores) fica para **T088** — não implementado nesta fase.
+11. **Analytics** (T136 no-op server-side até deploy, mesmo estado do follow): `trackPostCreate(type, hasImages)` após a tx e `trackPostLimitHit(tier, limit)` quando o 429 diário dispara.
 
 ### Validação
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
 | `type` | string | Sim | `text`, `image`, `reading` |
-| `readingId` | string | Se type=`reading` | Tiragem do usuário |
-| `text` | string | Se type=`text` | 1–500 caracteres |
+| `content` | string | Sim se `type=text` | **1–500** caracteres, **não pode ser só espaços em branco** (`type=text`); ≤300 (`type=image`); ≤200 (`type=reading`); vazio/whitespace rejeitado nos demais tipos (`MAX_CONTENT_BY_TYPE` em `src/lib/validators/social.ts`) |
+| `imageUrls` | string[] | Sim se `type=image` | 1–4 chaves (S2-12) no formato exato do presign `posts/{userId}/{ts}-{i}.{jpg|png|webp}`; só aceitas em `type=image` |
+| `readingId` | string | Sim se `type=reading` | Tiragem do usuário — `readingId` só existe em `type=reading` |
 | `audience` | string | Não | `public` (padrão) ou `followers` |
+| `commentsDisabled` | boolean | Não | Default `false` |
 
-> **Mapeamento para o schema real (Sprint 2 Phase 0 — `prisma/schema.prisma`)**: `text` → coluna `content`; `audience` → coluna `audience` (default `public`); `type` também aceita `image`, com as imagens em `imageUrls String[]`. Contagens vivem em `likeCount`/`commentCount` (denormalizadas).
+> **Campo de texto é `content` (não `text`)**: o request usa `content` (Zod) que **vai direto para a coluna `Post.content`** — o antigo contrato com campo `text` + "mapeamento para o schema real" foi removido porque o schema real é o contrato. `audience` → coluna `audience`; `type` também aceita `image` com as imagens em `imageUrls String[]`.
 
 ### Resposta — 201 Created
 
@@ -345,17 +573,18 @@ Content-Type: application/json
     "post": {
       "id": "post_ghi789",
       "type": "reading",
-      "author": {
-        "id": "usr_a1b2c3d4",
-        "name": "Maria Silva",
-        "username": "mariatarot"
-      },
-      "content": {
-        "readingId": "rdg_x1y2z3",
-        "text": "Acabei de fazer uma leitura..."
-      },
-      "stats": { "likes": 0, "comments": 0, "gifts": 0 },
-      "createdAt": "2025-01-15T10:30:00Z"
+      "content": "Acabei de fazer uma leitura sobre meu futuro profissional…",
+      "imageUrls": [],
+      "readingId": "rdg_x1y2z3",
+      "audience": "public",
+      "commentsDisabled": false,
+      "likeCount": 0,
+      "commentCount": 0,
+      "isHidden": false,
+      "isPinned": false,
+      "authorId": "usr_a1b2c3d4",
+      "createdAt": "2026-10-01T10:30:00Z",
+      "author": { "id": "usr_a1b2c3d4", "name": "Maria Silva", "displayName": null, "avatar": null }
     }
   }
 }
@@ -365,14 +594,195 @@ Content-Type: application/json
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
-| 400 | `VALIDATION_ERROR` | Dados inválidos |
-| 403 | `READING_ACCESS_DENIED` | Tiragem não é do usuário |
+| 403 | `CSRF_TOKEN_INVALID` | `enforceCsrf` rejeitou cookie/header — etapa 1, **antes** do rate limit, sem `rate.headers` |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | Falha do `requireAuth` (etapa 2, antes do rate limit — sem `rate.headers`) |
+| 422 | `VALIDATION_ERROR` | Corpo não-JSON, schema inválido (limite de caracteres por tipo, `imageUrls` fora do padrão/outro usuário, `readingId` em tipo errado) — `details[]` por campo |
+| 429 | `RATE_LIMITED` | Limite diário de posts (10 FREE / 50 PLUS) — `details: { limit: "post", resetAt, retryAfter }` + headers `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`Retry-After` (SC33) |
+| 403 | `CONTENT_BLOCKED` | Moderação bloqueou o conteúdo — `details.flaggedWords` (CHK011) |
+| 403 | `READING_ACCESS_DENIED` | Tiragem inexistente ou não é do usuário (uniforme — não distingue os dois casos) |
+| 500 | `INTERNAL_ERROR` | Falha de DB na transação — JSON com `rate.headers`, nunca HTML |
+
+---
+
+## GET /social/posts/:id
+
+Detalhe de um post: o post + preview de comentários (raízes com respostas aninhadas 1 nível).
+
+> **Implementado (Sprint 2 Phase 2, T057)** em `src/app/api/v1/social/posts/[id]/route.ts` — predicado de visibilidade compartilhado com o og-image em `src/lib/social/post-visibility.ts` (`canViewPost`, CHK006).
+
+### Requisição
+
+```http
+GET /api/v1/social/posts/post_abc123
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento
+
+1. `requireAuth` → 401/403.
+2. `post.findUnique` com `author` (`POST_DETAIL_AUTHOR_SELECT`) e `comments` (raízes `parentCommentId: null`, **autores banidos/soft-deleted excluídos** — mesma regra LGPD do predicado do post, review Phase 2, `createdAt desc`, **lote 10**) + `replies` (lote 10, mesmo filtro de autor, mais recentes primeiro — aninhamento de **1 nível**, SC11; mesmo default do endpoint dedicado de comentários T078/RF-SOC-005).
+3. **`canViewPost(post, viewerId)`** — responde **404 `POST_NOT_FOUND` uniforme** (anti-timing; nunca revela qual caso) quando:
+   - o post não existe;
+   - `isHidden` (moderação);
+   - autor banido, soft-deleted ou **inativo**;
+   - `audience = "followers"` e o viewer **não** segue o autor;
+   - perfil do autor `profileVisibility = "private"` e o viewer **não** segue o autor.
+   **Exceção**: o **autor vê o próprio post** sem depender de follow (branch do dono não consulta a tabela de follow) — os checks de `isHidden`/banido/inativo acima **continuam valendo para o próprio autor** (autor de post oculto/banido não vê).
+
+### Resposta — 200 OK
+
+```json
+{
+  "data": {
+    "post": {
+      "id": "post_abc123",
+      "type": "text",
+      "content": "Hoje fiz minha primeira leitura…",
+      "audience": "public",
+      "commentsDisabled": false,
+      "likeCount": 23,
+      "commentCount": 5,
+      "createdAt": "2026-09-28T09:00:00Z",
+      "author": { "id": "usr_b2c3d4", "name": "Ana Costa", "displayName": "Ana", "avatar": null }
+    },
+    "comments": [
+      {
+        "id": "cmt_xyz789",
+        "text": "Que bela leitura!",
+        "author": { "id": "usr_a1b2c3d4", "name": "Maria Silva", "displayName": null, "avatar": null },
+        "createdAt": "2026-09-28T10:35:00Z",
+        "replies": [
+          {
+            "id": "cmt_rst001",
+            "text": "Concordo!",
+            "author": { "id": "usr_e5f6g7", "name": "Pedro Luz", "displayName": null, "avatar": null },
+            "createdAt": "2026-09-28T10:40:00Z"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> `comments` sai **de dentro** de `data` (junto com `post`) para não duplicar o payload; **não há paginação nesta rota** — é o preview de 10/10; a listagem paginada completa é `GET /social/posts/:id/comments` (T078, planejado).
+>
+> **Headers e projeção (review Phase 2)**: sucesso e erros saem com `Cache-Control: private, no-store` + `Vary: Authorization` (o post pode ser gated). O `post` da resposta passa por `toPublicPost` (`src/lib/social/post-visibility.ts`) — campos de predicado do autor (`isBanned`, `deletedAt`, `isActive`, `profile.privacy`) **nunca saem na resposta** (mesmo princípio do Explore).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 401 | `AUTH_TOKEN_INVALID` / 403 `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 404 | `POST_NOT_FOUND` | **Uniforme** para os 5 casos de invisibilidade acima (anti-timing — Q28) |
+| 500 | `INTERNAL_ERROR` | Falha de DB — JSON, nunca HTML |
+
+---
+
+## GET /social/posts/:id/og-image
+
+OG image (PNG 1200×630) para preview de compartilhamento.
+
+> **Implementado (Sprint 2 Phase 2, T058)** em `src/app/api/v1/social/posts/[id]/og-image/route.ts` — gera via `generatePostOgImage` (`src/lib/og-image.ts`, T029) e usa o **mesmo predicado** `canViewPost`/`postIsGated` do detalhe (CHK006).
+
+### Requisição
+
+```http
+GET /api/v1/social/posts/post_abc123/og-image
+# Bearer opcional (optionalAuth) — crawlers de preview chegam sem token
+```
+
+### Comportamento
+
+| Viewer | Post público | Post gated (`followers` ou perfil `private`) |
+|--------|--------------|-----------------------------------------------|
+| **Anônimo** (crawler) | 200 `image/png`, `Cache-Control: public, max-age=3600, s-maxage=86400` | **404 `POST_NOT_FOUND`** (CHK005 — OG de conteúdo restrito não é buscável por terceiros) |
+| **Autenticado sem follow** | 200 PNG público | **404 `POST_NOT_FOUND`** |
+| **Seguidor (ou o próprio autor)** | 200 PNG | 200 PNG, `Cache-Control: private, no-store` |
+
+- **Cache no 200** (review 2026-10-01): público sai **sem** `Vary: Authorization` (resposta idêntica com ou sem token — o Vary só fragmentaria o cache do CDN por sessão); gated sai `Cache-Control: private, no-store`. **Erros 404/500** saem com `Cache-Control: private, no-store` + `Vary: Authorization` (nunca cacheável — mesmo padrão do detalhe do post).
+- `optionalAuth`: token inválido/ausente → `viewerId = null` (nunca 401 nesta rota).
+- 404 é **uniforme** para inexistente/`isHidden`/autor banido (mesmos casos do detalhe).
+
+### Resposta — 200 OK
+
+`Content-Type: image/png` + `Content-Length`; corpo = bytes do PNG (não JSON).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 404 | `POST_NOT_FOUND` | Post gated/oculto/inexistente para este viewer (uniforme) |
+| 500 | `INTERNAL_ERROR` | Falha do generator (`generatePostOgImage`) — JSON, nunca HTML |
+
+---
+
+## POST /social/posts/images/presign
+
+Presign de imagens de post para PUT direto no R2.
+
+> **Implementado (Sprint 2 Phase 2, T064)** em `src/app/api/v1/social/posts/images/presign/route.ts` (Zod `postImagesPresignSchema` de `src/lib/validators/social.ts`; reutiliza `generatePresignedUrl` de `src/lib/r2.ts`, mesmo padrão do presign de avatar).
+
+### Requisição
+
+```http
+POST /api/v1/social/posts/images/presign
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+x-csrf-token: <csrf-token>
+```
+
+```json
+{
+  "images": [{ "contentType": "image/jpeg" }, { "contentType": "image/png" }]
+}
+```
+
+### Comportamento (ordem exata do handler)
+
+1. **CSRF** (`enforceCsrf`) → 403 `CSRF_TOKEN_INVALID` sem `rate.headers`.
+2. **`requireAuth`** → 401/403.
+3. Corpo JSON + Zod: `images` 1–4, `contentType` ∈ `image/jpeg` \| `image/png` \| `image/webp` → 422 `VALIDATION_ERROR` com `details[]`.
+4. **Tamanho**: **não** é checado no presign (review 2026-10-01 C2 — o `Content-Length` deste request é o do **JSON**, não da imagem; o check antigo era morto). O guard de 5MB é do PUT autorizado pela assinatura; **pendência S2-12**: verificação HEAD pós-PUT (decisão do dono).
+5. **Rate limit** `upload` = **20/dia** (S2-10) → 429 `RATE_LIMITED` com `rate.headers`.
+6. Gera uma URL por imagem com key `posts/{userId}/{ts}-{i}.{ext}` (`image/jpeg` → `jpg`; ext canônico por MIME — `EXT_BY_TYPE` em `src/lib/validators/social.ts`, single source), expiração **300s** (CHK014).
+
+> **Fluxo S2-12**: o cliente faz o **PUT direto ao R2** com a `uploadUrl` e depois envia as `key`s em `POST /social/posts` (`imageUrls`, chave no formato `posts/{userId}/{ts}-{i}.{ext}` validada lá). **Os bytes não são revalidados após o PUT** (decisão S2-12 — sem re-baixar) e o presign **não** mede o tamanho (ver item 4) — **limitação conhecida**: sem re-validação autoritativa server-side do bytes efetivamente publicado; o cliente valida ≤5MB antes do upload. **Pendência de decisão do dono** (revisão Phase 2): mecanismo de verificação pós-PUT (ex.: HEAD/GET no R2) ou aceite explícito da limitação.
+>
+> **Exibição da imagem**: a `key` guardada em `Post.imageUrls` é resolvida para URL pública no client por `src/components/social/post-card.tsx` via `getR2PublicUrl()` de **`src/lib/r2-public-url.ts`** (env `NEXT_PUBLIC_R2_PUBLIC_URL`, fallback `https://r2.arkanaagora.com` — single source server/client; `src/lib/r2.ts` reexporta a mesma base; fusão de 2026-10-01; ver `docs/environments.md`).
+
+### Resposta — 200 OK
+
+Envelope **top-level** `{ uploads }` (mesmo shape do presign de avatar — **sem** wrapper `data`):
+
+```json
+{
+  "uploads": [
+    { "uploadUrl": "https://<bucket>.r2.cloudflarestorage.com/posts/usr_a1b2c3d4/1727781000000-0.jpg?X-Amz-…", "key": "posts/usr_a1b2c3d4/1727781000000-0.jpg" },
+    { "uploadUrl": "https://<bucket>.r2.cloudflarestorage.com/posts/usr_a1b2c3d4/1727781000000-1.png?X-Amz-…", "key": "posts/usr_a1b2c3d4/1727781000000-1.png" }
+  ]
+}
+```
+
+Sempre com `X-RateLimit-Limit`/`X-RateLimit-Remaining` (`rate.headers`).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | `enforceCsrf` — etapa 1, antes do rate limit, sem `rate.headers` |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 422 | `VALIDATION_ERROR` | Corpo não-JSON; lista vazia; **mais de 4 imagens**; `contentType` fora de jpeg/png/webp — `details[]` por campo |
+| 429 | `RATE_LIMITED` | Limite de upload 20/dia — `details: { limit: "upload", resetAt, retryAfter }` + `rate.headers` |
+| 500 | `INTERNAL_ERROR` | Falha ao gerar a URL assinada (R2) — JSON com `rate.headers`, nunca HTML |
 
 ---
 
 ## DELETE /social/posts/:id
 
 Remove uma publicação.
+
+> **Planejado — rota não existe** (`src/app/api/v1/social/posts/[id]/route.ts` só tem o `GET` de detalhe; nenhuma rota `DELETE` em `src/app/api/v1/social/`).
 
 ### Requisição
 
@@ -393,6 +803,8 @@ Authorization: Bearer <accessToken>
 ## POST /social/posts/:id/like
 
 Curtir (ou descurtir) uma publicação.
+
+> **Planejado (T076) — rota não existe.** Até lá o `PostCard` (`src/components/social/post-card.tsx`) renderiza o botão de like com `aria-disabled` (placeholder até T076/T077) e `likeCount`/`commentCount` nascem em **0** na criação (S2-19 — os incrementos pertencem a T076/T077/T081).
 
 ### Requisição
 
@@ -422,6 +834,8 @@ Authorization: Bearer <accessToken>
 ## POST /social/posts/:id/comments
 
 Comentar em uma publicação.
+
+> **Planejado (T077) — rota não existe.** O preview de comentários já vem embutido em `GET /social/posts/:id` (raízes + 1 nível, lote 10).
 
 ### Requisição
 
@@ -473,6 +887,8 @@ Content-Type: application/json
 
 Lista comentários de uma publicação.
 
+> **Planejado (T078) — rota não existe.** ⚠️ **Divergência de contrato**: o plano T078 prevê resposta **cursor-based com lote default 10**; o exemplo abaixo (offset `page`/`totalItems`) é o rascunho antigo deste documento — alinhar ao envelope S2-18 `{ data, pagination: { nextCursor } }` na implementação.
+
 ### Requisição
 
 ```http
@@ -517,6 +933,8 @@ GET /api/v1/social/posts/post_abc123/comments?page=1&limit=20
 ## POST /social/gifts
 
 Enviar um presente virtual a um usuário.
+
+> **Planejado (T120) — rota não existe** (divergências de rota/body/model listadas em "Divergências contrato ↔ código" abaixo).
 
 ### Requisição
 
@@ -588,6 +1006,8 @@ Content-Type: application/json
 
 Lista notificações do usuário.
 
+> **Planejado (T082) — rota não existe** (Phase 6). A Phase 2 (2026-10-01) entregou posts/feed/explore/search, não notifications.
+
 ### Requisição
 
 ```http
@@ -658,13 +1078,15 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-> **Contrato × hook (divergência conhecida, review Step 5; nota atualizada no Phase 1, 2026-09-28)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md` e **é o vencedor fixado pelo S2-18/SC30** — a primeira rota social existente (`GET /users/:username/{followers,following}`, T044/T045) já responde nele. O T082 do plano ainda especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) porque **a rota de notificações continua inexistente** (Phase 6/T082 — a Phase 1 entregou follow, não notifications); quando T082 chegar, entregar no envelope e **estreitar o hook** (union pode ser removida). `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`).
+> **Contrato × hook (divergência conhecida, review Step 5; nota atualizada no Phase 1, 2026-09-28)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md` e **é o vencedor fixado pelo S2-18/SC30** — a primeira rota social existente (`GET /users/:username/{followers,following}`, T044/T045) já responde nele. O T082 do plano ainda especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) porque **a rota de notificações continua inexistente** (Phase 6/T082 — a Phase 1 entregou follow e a Phase 2 posts/feed, não notifications); quando T082 chegar, entregar no envelope e **estreitar o hook** (union pode ser removida). `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`).
 
 ---
 
 ## PATCH /social/notifications/read
 
 Marca notificações como lidas.
+
+> **Planejado — rota não existe.** ⚠️ **Divergência de contrato**: o plano prevê **duas rotas** — `PATCH /social/notifications/:id/read` (T083) e `PATCH /social/notifications/read-all` (T084) — enquanto este documento documenta **uma** rota `PATCH /social/notifications/read` com `{ notificationIds, readAll }`. Resolver na Phase 6 antes de implementar.
 
 ### Requisição
 

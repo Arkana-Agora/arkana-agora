@@ -143,7 +143,7 @@ AI_MODEL_FOLLOWUP=gpt-4o-mini
 # Horóscopos (T097/T098 — geração via IA)
 AI_HOROSCOPE_API_KEY=
 AI_HOROSCOPE_MODEL=gpt-4o-mini
-# Moderação de posts/comentários (T025 — consumidor: src/lib/moderation.ts checkContent(); ainda não chamado por nenhuma rota — T129; palavras separadas por vírgula)
+# Moderação de posts/comentários (T025 — consumidor: src/lib/moderation.ts checkContent(); 1º consumidor de rota desde a Phase 2/T051 — POST /social/posts → 403 CONTENT_BLOCKED; escopo restante T129; palavras separadas por vírgula)
 MODERATION_BLOCKED_WORDS=
 # Sharp (libvips global ignorada — usado em upload de imagens)
 SHARP_IGNORE_GLOBAL_LIBVIPS=
@@ -171,7 +171,7 @@ R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=
-R2_PUBLIC_URL=https://your-r2-bucket-name.r2.cloudflarestorage.com
+NEXT_PUBLIC_R2_PUBLIC_URL=https://assets.arkanaagora.com.br
 ```
 
 ---
@@ -262,14 +262,14 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `R2_ACCESS_KEY_ID` | *Access Key ID da R2* | Production | Chave de acesso da R2 |
 | `R2_SECRET_ACCESS_KEY` | *Access Key Secret da R2* | Production | Segredo da chave de acesso da R2 |
 | `R2_BUCKET_NAME` | *Nome do bucket da R2* | Production | Nome do bucket na R2 — lido por `src/lib/r2.ts`/`src/lib/env.ts` (não existe `R2_BUCKET`) |
-| `R2_PUBLIC_URL` | `https://` | Production | URL pública do bucket (ex: `https://your-bucket.r2.dev` se custom domain) |
+| `NEXT_PUBLIC_R2_PUBLIC_URL` | `https://assets.arkanaagora.com.br` | Production | URL pública dos assets R2 — **mesma var para server e client** (fusão 2026-10-01; antes eram `R2_PUBLIC_URL` + `NEXT_PUBLIC_R2_PUBLIC_URL`): validada em `src/lib/env.ts`; single source **`src/lib/r2-public-url.ts`** (`getR2PublicUrl()`/`r2KeyFromPublicUrl()` — review 2026-10-01, W4–W8; `src/lib/r2.ts` só reexporta), consumida server-side por avatar confirm/delete e client-side por `post-card.tsx`, que transforma chaves R2 (`posts/{userId}/…`) em URLs exibíveis; vazio/ausente → fallback `https://r2.arkanaagora.com` |
 | `AI_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
 | `AI_MODEL` | *Modelo OpenAI* | Production | Modelo de interpretacao (default: gpt-4o) |
 | `AI_MODEL_FOLLOWUP` | *Modelo OpenAI follow-up* | Production | Modelo de follow-up (default: gpt-4o-mini) |
 | `SOCKET_PORT` | `3003` | Production | Porta do mini-service Socket.io (Sprint 2 — `src/lib/env.ts`, default 3003; **serviço ainda não scaffoldado** — T066) |
 | `AI_HOROSCOPE_API_KEY` | *Chave dedicada* | Production | Opcional — chave separada p/ geração de horóscopos (Sprint 2; **sem consumidor até as fases 5/6** do plano) |
 | `AI_HOROSCOPE_MODEL` | `gpt-4o-mini` | Production | Modelo da geração de horóscopos (idem — pendente de T097/T098) |
-| `MODERATION_BLOCKED_WORDS` | *palavra1,palavra2* | Production | Palavras bloqueadas da moderação de posts/comentários (Sprint 2 T025 — declarada em `src/lib/env.ts`, consumida por `src/lib/moderation.ts` `checkContent()` desde o Phase 0.5; **nenhuma rota aplica o filtro ainda** — T129) |
+| `MODERATION_BLOCKED_WORDS` | *palavra1,palavra2* | Production | Palavras bloqueadas da moderação de posts/comentários (Sprint 2 T025 — declarada em `src/lib/env.ts`, consumida por `src/lib/moderation.ts` `checkContent()` desde o Phase 0.5; **primeiro consumidor de rota desde o Sprint 2 Phase 2 (2026-10-01)**: `POST /api/v1/social/posts` (T051) responde **403 `CONTENT_BLOCKED`** com `details.flaggedWords`; escopo restante de T129 pendente) |
 | `SHARP_IGNORE_GLOBAL_LIBVIPS` | `true` \| `false` | Production | Flag do Sharp para upload de imagens (Sprint 2 — `src/lib/env.ts`) |
 | `MP_ACCESS_TOKEN` | *Token Mercado Pago* | Production | Token de acesso do Mercado Pago |
 | `MP_WEBHOOK_URL` | *URL do webhook Mercado Pago* | Production | URL de callback do webhook |

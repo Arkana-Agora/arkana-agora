@@ -1,7 +1,7 @@
 # Integrations — Arkana Agora
 
 > Canonical catalog of the external systems and contracts Arkana Agora depends on.
-> **Status: only the Auth.js v5 login layer is shipped.** The repo (Next.js 16 at root) ships the Auth.js v5 login layer (Google OAuth + magic link via `EmailProvider`, ADR-010) at `/api/auth/*`; no OpenAI, Mercado Pago, SMTP, Redis, or R2 code exists — those entries below are the **documented design** (referenced to the pt-BR SDD). Secondary source of truth for each is listed in the "Contract" column.
+> **Status: shipped = Auth.js v5 login layer + Cloudflare R2 storage + email delivery + Redis + OpenAI client; payments/queues/alerting are design-only.** The repo (Next.js 16 at root) ships the Auth.js v5 login layer (Google OAuth + magic link via `EmailProvider`, ADR-010) at `/api/auth/*`, **Cloudflare R2** storage code (`src/lib/r2.ts`: avatar presign/confirm/delete since Sprint 1; post-image presign `POST /api/v1/social/posts/images/presign` since Sprint 2 Phase 2), email (`src/lib/email/email.ts` — Resend; magic link via Auth.js `EmailProvider`), Redis (`src/lib/redis.ts`) and the OpenAI client (`src/lib/ai/client.ts` behind `POST /api/v1/ai/*`). **Not shipped** — the entries below for Mercado Pago (no `payments`/`webhooks` route today), BullMQ and PagerDuty/Slack are the **documented design** (referenced to the pt-BR SDD). Secondary source of truth for each is listed in the "Contract" column.
 
 ## Integration Catalog
 

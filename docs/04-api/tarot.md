@@ -271,7 +271,7 @@ Content-Type: application/json
 | `deckId` | string | Não | Baralho (padrão: Rider-Waite) |
 | `mood` | string | Não | `geral`, `amor`, `carreira`, `saude`, `espiritual` |
 | `question` | string | Não | Pergunta do usuário (máx 300 chars) |
-| `isPublic` | boolean | Não | Compartilhar no feed (padrão: `false`) |
+| `isPublic` | boolean | Não | Compartilhar no feed (padrão: `false`) — ⚠️ ainda **sem efeito no feed** (só controla visibilidade/OG da tiragem; ver Comportamento item 5) |
 | `shuffleSeed` | number | Não | Semente para baralho determinístico |
 
 ### Comportamento
@@ -280,7 +280,7 @@ Content-Type: application/json
 2. Verifica rate limit de AI (se solicitada)
 3. Embaralha e seleciona cartas (sem repetição)
 4. Salva a tiragem no banco
-5. Se `isPublic`, publica no feed social
+5. Se `isPublic`, publica no feed social — ⚠️ **não implementado** (o `POST /api/v1/readings` de `src/app/api/v1/readings/route.ts` só persiste `Reading.isPublic`; **não cria `Post`**). O feed social só recebe posts criados por `POST /api/v1/social/posts` (Sprint 2 Phase 2); publicar tiragem no feed fica para a integração posterior (ver `docs/04-api/social.md` §POST /social/posts — campo `readingId`)
 
 ### Resposta — 201 Created
 

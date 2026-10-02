@@ -118,9 +118,14 @@ As rotas de API seguem o padrão RESTful:
 | `GET` | `/api/v1/readings` | Listar leituras do usuário |
 | `POST` | `/api/v1/readings` | Criar nova leitura |
 | `GET` | `/api/v1/readings/[id]` | Buscar leitura específica |
-| `GET` | `/api/v1/feed` | Feed social do usuário |
-| `POST` | `/api/v1/posts` | Criar postagem |
-| `POST` | `/api/v1/follows` | Seguir usuário |
+| `GET` | `/api/v1/social/feed` | Feed social do usuário — **implementada (T052)** |
+| `POST` | `/api/v1/social/posts` | Criar postagem — **implementada (T051)** |
+| `POST` | `/api/v1/social/follow/:userId` | Seguir usuário — **implementada (T043, Phase 1)** |
+| `GET` | `/api/v1/social/explore/{trending,hashtags,suggestions}` | Explore — **implementada (T053–T055)** |
+| `GET` | `/api/v1/social/search` | Busca social (posts/users/hashtags) — **implementada (T056)** |
+| `GET` | `/api/v1/social/posts/:id` | Detalhe do post — **implementada (T057)** |
+| `GET` | `/api/v1/social/posts/:id/og-image` | Imagem OG do post (`optionalAuth`) — **implementada (T058)** |
+| `POST` | `/api/v1/social/posts/images/presign` | Presign de imagens de post (R2) — **implementada (T064)** |
 | `GET` | `/api/v1/marketplace/products` | Listar produtos |
 | `POST` | `/api/v1/payments/create` | Criar pagamento |
 | `POST` | `/api/v1/webhooks/mercadopago` | Webhook Mercado Pago |

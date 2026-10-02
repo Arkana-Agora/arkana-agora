@@ -125,6 +125,8 @@ async function onNewPost(userId: string) {
 }
 ```
 
+> **⚠️ Exemplo ilustrativo, não é o que existe em produção (review 2026-10-01, W4–W8).** O feed real é cacheado por `src/lib/feed-cache.ts` + cron `src/jobs/feed-cache-refresh.ts` (`GET /api/cron/feed-cache-refresh`, `0 0 * * *`, SC34): o hit serve a **página materializada completa** (não recortada no `limit` — cortar reencodava o cursor pelo último do ranking e duplicava/pulava posts), **não há invalidação wildcard** por novo post (`POST /api/v1/social/posts` chama `refreshFeedCache(authorId)` para reconstruir só a página do autor) e o TTL é gerenciado pela lib, não por `EX 60`. Antes de copiar o padrão acima, leia `docs/04-api/social.md` §GET /social/feed.
+
 ### 3.4 Cache L3 — CDN (Cloudflare)
 
 **Usado para**: Imagens de cartas, assets estáticos, CSS/JS

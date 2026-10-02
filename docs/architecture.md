@@ -70,7 +70,7 @@ src/
 └── types/          # domain contracts
 ```
 
-**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, `/api/feed`, `/api/posts`, `/api/follows`, `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming routes **implementados**: `POST /api/v1/ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret` (`docs/04-api/ai.md` §Status das rotas; `POST /api/v1/ai/reading/stream` é design legado — rota não existe).
+**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, social under `/api/v1/social/*` (`posts`, `feed`, `follow/:userId`, `explore/{trending,hashtags,suggestions}`, `search`, `posts/:id`, `posts/:id/og-image`, `posts/images/presign` — Sprint 2 Phase 1/2; contrato em `docs/04-api/social.md`), `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming routes **implementados**: `POST /api/v1/ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret` (`docs/04-api/ai.md` §Status das rotas; `POST /api/v1/ai/reading/stream` é design legado — rota não existe).
 
 ### Mini-services (separate ports)
 
