@@ -1,12 +1,18 @@
 import { prisma } from "@/lib/prisma"
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
+import { enforceCsrf } from "@/lib/middleware/csrf"
 import { deleteObject } from "@/lib/r2"
+import { r2KeyFromPublicUrl } from "@/lib/r2-public-url"
 
 export const dynamic = "force-dynamic"
 
 export async function DELETE(request: Request): Promise<Response> {
   const reqId = newReqId()
+
+  const csrfError = enforceCsrf(request, reqId)
+  if (csrfError) return csrfError
+
   const auth = await requireAuth(request, reqId)
   if (auth instanceof Response) return auth
 
@@ -17,10 +23,7 @@ export async function DELETE(request: Request): Promise<Response> {
     })
 
     if (user?.avatar) {
-      const key = user.avatar.replace(
-        `${process.env.R2_PUBLIC_URL ?? "https://r2.arkanaagora.com"}/`,
-        "",
-      )
+      const key = r2KeyFromPublicUrl(user.avatar)
       try {
         await deleteObject(key)
       } catch (err) {

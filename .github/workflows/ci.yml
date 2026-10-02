@@ -68,6 +68,8 @@ jobs:
       # modelados pelo schema.prisma — um drop manual de constraint deixa o
       # diff verde. Assertion SQL cobre as constraints escritas à mão.
       - run: bunx prisma db execute --file prisma/ci/assert-integrity.sql
+      # Generate Prisma Client for tests (required after migrations)
+      - run: bunx prisma generate
       - run: bun run test:coverage
       - uses: codecov/codecov-action@v5
         with:

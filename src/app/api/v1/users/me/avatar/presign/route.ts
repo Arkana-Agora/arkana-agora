@@ -1,5 +1,7 @@
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
+import { enforceCsrf } from "@/lib/middleware/csrf"
+import { enforceSocialLimit } from "@/lib/middleware/rate-limit"
 import { generatePresignedUrl } from "@/lib/r2"
 import { avatarPresignSchema } from "@/lib/validators/profile"
 
@@ -7,6 +9,10 @@ export const dynamic = "force-dynamic"
 
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
+
+  const csrfError = enforceCsrf(request, reqId)
+  if (csrfError) return csrfError
+
   const auth = await requireAuth(request, reqId)
   if (auth instanceof Response) return auth
 
@@ -41,12 +47,19 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
+  const rate = await enforceSocialLimit({
+    limit: "upload",
+    userId: auth.userId,
+    reqId,
+  })
+  if (!rate.allowed) return rate.response
+
   const ext = parsed.data.contentType.split("/")[1]
   const key = `avatars/${auth.userId}/${Date.now()}.${ext}`
 
   try {
     const uploadUrl = await generatePresignedUrl(key, parsed.data.contentType)
-    return Response.json({ uploadUrl, key })
+    return Response.json({ uploadUrl, key }, { headers: rate.headers })
   } catch (error) {
     logger.error({ err: error, reqId }, "[avatar:presign] erro ao gerar URL")
     return Response.json(

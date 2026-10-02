@@ -39,7 +39,7 @@ export const envSchema = z.object({
   R2_ACCESS_KEY_ID: optionalText,
   R2_SECRET_ACCESS_KEY: optionalText,
   R2_BUCKET_NAME: optionalText,
-  R2_PUBLIC_URL: optionalUrl,
+  NEXT_PUBLIC_R2_PUBLIC_URL: optionalUrl,
 })
 
 export type Env = z.infer<typeof envSchema>

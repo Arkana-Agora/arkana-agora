@@ -46,7 +46,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 |---|---|---|
 | "IA / AI" | (1) The AI subsystem, (2) the AI streaming endpoint, (3) OpenAI providers | Referenced as `AI Service`, `POST /api/v1/ai/interpret` (SSE `token`/`done`/`error`; legacy design path `/api/v1/ai/reading/stream` does not exist), provider names |
 | "Tarot" | (1) The RWS deck system, (2) the tarot feature module, (3) the reading engine | Module paths: `docs/06-features/tarot*.md`, `.specs/003-tarot-engine/` |
-| "R2 / S3" | Storage documented as Cloudflare R2; env vars use the `R2_*` prefix in `security.md` | Canonical storage = **Cloudflare R2**; env vars are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`. No AWS S3 in SDD |
+| "R2 / S3" | Storage documented as Cloudflare R2; env vars use the `R2_*` prefix in `security.md` | Canonical storage = **Cloudflare R2**; env vars are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL`. No AWS S3 in SDD |
 | "bun vs pnpm" | Package managers in different docs | **bun** = MVP single app (deploy/Docker/CI); **pnpm** = planned monorepo (ADR-005). See `docs/02-architecture/deployment.md` §2.0 |
 | "Monorepo" | Antiga descrição como estado atual em sprint-0.md vs futuro (ADR-005) | **Resolvido (2026-08-10):** `sprint-0.md` atualizado — MVP é app único `bun` na raiz; monorepo pnpm/Turborepo é planejado pós-MVP (ADR-005). Ver `docs/02-architecture/monorepo.md` |
 

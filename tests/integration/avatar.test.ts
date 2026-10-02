@@ -11,7 +11,14 @@ const r2Mock = vi.hoisted(() => ({
   getObjectBuffer: vi.fn(),
   putObjectBuffer: vi.fn(),
   deleteObject: vi.fn(),
-  R2_PUBLIC_URL: "https://r2.test",
+  headObjectSize: vi.fn(),
+  NEXT_PUBLIC_R2_PUBLIC_URL: "https://r2.test",
+}))
+const rateMock = vi.hoisted(() => ({
+  enforceSocialLimit: vi.fn(),
+}))
+const csrfMock = vi.hoisted(() => ({
+  enforceCsrf: vi.fn(),
 }))
 const sharpMock = vi.hoisted(() => {
   const chain = {
@@ -23,11 +30,11 @@ const sharpMock = vi.hoisted(() => {
   return vi.fn(() => chain)
 })
 
-process.env.R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ?? "https://r2.test"
-
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 vi.mock("@/services/token-service", () => tokenServiceMock)
 vi.mock("@/lib/r2", () => r2Mock)
+vi.mock("@/lib/middleware/rate-limit", () => rateMock)
+vi.mock("@/lib/middleware/csrf", () => csrfMock)
 vi.mock("sharp", () => ({ default: sharpMock }))
 
 import { POST as presignPOST } from "@/app/api/v1/users/me/avatar/presign/route"
@@ -58,6 +65,15 @@ describe("POST /api/v1/users/me/avatar/presign", () => {
     r2Mock.putObjectBuffer.mockReset()
     r2Mock.deleteObject.mockReset()
     sharpMock.mockClear()
+    csrfMock.enforceCsrf.mockReset()
+    csrfMock.enforceCsrf.mockReturnValue(null)
+    rateMock.enforceSocialLimit.mockReset()
+    rateMock.enforceSocialLimit.mockResolvedValue({
+      allowed: true,
+      headers: {},
+    })
+    r2Mock.headObjectSize.mockReset()
+    r2Mock.headObjectSize.mockResolvedValue(null)
   })
 
   it("returns 401 without bearer token", async () => {
@@ -96,6 +112,48 @@ describe("POST /api/v1/users/me/avatar/presign", () => {
     expect(body.uploadUrl).toBe("https://r2.test/presigned")
     expect(String(body.key)).toMatch(/^avatars\/u1\//)
     expect(r2Mock.generatePresignedUrl).toHaveBeenCalledOnce()
+    expect(csrfMock.enforceCsrf).toHaveBeenCalled()
+    expect(rateMock.enforceSocialLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: "upload", userId: "u1" }),
+    )
+  })
+
+  it("returns 403 when CSRF token is invalid", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    csrfMock.enforceCsrf.mockReturnValue(
+      Response.json(
+        { error: { code: "CSRF_TOKEN_INVALID", message: "CSRF invalido" } },
+        { status: 403 },
+      ),
+    )
+
+    const res = await presignPOST(
+      authRequest("POST", "/api/v1/users/me/avatar/presign", {
+        contentType: "image/png",
+      }),
+    )
+    expect(res.status).toBe(403)
+    expect(r2Mock.generatePresignedUrl).not.toHaveBeenCalled()
+  })
+
+  it("returns 429 when upload limit is exceeded", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    rateMock.enforceSocialLimit.mockResolvedValue({
+      allowed: false,
+      headers: { "Retry-After": "3600" },
+      response: Response.json(
+        { error: { code: "RATE_LIMITED", message: "Limite excedido" } },
+        { status: 429 },
+      ),
+    })
+
+    const res = await presignPOST(
+      authRequest("POST", "/api/v1/users/me/avatar/presign", {
+        contentType: "image/png",
+      }),
+    )
+    expect(res.status).toBe(429)
+    expect(r2Mock.generatePresignedUrl).not.toHaveBeenCalled()
   })
 
   it("returns 500 when presign generation fails", async () => {
@@ -121,6 +179,15 @@ describe("PATCH /api/v1/users/me/avatar/confirm", () => {
     r2Mock.putObjectBuffer.mockReset()
     r2Mock.deleteObject.mockReset()
     sharpMock.mockClear()
+    csrfMock.enforceCsrf.mockReset()
+    csrfMock.enforceCsrf.mockReturnValue(null)
+    rateMock.enforceSocialLimit.mockReset()
+    rateMock.enforceSocialLimit.mockResolvedValue({
+      allowed: true,
+      headers: {},
+    })
+    r2Mock.headObjectSize.mockReset()
+    r2Mock.headObjectSize.mockResolvedValue(null)
   })
 
   it("returns 401 without bearer token", async () => {
@@ -235,6 +302,58 @@ describe("PATCH /api/v1/users/me/avatar/confirm", () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled()
     expect(sharpMock).toHaveBeenCalledTimes(6)
   })
+
+  it("rejects oversized upload by R2 head size without downloading it", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    r2Mock.headObjectSize.mockResolvedValue(5 * 1024 * 1024 + 1)
+
+    const res = await confirmPATCH(
+      authRequest("PATCH", "/api/v1/users/me/avatar/confirm", {
+        fileKey: "avatars/u1/big.png",
+      }),
+    )
+    expect(res.status).toBe(422)
+    expect(r2Mock.getObjectBuffer).not.toHaveBeenCalled()
+  })
+
+  it("returns 429 when upload limit is exceeded", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    rateMock.enforceSocialLimit.mockResolvedValue({
+      allowed: false,
+      headers: { "Retry-After": "3600" },
+      response: Response.json(
+        { error: { code: "RATE_LIMITED", message: "Limite excedido" } },
+        { status: 429 },
+      ),
+    })
+
+    const res = await confirmPATCH(
+      authRequest("PATCH", "/api/v1/users/me/avatar/confirm", {
+        fileKey: "avatars/u1/photo.png",
+      }),
+    )
+    expect(res.status).toBe(429)
+    expect(r2Mock.headObjectSize).not.toHaveBeenCalled()
+    expect(r2Mock.getObjectBuffer).not.toHaveBeenCalled()
+  })
+
+  it("returns 403 when CSRF token is invalid", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    csrfMock.enforceCsrf.mockReturnValue(
+      Response.json(
+        { error: { code: "CSRF_TOKEN_INVALID", message: "CSRF invalido" } },
+        { status: 403 },
+      ),
+    )
+
+    const res = await confirmPATCH(
+      authRequest("PATCH", "/api/v1/users/me/avatar/confirm", {
+        fileKey: "avatars/u1/photo.png",
+      }),
+    )
+    expect(res.status).toBe(403)
+    expect(r2Mock.getObjectBuffer).not.toHaveBeenCalled()
+  })
 })
 
 describe("DELETE /api/v1/users/me/avatar", () => {
@@ -243,6 +362,13 @@ describe("DELETE /api/v1/users/me/avatar", () => {
     prismaMock.user.update.mockReset()
     tokenServiceMock.verifyAccessToken.mockReset()
     r2Mock.deleteObject.mockReset()
+    csrfMock.enforceCsrf.mockReset()
+    csrfMock.enforceCsrf.mockReturnValue(null)
+    rateMock.enforceSocialLimit.mockReset()
+    rateMock.enforceSocialLimit.mockResolvedValue({
+      allowed: true,
+      headers: {},
+    })
   })
 
   it("returns 401 without bearer token", async () => {
@@ -304,5 +430,40 @@ describe("DELETE /api/v1/users/me/avatar", () => {
     )
     expect(res.status).toBe(200)
     expect(r2Mock.deleteObject).not.toHaveBeenCalled()
+  })
+
+  it("returns 403 when CSRF token is invalid", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: "https://r2.test/avatars/u1/photo.webp",
+    })
+    csrfMock.enforceCsrf.mockReturnValue(
+      Response.json(
+        { error: { code: "CSRF_TOKEN_INVALID", message: "CSRF invalido" } },
+        { status: 403 },
+      ),
+    )
+
+    const res = await avatarDELETE(
+      authRequest("DELETE", "/api/v1/users/me/avatar"),
+    )
+    expect(res.status).toBe(403)
+    expect(r2Mock.deleteObject).not.toHaveBeenCalled()
+    expect(prismaMock.user.update).not.toHaveBeenCalled()
+  })
+
+  it("deletes by path key even when avatar URL was minted on another origin", async () => {
+    tokenServiceMock.verifyAccessToken.mockResolvedValue({ userId: "u1" })
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: "https://cdn.other.example/avatars/u1/old.webp",
+    })
+    r2Mock.deleteObject.mockResolvedValue(undefined)
+    prismaMock.user.update.mockResolvedValue({})
+
+    const res = await avatarDELETE(
+      authRequest("DELETE", "/api/v1/users/me/avatar"),
+    )
+    expect(res.status).toBe(200)
+    expect(r2Mock.deleteObject).toHaveBeenCalledWith("avatars/u1/old.webp")
   })
 })

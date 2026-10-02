@@ -262,7 +262,11 @@ describe("getFeed (T026)", () => {
     ])
   })
 
-  it("S2-15: descarta post de perfil PRIVATE de quem não é seguido", async () => {
+  // O contrato de armazenamento é MINUSCULO (privacySchema z.enum(["public",
+  // "private"]), escrito por PUT /users/me/privacy e lido por
+  // findVisibleProfile/_helpers) — um check "PRIVATE" nunca casa no banco
+  // real e o feed vazava post de perfil privado para não-seguidores (S2-15).
+  it("S2-15: descarta post de perfil private de quem não é seguido", async () => {
     prismaMock.post.findMany.mockResolvedValue([
       makePost("privado", {
         authorId: "author_priv",
@@ -270,6 +274,51 @@ describe("getFeed (T026)", () => {
           id: "author_priv",
           name: "Privada",
           displayName: "Privada",
+          avatar: null,
+          profile: { privacy: { profileVisibility: "private" } },
+        },
+      }),
+      makePost("publico"),
+    ])
+
+    const page = await getFeed("viewer_1")
+
+    expect(page.posts.map((p) => p.id)).toEqual(["publico"])
+  })
+
+  it("S2-15: mantém post private de quem o viewer segue", async () => {
+    prismaMock.follow.findMany.mockResolvedValue([
+      { followingId: "author_priv" },
+    ])
+    prismaMock.post.findMany.mockResolvedValue([
+      makePost("privado", {
+        authorId: "author_priv",
+        author: {
+          id: "author_priv",
+          name: "Privada",
+          displayName: "Privada",
+          avatar: null,
+          profile: { privacy: { profileVisibility: "private" } },
+        },
+      }),
+    ])
+
+    const page = await getFeed("viewer_1")
+
+    expect(page.posts.map((p) => p.id)).toEqual(["privado"])
+  })
+
+  // Fail-closed (review Phase 2): privacy malformada (JSON inválido, enum
+  // legado etc.) tem que ser tratada como PRIVADA — um check aberto (falso)
+  // reproduz o mesmo vazamento do bug "PRIVATE" original (S2-15).
+  it("S2-15: privacy malformada é tratada como privada (fail-closed)", async () => {
+    prismaMock.post.findMany.mockResolvedValue([
+      makePost("quebrado", {
+        authorId: "author_x",
+        author: {
+          id: "author_x",
+          name: "Quebrada",
+          displayName: "Quebrada",
           avatar: null,
           profile: { privacy: { profileVisibility: "PRIVATE" } },
         },
@@ -282,26 +331,23 @@ describe("getFeed (T026)", () => {
     expect(page.posts.map((p) => p.id)).toEqual(["publico"])
   })
 
-  it("S2-15: mantém post PRIVATE de quem o viewer segue", async () => {
-    prismaMock.follow.findMany.mockResolvedValue([
-      { followingId: "author_priv" },
-    ])
+  it("S2-15: autor sem privacy gravada continua público", async () => {
     prismaMock.post.findMany.mockResolvedValue([
-      makePost("privado", {
-        authorId: "author_priv",
+      makePost("sem_privacy", {
+        authorId: "author_y",
         author: {
-          id: "author_priv",
-          name: "Privada",
-          displayName: "Privada",
+          id: "author_y",
+          name: "SemPrivacy",
+          displayName: "SemPrivacy",
           avatar: null,
-          profile: { privacy: { profileVisibility: "PRIVATE" } },
+          profile: null,
         },
       }),
     ])
 
     const page = await getFeed("viewer_1")
 
-    expect(page.posts.map((p) => p.id)).toEqual(["privado"])
+    expect(page.posts.map((p) => p.id)).toEqual(["sem_privacy"])
   })
 
   it("cursor vira keyset (createdAt, id) no where", async () => {
@@ -455,13 +501,14 @@ describe("getFeed (T026)", () => {
     expect(page.nextCursor).toBeNull()
   })
 
-  it("filtra posts de autores banidos ou soft-deleted (contrato do where)", async () => {
+  it("filtra posts de autores banidos, inativos ou soft-deleted (contrato do where)", async () => {
     await getFeed("viewer_1")
 
     const firstCallWhere = prismaMock.post.findMany.mock.calls[0]![0].where
     expect(firstCallWhere.author).toEqual({
       isBanned: false,
       deletedAt: null,
+      isActive: true,
     })
   })
 })

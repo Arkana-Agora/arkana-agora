@@ -288,6 +288,10 @@ Fluxo **Implementado** em 3 rotas (não multipart):
 > `src/app/api/v1/users/me/avatar/confirm/route.ts`
 > `src/app/api/v1/users/me/avatar/route.ts` (DELETE)
 
+**CSRF (review 2026-10-01)**: `presign`, `confirm` **e** `DELETE /users/me/avatar` rodam `enforceCsrf` **antes** do rate limit — 403 `CSRF_TOKEN_INVALID` sem `rate.headers` (as rotas mutam estado e emitem credencial de upload; o DELETE passou a validá-lo na review W4–W8, `src/app/api/v1/users/me/avatar/route.ts`).
+
+**Rate limit (review W4–W8, 2026-10-01)**: `presign` e `confirm` também passam por `enforceSocialLimit({ limit: "upload" })` (**20/dia**, janela UTC — `FIXED_LIMITS.upload` em `src/lib/social/limits.ts`) → **429 `RATE_LIMITED`** com `rate.headers` + `details.retryAfter`; o `DELETE /users/me/avatar` **não** tem rate limit próprio. O `confirm` valida o tamanho **antes** de baixar o objeto: `headObjectSize()` (`src/lib/r2.ts`) → `> 5MB` → 422 sem bufferar o arquivo inteiro (review C3; `null` cai no GET, que revalida).
+
 ### 1) POST /users/me/avatar/presign
 
 Gera URL pré-assinada R2 para upload direto do arquivo.
@@ -344,11 +348,12 @@ Content-Type: application/json
 
 ### 3) DELETE /users/me/avatar
 
-Remove o avatar atual (`User.avatar = null`) e apaga o objeto R2 se existir.
+Remove o avatar atual (`User.avatar = null`) e apaga o objeto R2 se existir (`r2KeyFromPublicUrl()` de `src/lib/r2-public-url.ts` extrai a key da URL pública — review 2026-10-01, W4–W8).
 
 ```http
 DELETE /api/v1/users/me/avatar
 Authorization: Bearer <accessToken>
+x-csrf-token: <csrf>          # obrigatório (enforceCsrf, etapa 1)
 ```
 
 **Resposta — 200 OK**
@@ -357,12 +362,14 @@ Authorization: Bearer <accessToken>
 { "message": "Avatar removido" }
 ```
 
-### Erros (presign/confirm)
+### Erros (presign/confirm/delete)
 
 | Status | Código | Descrição |
 |--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | `enforceCsrf` em presign/confirm/**delete** — etapa 1, antes do rate limit, sem `rate.headers` |
 | 401 | `AUTH_TOKEN_INVALID` | Access token ausente ou inválido |
-| 422 | `VALIDATION_ERROR` | contentType inválido, fileKey ausente/path traversal, arquivo >5MB, extensão inválida |
+| 422 | `VALIDATION_ERROR` | contentType inválido, fileKey ausente/path traversal, arquivo >5MB (HEAD prévio no confirm — review C3), extensão inválida |
+| 429 | `RATE_LIMITED` | Cota diária de upload (20/dia) em `presign`/`confirm` — `details: { limit: "upload", resetAt, retryAfter }` + `rate.headers` (review W4–W8) |
 | 500 | `INTERNAL_ERROR` | Falha no processamento (avatar anterior mantido) |
 
 ---
@@ -523,6 +530,8 @@ Authorization: Bearer <accessToken>
 ## GET /users/search
 
 Busca usuários por nome ou username.
+
+> **Planejado — rota não existe** (não há `src/app/api/v1/users/search/`). A busca **implementada** hoje é `GET /api/v1/social/search` (Sprint 2 Phase 2, T056 — contrato em `docs/04-api/social.md`), que também cobre nome **OU** username (case-insensitive) com o **mesmo mínimo de 2 caracteres**, mas responde **422** `VALIDATION_ERROR` (não 400) e devolve `{ data: { posts, users, hashtags } }` com limite fixo de 20 por seção (sem paginação offset).
 
 ### Requisição
 

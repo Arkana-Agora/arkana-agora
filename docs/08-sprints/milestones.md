@@ -119,7 +119,7 @@ Semana  1───3───5──────8──────13────
 
 ### Critérios de Conclusão
 
-- [ ] Feed timeline funcional com posts de seguidos
+- [ ] Feed timeline funcional com posts de seguidos — **backend + UI entregues no Sprint 2 Phase 2 (2026-10-01)**: `GET /api/v1/social/feed` (T052) + página `/feed` com infinite scroll (T061) + composer (T060); **falta wiring de UI de follow** (item abaixo) para ver "posts de seguidos" ponta a ponta
 - [ ] Sistema de follow/unfollow operacional (backend entregue no Sprint 2 Phase 1 — `POST /social/follow/:userId` + listas + contadores; **falta wiring de UI** em `/perfil/:username` para ser operacional ponta a ponta)
 - [ ] Likes e comentários funcionando em posts
 - [ ] Horóscopo Ocidental calculando e exibindo para os 12 signos

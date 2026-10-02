@@ -13,7 +13,7 @@ const ENV_KEYS = [
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
   "R2_BUCKET_NAME",
-  "R2_PUBLIC_URL",
+  "NEXT_PUBLIC_R2_PUBLIC_URL",
 ] as const
 
 const saved = new Map<string, string | undefined>()
@@ -55,25 +55,32 @@ describe("envSchema (T022)", () => {
   it("strings vazias viram undefined (não '')", () => {
     const result = envSchema.parse({
       REDIS_URL: "",
-      R2_PUBLIC_URL: "",
+      NEXT_PUBLIC_R2_PUBLIC_URL: "",
       MODERATION_BLOCKED_WORDS: "",
     })
     expect(result.REDIS_URL).toBeUndefined()
-    expect(result.R2_PUBLIC_URL).toBeUndefined()
+    expect(result.NEXT_PUBLIC_R2_PUBLIC_URL).toBeUndefined()
     expect(result.MODERATION_BLOCKED_WORDS).toBeUndefined()
   })
 
-  it("aceita URLs válidas para REDIS_URL e R2_PUBLIC_URL", () => {
+  it("aceita URLs válidas para REDIS_URL e NEXT_PUBLIC_R2_PUBLIC_URL", () => {
     const result = envSchema.parse({
       REDIS_URL: "redis://localhost:6379",
-      R2_PUBLIC_URL: "https://pub.example.com",
+      NEXT_PUBLIC_R2_PUBLIC_URL: "https://pub.example.com",
     })
     expect(result.REDIS_URL).toBe("redis://localhost:6379")
-    expect(result.R2_PUBLIC_URL).toBe("https://pub.example.com")
+    expect(result.NEXT_PUBLIC_R2_PUBLIC_URL).toBe("https://pub.example.com")
   })
 
   it("rejeita REDIS_URL que não é URL", () => {
     const result = envSchema.safeParse({ REDIS_URL: "nao-e-url" })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejeita NEXT_PUBLIC_R2_PUBLIC_URL que não é URL", () => {
+    const result = envSchema.safeParse({
+      NEXT_PUBLIC_R2_PUBLIC_URL: "nao-e-url",
+    })
     expect(result.success).toBe(false)
   })
 

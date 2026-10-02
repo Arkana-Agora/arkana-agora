@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client"
 
+import { logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
+import { parsePrivacy } from "@/lib/validators/profile"
 
 /**
  * Feed algorithm (T026/US-022): candidatos visíveis (S2-15) de
@@ -143,12 +145,13 @@ const AUTHOR_SELECT = {
   profile: { select: { privacy: true } },
 } satisfies Prisma.UserSelect
 
-const CANDIDATE_INCLUDE = {
+/** Include canônico de um Post + autor (usado pelo feed e pelo Explore). */
+export const POST_INCLUDE = {
   author: { select: AUTHOR_SELECT },
 } satisfies Prisma.PostInclude
 
 export type FeedPost = Prisma.PostGetPayload<{
-  include: typeof CANDIDATE_INCLUDE
+  include: typeof POST_INCLUDE
 }>
 
 export interface FeedPage {
@@ -156,13 +159,30 @@ export interface FeedPage {
   nextCursor: string | null
 }
 
-interface PrivacyJson {
-  profileVisibility?: unknown
-}
-
-function isPrivateProfile(post: FeedPost): boolean {
-  const privacy = post.author.profile?.privacy as PrivacyJson | null | undefined
-  return privacy?.profileVisibility === "PRIVATE"
+/**
+ * S2-15 (predicado único de privacidade de perfil, compartilhado por feed e
+ * Explore): `UserProfile.privacy.profileVisibility === "private"` → só
+ * seguidores/quem segue o autor. O contrato de armazenamento é MINUSCULO
+ * (privacySchema z.enum) — o check antigo ("PRIVATE") nunca casava no banco
+ * e vazava post de perfil privado (S2-15).
+ *
+ * Fail-closed (review Phase 2): privacy malformada (JSON inválido, enum
+ * legado etc.) é tratada como **privada** — mesmo risco do bug original.
+ * Sem privacy gravada (coluna nula) continua pública (default).
+ */
+export function hasPrivateProfile(source: {
+  profile: { privacy?: unknown } | null
+}): boolean {
+  const raw = source.profile?.privacy
+  if (raw === null || raw === undefined) return false
+  const parsed = parsePrivacy(raw)
+  if (parsed === null) {
+    logger.warn(
+      "[feed-algorithm] privacy malformada — tratada como privada (fail-closed)",
+    )
+    return true
+  }
+  return parsed.profileVisibility === "private"
 }
 
 function minTuple(posts: readonly FeedPost[]): FeedCursor | undefined {
@@ -225,9 +245,9 @@ export async function getFeed(
 
   const where: Prisma.PostWhereInput = {
     isHidden: false,
-    // review: posts de autores banidos ou em janela LGPD de soft-delete
-    // não podem aparecer (mesma regra do guard requireAuth)
-    author: { isBanned: false, deletedAt: null },
+    // review: posts de autores banidos, inativos ou em janela LGPD de
+    // soft-delete não podem aparecer (mesma regra do guard requireAuth)
+    author: { isBanned: false, deletedAt: null, isActive: true },
     // visibilidade S2-15: público de qualquer autor OU followers de quem sigo;
     // followingIds vazio → só públicos (fallback explore, T026)
     OR: [
@@ -241,13 +261,14 @@ export async function getFeed(
     where,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take,
-    include: CANDIDATE_INCLUDE,
+    include: POST_INCLUDE,
   })
 
   // S2-15: perfil privado → só seguidores
   const followingSet = new Set(followingIds)
   const visible = candidates.filter(
-    (post) => !isPrivateProfile(post) || followingSet.has(post.authorId),
+    (post) =>
+      !hasPrivateProfile(post.author) || followingSet.has(post.authorId),
   )
 
   const ids = visible.map((post) => post.id)
