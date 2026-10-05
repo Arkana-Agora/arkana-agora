@@ -26,6 +26,7 @@ vi.mock("@/lib/logger", () => ({
 }))
 
 import {
+  checkSocialLimit,
   checkCommentLimit,
   checkFollowLimit,
   checkGiftLimit,
@@ -241,6 +242,38 @@ describe("fail-open Q26 (T027)", () => {
       expect.objectContaining({
         limit: "upload",
         reason: "redis_not_configured",
+      }),
+      "rate_limiter_bypass",
+    )
+  })
+})
+
+describe("checkSocialLimit polling (revisao O)", () => {
+  it("60/min com janela sliding e chave rl:polling", async () => {
+    const result = await checkSocialLimit("polling", "usr_1")
+    expect(result.allowed).toBe(true)
+    expect(result.max).toBe(60)
+    expect(evalArgsOfCall()[2]).toBe("rl:polling:usr_1")
+    expect(evalArgsOfCall()[6]).toBe("60")
+    expect(evalArgsOfCall()[7]).toBe("60000")
+    expect(result.resetAt.getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it("bloqueia acima de 60 no minuto", async () => {
+    redisMock.eval.mockResolvedValue(DENY(61, Date.now() - 1000))
+    const result = await checkSocialLimit("polling", "usr_1")
+    expect(result.allowed).toBe(false)
+    expect(result.remaining).toBe(0)
+  })
+
+  it("sem Redis o polling libera com bypass logado (fail-open)", async () => {
+    redisHolder.current = undefined
+    const result = await checkSocialLimit("polling", "usr_1")
+    expect(result.allowed).toBe(true)
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "redis_not_configured",
+        limit: "polling",
       }),
       "rate_limiter_bypass",
     )

@@ -30,7 +30,7 @@ export interface LimitCheck {
 }
 
 export type SocialLimit =
-  "post" | "like" | "comment" | "follow" | "gift" | "upload"
+  "post" | "like" | "comment" | "follow" | "gift" | "upload" | "polling"
 
 const WINDOW_MS: Record<SocialLimit, number> = {
   post: DAY,
@@ -39,6 +39,10 @@ const WINDOW_MS: Record<SocialLimit, number> = {
   follow: MINUTE,
   gift: DAY,
   upload: DAY,
+  // Revisão O: fallback de polling a cada 30s × 4 endpoints — 60/min por
+  // usuário (janela compartilhada entre as 4 rotas) cobre ~2 abas com
+  // margem e pune flood.
+  polling: MINUTE,
 }
 
 const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
@@ -47,6 +51,7 @@ const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
   follow: 20,
   gift: 10,
   upload: 20,
+  polling: 60,
 }
 
 export const POST_LIMIT_BY_TIER: Record<UserPlan, number> = {
