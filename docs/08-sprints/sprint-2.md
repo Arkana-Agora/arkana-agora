@@ -1,11 +1,11 @@
 # Sprint 2 — Social + Conteúdo
 
-> **Projeto**: Arkana Agora  
-> **Identificador**: `arkana-agora`  
-> **Duração**: 4 semanas  
-> **Equipe**: 2-3 desenvolvedores  
-> **Status**: Em andamento — Phases 0 (T001–T023), 0.5 (T024–T042), 1 (T043–T050, Follow System) e 2 (T051–T065, posts/feed/explore) do plano de execução concluídas  
-> **Dependência**: Sprint 1 completo
+> - **Projeto**: Arkana Agora
+> - **Identificador**: `arkana-agora`
+> - **Duração**: 4 semanas
+> - **Equipe**: 2-3 desenvolvedores
+> - **Status**: Em andamento — Phases 0 (T001–T023), 0.5 (T024–T042), 1 (T043–T050, Follow System), 2 (T051–T065, posts/feed/explore) e **2.5 (T066–T075, WebSocket Foundation + realtime/polling)** do plano de execução concluídas
+> - **Dependência**: Sprint 1 completo
 
 ---
 
@@ -91,8 +91,8 @@ Adicionar features sociais (feed, follow, interações) e expandir o conteúdo e
 - [x] 36. Seed data: horóscopos, selos maias, gifts
 
 ### Real-time
-- [ ] 37. WebSocket service para atualizações do feed em tempo real
-- [ ] 38. Reconnection logic e fallback para polling
+- [x] 37. WebSocket service para atualizações do feed em tempo real — **Sprint 2 Phase 2.5 (T066–T075, 2026-10-02)**: `socket-service/` na 3003 (`GET /health`, auth RS256/ADR-009, rooms `user:`/`feed:` auto-join, Event Bus `realtime:events`), emits `new-post`/`follow-update`/`notification` ligados nas rotas (T088 parcial), pill do feed (`useFeedRealtime`) + badge (`NotificationsProvider`); like/comment/gift ficam para a Phase 3
+- [x] 38. Reconnection logic e fallback para polling — `src/hooks/use-socket.ts` (backoff 1s→30s; polling de 30s em `GET /api/v1/social/polling/{posts,notifications}?since=` com janela inicial de 5min, suprimido enquanto conectado); E2E `tests/e2e/social-realtime.spec.ts` (T075: 3 cenários reais + 3 `fixme` de Phase 3)
 
 ---
 

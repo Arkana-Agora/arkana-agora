@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-28
+> Versão: 1.3 | Última atualização: 2026-10-03
 
 ---
 
@@ -24,7 +24,7 @@
 
 ### 2.1 Backend e Frontend (frameworks e onde fica o código)
 
-> A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares vivem em `services/`. Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
+> A arquitetura documentada é **monolito modular Next.js** — não há separação `backend/`/`frontend/` no SDD. No MVP, frontend e API ficam no mesmo app; serviços auxiliares scaffoldados ficam na **raiz do repo** (hoje `socket-service/`; o layout `services/{ai-service,socket-service,worker}` é o do monorepo futuro — `monorepo.md`). Os diretórios vazios `backend/` e `frontend/` na raiz do repo são placeholders e não fazem parte da estrutura documentada.
 >
 > **Status (esqueleto + F1 DB/Docker + F2A auth login + F2B design system + Módulo 1 Auth completo):** já existe na raiz do repo um esqueleto Next.js 16 (App Router) — `package.json` (toolchain `bun`), `src/app/` (incl. `src/app/api/health/route.ts`), `src/lib/prisma.ts`, `prisma/schema.prisma` (datasource `postgresql`; 5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init` aplicada), `prisma/seed.ts`, `tests/health.test.ts`, `.env.example`, `eslint.config.mjs`, `vitest.config.ts`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Dev DB: Docker Postgres 16 (`docker compose up -d postgres`) via `bunx prisma migrate dev`. **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth** em `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`, `src/auth/`; credenciais e-mail/senha entregues na Sprint 1 (backend `POST /api/v1/auth/login` T7 + frontend `LoginForm` T19 em `src/app/(auth)/login/login-form.tsx` + `RegisterForm` T20 em `src/app/(auth)/register/register-form.tsx`); Facebook OAuth fica para o Sprint 1. **Design system implementado (Sprint 0, F2B):** Tailwind CSS 4 via `postcss.config.mjs` (plugin `@tailwindcss/postcss`), `components.json` (style radix-nova), tokens oklch claro/escuro em `src/app/globals.css`, `src/components/ui/` (Button, Card, Input, Label, Skeleton, Alert + `form.tsx` manual), `src/lib/utils.ts` (`cn`), `next-themes` (`providers.tsx`/`theme-provider.tsx`/`theme-toggle.tsx`), `layout.tsx` com fonte Geist (`--font-geist-sans`) + `suppressHydrationWarning`, guard de auth em `src/app/(app)/layout.tsx`. **Módulo 1 Auth (Sprint 1) completo:** `POST /api/v1/auth/register` (T6), `POST /api/v1/auth/login` (T7), `POST /api/v1/auth/magic-link` (T9), `POST /api/v1/auth/magic-link/verify` (T10), `POST /api/v1/auth/forgot-password` (T11), `POST /api/v1/auth/reset-password` (T12), `POST /api/v1/auth/refresh` (T13), `POST /api/v1/auth/logout` (T14), `POST /api/v1/auth/verify-email` (T30) e `POST /api/v1/auth/verify-email/resend` (T30) implementados com `src/services/token-service.ts`, `src/lib/rate-limit.ts` (+ magic link 3/h por email e 3/h por IP, register 3/15min por email e 3/h por IP, forgot-password 3/h por email e 5/h por IP, verify-email/resend 1/min por email e 5/h por IP), `src/lib/redis.ts`, `src/lib/validators/auth.ts` (`loginSchema`/`magicLinkSchema`/`magicLinkVerifySchema`/`forgotPasswordSchema`). **LGPD deleção de conta implementada:** `DELETE /api/v1/auth/account` (T15, soft delete atômico) + `GET /api/cron/hard-delete` (T16, Vercel Cron 03:00 UTC — anonimização pós-30 dias, `src/jobs/hard-delete-accounts.ts`). Ainda não existe: IA, pagamentos, social → veja `docs/architecture.md`  "Implementation status".
 
@@ -32,7 +32,7 @@
 |---|---|---|---|---|
 | **Frontend (web)** | Next.js 16 (App Router) + TypeScript | `apps/web` (monorepo futuro) / raiz do app (MVP) | 3000 | `bun run dev` |
 | **Backend (API)** | Next.js API Routes + Prisma + Auth.js v5 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
-| **Backend — WebSocket** | Node.js + Socket.io | `services/ws-service` | 3003 | `bun run dev:ws` |
+| **Backend — WebSocket** | Node.js + Socket.io | `socket-service/` (raiz do repo — ADR-007; **não** existe `services/ws-service`) | 3003 | `bun run dev:ws` (`tsx watch socket-service/index.ts`) |
 | **Backend — IA** (futuro) | Node.js | `services/ai-service` | 3004 | — |
 | **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
 | **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
@@ -60,7 +60,7 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
 └────────────┘ └──────────┘ └──────────┘
 ```
 
-> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** (sem ws/caddy — adiados para o Sprint 1 de chat). O diagrama acima é o stack local completo documentado; Socket.io e Caddy serão adicionados ao compose quando o serviço de chat for scaffoldado.
+> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** — **não há serviço `ws` no compose**: o `socket-service/` scaffoldado na Phase 2.5 tem `Dockerfile`/`ecosystem.config.js` próprios e roda fora do compose via `bun run dev:ws`. **Caddy continua fora do compose** (adiado). O diagrama acima é o stack local completo documentado.
 
 ### 2.3 Comandos de Desenvolvimento
 
@@ -90,7 +90,7 @@ bun run dev:ws       # Socket.io na porta 3003
 bun run dev:all
 ```
 
-> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). `dev:ws` e `dev:all` ainda são stubs (eco de aviso) até o Socket.io service e o Caddy serem scaffoldados (adiados para o Sprint 1 de chat). O banco de dev é o container `postgres` do compose (db/user/pass `arkana`, porta 5432); `docker compose up -d postgres redis` sobe banco + Redis.
+> **Nota:** os scripts acima já existem no `package.json` do esqueleto na raiz (MVP). **`dev:ws` não é mais stub** desde a Phase 2.5: roda `tsx watch socket-service/index.ts` (Socket.io na porta 3003, `GET /health`) e exige `AUTH_URL` e `JWT_PUBLIC_KEY` no ambiente (`REDIS_URL` é **opcional** no schema desde a correção de review K — validação Zod em `socket-service/src/lib/env.ts`; sem `REDIS_URL` o Event Bus cai no bus em memória e o E2E de realtime quebra — ver `playwright.config.ts`). `dev:all` **continua stub** (eco de aviso) até o Caddy entrar. O banco de dev é o container `postgres` do compose (db/user/pass `arkana`, porta 5432); `docker compose up -d postgres redis` sobe banco + Redis.
 
 > **Logger note:** `src/lib/logger.ts` (Pino) is implemented (Sprint 0, F4) — the health route logs via `logger.error({ err }, "[health] ...")`. Remaining known stopgap: `console.log("[auth:magic-link] ...")` in `src/auth/auth.config.ts` (EmailProvider `sendVerificationRequest`; anchor the symbol, not a line number — it drifts; see `docs/solutions/patterns/observability/logger-migration-stopgap.md`; pattern details in `docs/solutions/patterns/backend/health-check-envelope.md`).
 
@@ -101,9 +101,18 @@ bun run dev:all
 ```env
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+# URL do socket-service consumida por src/hooks/use-socket.ts (socket.io aceita ws://, http:// etc.;
+# sem ela o default é http://localhost:3003)
 NEXT_PUBLIC_WS_URL=ws://localhost:3003
-# Sprint 2 (src/lib/env.ts) — porta do mini-service Socket.io (default 3003; serviço ainda não scaffoldado — T066)
+# Porta do mini-service Socket.io (Sprint 2 — src/lib/env.ts E socket-service/src/lib/env.ts, default 3003)
 SOCKET_PORT=3003
+# socket-service (Phase 2.5, T066) — valida com Zod em socket-service/src/lib/env.ts:
+#   REDIS_URL (opcional — sem ela o Event Bus vira bus em memória: ok em teste unitário, NÃO em E2E
+#   multi-processo nem em produção multi-instância), AUTH_URL (obrigatória — origem do CORS),
+#   JWT_PUBLIC_KEY (obrigatória, RS256/ADR-009) + SOCKET_PORT acima.
+#   ACCESS_TOKEN_TTL_SECONDS (revisão R2, default 900): PRECISA casar com a do
+#   token-service do Next (src/services/token-service.ts) — o handshake usa o valor
+#   no maxTokenAge; divergir rejeita tokens ainda válidos ou aceita além do TTL.
 
 # Banco (dev) — Prisma Postgres via Vercel Marketplace (pooled p/ runtime, direct p/ CLI)
 DATABASE_URL=postgres://user:pass@pooled.db.prisma.io:5432/postgres?sslmode=require
@@ -120,6 +129,11 @@ AUTH_GOOGLE_ID=dev-google-id
 AUTH_GOOGLE_SECRET=dev-google-secret
 AUTH_EMAIL_SKIP_SEND=true
 EMAIL_FROM=Arkana Agora <nao-responda@arkanaagora.dev>
+# JWT custom RS256 (Sprint 1 — ADR-009): par RSA 2048, AMBAS as chaves obrigatórias
+# (blocos PEM multiline — ver .env.example e docs/runbooks/jwt-public-key-missing-all-401.md).
+# A pública é consumida também pelo socket-service (handshake RS256, ADR-009).
+JWT_PRIVATE_KEY=
+JWT_PUBLIC_KEY=
 # SMTP (opcional em dev — sem SMTP + AUTH_EMAIL_SKIP_SEND=true loga o link no console)
 SMTP_URL=
 SMTP_HOST=
@@ -266,7 +280,9 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `AI_API_KEY` | *Chave OpenAI/IA* | Production | Chave da API principal de IA |
 | `AI_MODEL` | *Modelo OpenAI* | Production | Modelo de interpretacao (default: gpt-4o) |
 | `AI_MODEL_FOLLOWUP` | *Modelo OpenAI follow-up* | Production | Modelo de follow-up (default: gpt-4o-mini) |
-| `SOCKET_PORT` | `3003` | Production | Porta do mini-service Socket.io (Sprint 2 — `src/lib/env.ts`, default 3003; **serviço ainda não scaffoldado** — T066) |
+| `SOCKET_PORT` | `3003` | Production | Porta do mini-service Socket.io (`socket-service/` — scaffolded na Phase 2.5/T066; default 3003 validado em `socket-service/src/lib/env.ts` e `src/lib/env.ts`) |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Production | TTL do access token em segundos (token-service `src/services/token-service.ts`, default 900 = 15 min; **revisão R2**: também validado no boot do socket-service em `socket-service/src/lib/env.ts` e usado no `maxTokenAge` do handshake — **o valor tem de ser o MESMO nos dois processos**, senão o handshake rejeita tokens ainda válidos ou aceita além do TTL do emissor; `REFRESH_TOKEN_TTL_DAYS` default 30, só do token-service) |
+| `NEXT_PUBLIC_WS_URL` | `wss://ws.arkanaagora.com.br` | Production | URL do socket-service lida por `src/hooks/use-socket.ts` (domínio `ws.*` da §4.3; socket.io aceita `ws(s)://`/`http(s)://`; **sem a var em produção o realtime fica desabilitado** — `resolveSocketUrl` devolve `null`, `connect()` não abre socket e o fallback de polling cobre posts/notificações, **nunca localhost**, que mandaria o access token no handshake para um processo local; em dev cai no fallback `http://localhost:3003`). Também é a origem esperada do CORS do socket-service. **Inlined em build time** — precisa estar definida ANTES de `next build` (revisão I-e: `next.config.ts` emite WARN no build de produção sem a var; o CI builda sem ela de propósito e não falha) |
 | `AI_HOROSCOPE_API_KEY` | *Chave dedicada* | Production | Opcional — chave separada p/ geração de horóscopos (Sprint 2; **sem consumidor até as fases 5/6** do plano) |
 | `AI_HOROSCOPE_MODEL` | `gpt-4o-mini` | Production | Modelo da geração de horóscopos (idem — pendente de T097/T098) |
 | `MODERATION_BLOCKED_WORDS` | *palavra1,palavra2* | Production | Palavras bloqueadas da moderação de posts/comentários (Sprint 2 T025 — declarada em `src/lib/env.ts`, consumida por `src/lib/moderation.ts` `checkContent()` desde o Phase 0.5; **primeiro consumidor de rota desde o Sprint 2 Phase 2 (2026-10-01)**: `POST /api/v1/social/posts` (T051) responde **403 `CONTENT_BLOCKED`** com `details.flaggedWords`; escopo restante de T129 pendente) |
@@ -280,6 +296,16 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` | Production | Host do PostHog (`src/lib/analytics.ts`; default `https://app.posthog.com`; override com `us.i.posthog.com`/`eu.i.posthog.com` conforme a região do projeto) |
 | `AUTH_URL` | `https://arkanaagora.com.br` | Production + Preview | Origem canônica da aplicação (HTTPS obrigatório); guard de runtime em `src/auth/auth.config.ts` (`AUTH_URL_in_env`/`AUTH_URL_empty` no erro — redeploy após editar env) |
 | `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`), `feed-cache-refresh` (Sprint 2, `0 0 * * *` diário — SC34) e `counter-reconcile` (Sprint 2 T147 — reconciliação de contadores, `0 4 * * *`); obrigatório, sem ele os crons retornam 401 |
+
+**Build time (revisão I-e)**: variáveis `NEXT_PUBLIC_*` são resolvidas no **build**, não no runtime — definir `NEXT_PUBLIC_WS_URL` no ambiente do servidor *depois* do `next build` não tem efeito no bundle. Sem ela, em **produção** `resolveSocketUrl()` devolve `null` e `connect()` não abre socket: o realtime fica desabilitado (fallback de polling cobre posts/notificações; **nunca localhost** — C1 da revisão multi-agente 2026-10-04) e em **dev** cai no fallback `http://localhost:3003`; `resolveSocketUrl()` lança apenas para URL malformada/protocolo inválido. `next.config.ts` emite um **WARN** (não erro) quando `NODE_ENV=production` e a variável está ausente no momento do build.
+
+**Configuração no Railway (socket-service — Phase 2.5)**: o mini-service é um processo Node separado (não roda na Vercel). Deploy via `socket-service/Dockerfile` (PM2 cluster `socket-service/ecosystem.config.js`) com `AUTH_URL` (origem do CORS) e `JWT_PUBLIC_KEY` (handshake RS256, ADR-009) obrigatórias, `SOCKET_PORT` e `REDIS_URL` — opcional no schema (sem ela o bus é em memória), mas **exigida em produção** (Event Bus `realtime:events` + Redis adapter entre instâncias do cluster); `ACCESS_TOKEN_TTL_SECONDS` opcional (default 900) mas, se definida na Vercel/Next, **tem de ser idêntica aqui** (revisão R2 — `maxTokenAge` do handshake); healthcheck no `GET /health`. Ainda **não scaffoldado em produção** (deploy Railway planejado).
+
+**Resiliência do Event Bus (raiz do E2E T075, `socket-service/src/bus.ts`)**: conexões Redis podem cair com `ECONNRESET` após o boot (observado com Memurai local ~30 s depois de criar) e o `retryStrategy: () => null` (fail-fast, revisão K) deixaria o bus **permanentemente morto** — `publish FALHOU: Connection is closed` e evento perdido. Comportamento atual, sem ação operacional do operador:
+1. `ensureRedis()` detecta cliente morto (`status === "end" || "close"`) em **pub ou sub** → `discardDeadClients()` → **nova tentativa no próximo publish/subscribe** (promise rejeitada não é cacheada);
+2. o **sub reconecta sozinho** via handler em `close`/`end` → `scheduleBusReconnect()` com backoff **1 s → 30 s** e **máx 5 falhas consecutivas**, cancelado pela flag `busShuttingDown` em `resetRealtimeBus()` — necessário porque o socket-service nunca publica e o sub ficaria mudo para sempre;
+3. o fail-fast do **publish** é preservado: uma tentativa por chamada, `commandTimeout` 2 s, sem fila offline — o emit nunca pendura a rota de negócio.
+Testes: `tests/integration/realtime-bus.test.ts` (grupo `auto-recuperação de conexão morta (ECONNRESET)`).
 
 **Configuração no Vercel (Staging)**:
 
@@ -647,3 +673,5 @@ railway up --rollback
 - **2026-09-01 (T3 email):** §2.4 adicionada `RESEND_API_KEY` (provedor Resend transacional — `src/lib/email/email.ts`, helpers `sendVerificationEmail`/`sendPasswordResetEmail`/`sendMagicLinkEmail`), alinhada ao `.env.example`; guard de dev `AUTH_EMAIL_SKIP_SEND=true` exige `NODE_ENV=development`. O magic link do Auth.js continua via nodemailer/SMTP (`SMTP_*`).
 - **2026-09-23 (Prisma Postgres local):** dev DB alinhado a **Prisma Postgres** (Vercel Marketplace) — §1 tabela, §2.3 comandos (`.\node_modules\.bin\prisma generate` / `migrate dev`), §2.4 `DATABASE_URL` = pooled + `DIRECT_URL` = direct (Docker 16 como fallback offline). CLI pinado em `prisma@^7` (v8 RC sem `generate`/`migrate` quebra `npm run build`). URL do datasource em `prisma.config.ts`. Runtime com `@prisma/adapter-pg` (`src/lib/prisma.ts`). Ver `docs/solutions/ci-cd/prisma-v8-cli-regression.md`.
 - **2026-09-24 (PostHog env):** §2.4 e §4.2 alinhadas ao `.env.example`/código — adicionadas `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` + `NEXT_PUBLIC_POSTHOG_HOST` (as vars que `src/lib/analytics.ts` realmente lê); `POSTHOG_KEY` marcada como legada (não lida pelo código). `initAnalytics()` faz no-op em development (dev gate), então essas vars só são necessárias fora de development.
+- **2026-10-02 (socket-service — Sprint 2 Phase 2.5, T066–T075):** §2.1 caminho `services/ws-service` → **`socket-service/`** (raiz do repo — não existe diretório `services/`); Nota F1 + §2.3 — **`dev:ws` deixou de ser stub** (`tsx watch socket-service/index.ts`) e o compose continua **sem** serviço `ws` (socket-service roda fora do compose; `dev:all` segue stub do Caddy); §2.4 — `SOCKET_PORT` sem o marcador "serviço ainda não scaffoldado", + bloco de variáveis do socket-service (`REDIS_URL` obrigatória, `AUTH_URL` = origem do CORS, `JWT_PUBLIC_KEY` RS256/ADR-009 — Zod em `socket-service/src/lib/env.ts`) e o par `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` que faltava no bloco (já documentado em `environments.md`/`security.md`); §4.2 — linhas `SOCKET_PORT` e `NEXT_PUBLIC_WS_URL` (`src/hooks/use-socket.ts`) + seção de configuração no Railway. Nomes canônicos dos eventos e contrato de rooms em `architecture.md` §6.3/§6.4.
+- **2026-10-03 (revisões Phase 2.5 I-a…I-e + auto-heal do Event Bus):** §4.2 — novo bloco **"Resiliência do Event Bus"** documentando o comportamento real de `socket-service/src/bus.ts`: detecção de cliente morto + nova tentativa no próximo publish (`ensureRedis()`/`discardDeadClients()`) e reconexão automática do sub via `close`/`end` com backoff 1 s→30 s e máx 5 falhas (`scheduleBusReconnect()`), preservando o fail-fast por chamada do publish (revisão K). **Correção do entry anterior**: `REDIS_URL` **não** é obrigatória no schema (opcional desde a revisão K — só é exigida em produção, como §4.2 já diz). §2.4/§4.2 já continham o WARN de build da revisão I-e (`NEXT_PUBLIC_WS_URL` inlined em build time).

@@ -1,6 +1,6 @@
 # Arquitetura do Sistema — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-09-24
+> Versão: 1.1 | Última atualização: 2026-10-03
 
 ---
 
@@ -126,6 +126,7 @@ As rotas de API seguem o padrão RESTful:
 | `GET` | `/api/v1/social/posts/:id` | Detalhe do post — **implementada (T057)** |
 | `GET` | `/api/v1/social/posts/:id/og-image` | Imagem OG do post (`optionalAuth`) — **implementada (T058)** |
 | `POST` | `/api/v1/social/posts/images/presign` | Presign de imagens de post (R2) — **implementada (T064)** |
+| `GET` | `/api/v1/social/polling/{posts,likes,comments,notifications}?since=` | Fallback REST do realtime (polling 30s enquanto o socket está desconectado) — **implementadas (T071, Phase 2.5)** |
 | `GET` | `/api/v1/marketplace/products` | Listar produtos |
 | `POST` | `/api/v1/payments/create` | Criar pagamento |
 | `POST` | `/api/v1/webhooks/mercadopago` | Webhook Mercado Pago |
@@ -138,7 +139,7 @@ Serviços complementares que rodam em portas separadas:
 
 | Serviço | Porta | Tecnologia | Responsabilidade |
 |---------|-------|------------|-----------------|
-| **Socket.io Service** | 3003 | Node.js + Socket.io | Real-time: feed, notificações, presença |
+| **Socket.io Service** (`socket-service/`) | 3003 | `node:http` + Socket.io (Node.js) | Real-time: feed, notificações, presença — **implementado** (Phase 2.5, T066–T075; `bun run dev:ws`) |
 | **AI Service** (futuro) | 3004 | Node.js | Processamento assíncrono de leituras IA |
 | **Worker** (futuro) | 3005 | BullMQ | Jobs em background (horóscopos diários, emails) |
 
@@ -441,22 +442,40 @@ data: [DONE]
 
 ### 6.3 WebSocket (Real-time Social)
 
-- **Protocolo**: Socket.io (WebSocket com fallback)
-- **Porta**: 3003 (mini-service separado)
-- **Eventos**:
+- **Protocolo**: Socket.io (WebSocket com fallback de polling REST)
+- **Porta**: 3003 (mini-service separado `socket-service/`, ADR-007)
+- **Status**: **implementado** — Sprint 2 Phase 2.5 (T066–T075). Servidor `socket-service/src/server.ts`, emitters `socket-service/src/emitters.ts`, cliente `src/hooks/use-socket.ts`, fallback `src/app/api/v1/social/polling/`.
+- **Health**: `GET /health` → `{"status":"ok"}` (qualquer outra rota fora de `/socket.io` → 404) — usado pelo healthcheck do `socket-service/Dockerfile` e pelo `webServer` do Playwright.
+- **Auth no handshake**: `socket.handshake.auth.token` = access token **RS256** verificado com `JWT_PUBLIC_KEY` (`socket-service/src/auth.ts`, `jose` + `algorithms: ["RS256"]`). **Desvio documentado do plano**: o T069 pedia `JWT_SECRET`, mas o ADR-009 (nota na ADR-007) manda validar o access token custom RS256 — a mesma chave pública de `src/services/token-service.ts`. **Revogação (Crítico 5)**: o handshake também exige a claim `tokenVersion` (inteiro) e a compara com o espelho Redis `auth:tokenVersion:{userId}` (`getCachedTokenVersion` de `socket-service/src/redis-auth.ts`, mesma chave do `token-service`) — **cache miss/Redis fora é fail-open** (o container não tem Prisma; Dockerfile copia só `socket-service/`). A revogação efetiva chega por (1) **kick instantâneo**: `publishAuthKick()` no canal **`auth:kicks`** chamado por `bumpTokenVersion`/`revokeAllSessions`/`softDeleteAccount` (`src/services/token-service.ts`) → `disconnectSockets(true)` da room `user:{id}` (`socket-service/src/server.ts`); e (2) **revalidação periódica** a cada 60 s (`revalidateIntervalMs` em `socket-service/src/server.ts`) que checa `exp` + `tokenVersion` e desconecta — cobre kick perdido (Redis fora no momento do publish). Demais checagens: `maxTokenAge` = `ACCESS_TOKEN_TTL_SECONDS` (env **validada no boot** por `socket-service/src/lib/env.ts` desde a revisão R2 — antes era `process.env` cru lido em `auth.ts`; default 900 s, **tem de casar com o token-service do Next**) + 60 s, `clockTolerance` 30 s, `iss`/`aud` **não** verificados (o `token-service` não os emite; adicionar a checagem invalidaria todos os tokens vivos), chave pública cacheada por PEM (`publicKeyCache` — rotação = nova entrada). Testes: `tests/unit/socket-auth.test.ts` (revogado, cache miss fail-open, `maxTokenAge`, `clockTolerance`, reuso de KeyObject) + `tests/integration/websocket-server.test.ts` (kick desconecta o alvo e só o alvo). CORS: `origin = AUTH_URL`.
+- **Rooms**: no `connection` o servidor entra sozinho em `user:{userId}` e `feed:{userId}`; joins de cliente casam apenas `^(post|comment):[A-Za-z0-9_-]+$` via `room:join`/`room:leave` com ack — `user:`/`feed:` pedidas por cliente recebem `{ok:false, error:"room_forbidden"}` (anti-spoof: só o servidor entra nessas rooms). **Acks de `room:join`** (revisão M): `{ok:true}` | `room_forbidden` (regex não casa, `user:`/`feed:` ou visibilidade negada) | `room_cap` (cap de `maxClientRooms` = 100 rooms por socket; re-join idempotente não consome vaga) | `room_error` (falha interna em `socket.join`). **Visibilidade**: antes do join o servidor chama `verifyRoomAccess` (`socket-service/src/room-access.ts`) — `GET {AUTH_URL}/api/v1/social/posts/{id}` com o Bearer do próprio socket (timeout 1500 ms): `200→true`, `401/403/404→false` (`room_forbidden`), `5xx`/rede/timeout → `null` → **fail-open** documentado; `comment:{id}` não tem endpoint de leitura hoje (T077/Phase 3) → sempre `null` (fail-open) até a API existir.
+- **URL do cliente**: `NEXT_PUBLIC_WS_URL` (documentada em `docs/02-architecture/deployment.md` §2.4 e `.env.example`; validação Zod `z.string().url()` + refine `http/https/ws/wss` em `src/lib/env.ts`, resolução em `resolveSocketUrl` de `src/lib/socket-url.ts` — dev/sem var → default `http://localhost:3003`, **produção sem var → `null`** = realtime desabilitado, fallback de polling, nunca localhost (C1 da revisão multi-agente 2026-10-04); URL malformada → throw) — `src/hooks/use-socket.ts`.
+- **Resiliência**: singleton com refcount, reconexão com backoff 1s→30s — incluindo **rejeição de handshake** (`CONNECT_ERROR` de namespace, que o socket.io não religa sozinho porque `destroy()` limpa os subs; o `connect_error` de **transporte** fica com o backoff do Manager — `use-socket.ts`, arquitetura C-2 da revisão multi-agente 2026-10-04; `rate_limited` espera 60 s = janela do limiter). Enquanto o socket **não** está conectado, polling a cada 30s em `GET /api/v1/social/polling/{posts,notifications}?since=` (janela inicial 5 min, amplitude máxima **24 h** — clamp `POLLING_MAX_SINCE_MS`, integridade C1; rate limit **60/min por usuário** compartilhado entre as 4 rotas de polling — revisão O, `guardPolling`; polling é suprimido assim que o socket conecta). **Cursor por endpoint** `{since, until, pending}` (`PollCursor` em `src/hooks/use-socket.ts`): página cheia (≥ `POLLING_TAKE` = 50, constante em `src/lib/social/polling-window.ts`) **trava o `since` e drena o backlog com `?until=`** antes de avançar o cursor — `resolveUntil()` de `src/app/api/v1/social/polling/polling-utils.ts` devolve **422** para data inválida (revisão I-1). O envelope devolve `serverTime` no topo e o cliente usa o **mais antigo** entre `sentAt` e `serverTime` como cursor (`pollingCursor` em `src/hooks/use-socket.ts`) — imune a skew de relógio. **Sem catch-up**: eventos emitidos enquanto o cliente estava offline não são recuperados após reconectar (pendência registrada na Phase 2.5).
+- **Pendências da Phase 2.5 (2026-10-02, atualizado nas revisões)**: (1) checagem de visibilidade no `room:join` **resolvida para `post:`** na revisão M via API (acima); `comment:{id}` segue **fail-open** até o endpoint de comentário (T077, Phase 3). ~~(2) com `REDIS_URL` presente o adapter loga `missing 'error' handler on this Redis client`~~ — **resolvido na Phase 2.5 (revisão multi-agente 2026-10-04)**: handlers `error` no adapter pub/sub (`socket-service/src/server.ts`) e nos clients do singleton `src/lib/redis.ts`, cobertos por `tests/integration/websocket-adapter-env.test.ts` e `tests/unit/redis-client.test.ts`. ~~(3) polling sem rate limit~~ — **resolvido na revisão O** (limite `polling` 60/min, `docs/07-security/security.md` §Rate Limiting).
 
-| Evento | Direção | Descrição |
-|--------|---------|-----------|
-| `feed:new_post` | Server → Client | Nova postagem no feed |
-| `notification:new` | Server → Client | Nova notificação |
-| `presence:update` | Bidirectional | Status online/offline |
-| `reading:shared` | Server → Client | Leitura compartilhada |
-| `chat:message` | Bidirectional | Mensagens (futuro) |
+| Evento (nome canônico = `RealtimeEventMap` em `socket-service/src/emitters.ts`) | Direção | Rooms alvo | Status |
+|--------|---------|------------|--------|
+| `new-post` | Server → Client | `user:{id}`/`feed:{id}` dos **seguidores** do autor | **implementado** — emit em `POST /api/v1/social/posts` (T088 parcial); cliente `useFeedRealtime()` (`src/hooks/use-feed.ts`) busca o post e enfileira no pill "N novos posts" (dedup por id na fila do `useFeed`) |
+| `follow-update` | Server → Client | `user:{followingId}` | **implementado** — emit em `POST /api/v1/social/follow/:userId` (T088 parcial, inclui branch de corrida pós-rollback) |
+| `notification` | Server → Client | `user:{userId}` | **implementado** — badge em `src/components/social/notifications-provider.tsx` (carga inicial one-shot por polling + incremento por evento; **dedup por id** com `SEEN_IDS_CAP` = 500, revisão C) |
+| `like-updated` | Server → Client | `post:{postId}` | emitters prontos; **wiring de rota pendente (T076, Phase 3)** |
+| `comment-added` | Server → Client | `post:{postId}` (+ `user:{postAuthorId}` opcional) | emitters prontos; **wiring pendente (T077, Phase 3)** |
+| `comment-like-updated` | Server → Client | `post:{postId}` | emitters prontos; **wiring pendente (Phase 3)** |
+| `gift-received` | Server → Client | `user:{toUserId}` | emitters prontos; **wiring pendente (T120, Phase 3)** |
+| `presence:update`, `reading:shared`, `chat:message` | — | — | **não existem no código** — design legado desta seção (presença/chat/leitura compartilhada estão fora do escopo entregue) |
+
+- **Relay**: cada mensagem do Event Bus é entregue às rooms alvo em **todas** as instâncias (Redis adapter `@socket.io/redis-adapter`, só quando `REDIS_URL` está presente) e deduplicada por socket num `Set` — o cliente está em `user:{id}` **e** `feed:{id}` e não deve receber o mesmo evento duas vezes.
 
 ### 6.4 Event Bus (Inter-service)
 
-- **Implementação**: EventEmitter customizado (desenvolvimento), Redis Pub/Sub (produção)
-- **Eventos**:
+- **Implementação (realtime)**: Redis Pub/Sub no canal **`realtime:events`** quando `REDIS_URL` está presente (dev com docker compose e produção); **EventEmitter in-process** quando não está (testes — publicador e assinante correm no mesmo processo). Fonte: `socket-service/src/bus.ts` (`publishRealtime`/`subscribeRealtime`). O mesmo bus carrega o canal de **kick de revogação** **`auth:kicks`** (`AUTH_KICK_CHANNEL`, `publishAuthKick`/`subscribeAuthKick` em `socket-service/src/bus.ts`; fluxo em §6.3 "Auth no handshake") — o sub assina os dois canais de uma vez (`sub.subscribe(REALTIME_CHANNEL, AUTH_KICK_CHANNEL)`).
+- **Fluxo**: as rotas do Next chamam `emit*()` de `socket-service/src/emitters.ts` (alias `@socket/*` do `tsconfig.json`, import `@socket/src/emitters`) → `publishRealtime()` → canal → o socket-service assina e repassa para as rooms (§6.3). **Fire-and-forget**: falha de bus/DB é logada e engolida — nunca derruba a ação de negócio que disparou o emit.
+- **Conexão Redis — fail-fast por chamada + auto-heal** (`socket-service/src/bus.ts`; revisões Crítico 4/K + correção de raiz do E2E T075):
+  - **Fail-fast preservado no publish**: `createBusRedisClient()` configura `retryStrategy: () => null`, `enableOfflineQueue: false`, `maxRetriesPerRequest: 1` + `commandTimeout: 2000` / `connectTimeout: 3000` — **uma tentativa por chamada**, sem fila offline e sem retry de conexão embutido, para o `publishRealtime()`/`publishAuthKick()` nunca pendurar o request path das rotas. A falha vira `logger.warn` e é engolida (fire-and-forget acima).
+  - **(a) Cliente morto detectado no próximo uso**: com `retryStrategy: () => null` um cliente **nunca reconecta sozinho** — depois de `ECONNRESET` (observado com Memurai local ~30 s após o boot) ele fica `status === "end" || "close"` para sempre e todo publish seguinte falharia com `Connection is closed`. `ensureRedis()` checa o estado do **pub e do sub**; morto → `discardDeadClients()` (zera `pubClient`/`subClient`/`redisReady`) → **nova tentativa na mesma chamada**. Promise rejeitada **não** fica cacheada (o `catch` limpa `redisReady`), então a próxima chamada refaz a tentativa em vez de herdar a falha antiga.
+  - **(b) Reconexão automática do sub em background**: `registerSubCloseHandler(sub)` agenda `scheduleBusReconnect(sub)` nos eventos `close`/`end` do sub — backoff **1 s → 30 s** (`1000 * 2 ** failures`, cap 30 000 ms) e **máx 5 falhas consecutivas**, depois das quais o timer desiste (o próximo `publishRealtime()`/`subscribeRealtime()` ainda reconecta pelo item (a)); a flag `busShuttingDown` (limpa por `resetRealtimeBus()`) cancela o timer em shutdown/testes. É necessário porque o socket-service **não publica nada** — sem isto o sub ficaria permanentemente mudo após um ECONNRESET.
+  - **Testes**: `tests/integration/realtime-bus.test.ts` — grupo `auto-recuperação de conexão morta (ECONNRESET)` (4 casos: pub morto, sub morto, `close` agenda reconexão sem publish, falha não trava o próximo publish) + grupo `fail-fast do Redis (Crítico 4)`; hooks de teste `injectBusClientsForTests()`/`busConnectAttemptsForTests()` exportados por `socket-service/src/bus.ts`.
+- **Eventos de realtime publicados hoje**: `new-post`, `like-updated`, `comment-added`, `comment-like-updated`, `follow-update`, `notification`, `gift-received` (rooms em §6.3).
+- **Eventos inter-services planejados** — nenhum publicador/consumidor existe no código hoje:
 
 | Evento | Publicador | Consumidores |
 |--------|------------|-------------|

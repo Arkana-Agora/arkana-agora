@@ -66,7 +66,7 @@ O sistema de reservas (booking) permite que clientes escolham data, horário e t
 | Social | Módulo interno | Avaliações e posicionamento |
 | Pagamentos | Módulo interno | Processamento e repartição |
 | Notificações | Módulo interno | Lembretes de agendamento |
-| Chat/Notificações em tempo real | Infraestrutura | WebSocket para consultas ao vivo |
+| Chat/Notificações em tempo real | Infraestrutura | WebSocket para consultas ao vivo — **`socket-service/` existe desde a Phase 2.5 (2026-10-02), porém não há eventos de chat: `chat:message` não existe no `RealtimeEventMap` (presença/chat fora do escopo MVP)** |
 | Moderação (Admin) | Módulo interno | Verificação de profissionais |
 
 ---

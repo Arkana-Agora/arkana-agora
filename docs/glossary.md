@@ -28,7 +28,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | PWA | Progressive Web App (manifest, service worker, offline cache) — planned V1 | `docs/01-product/mvp.md` |
 | LGPD | Lei Geral de Proteção de Dados (Lei 13.709/2018); privacy-by-design requirement | `docs/07-security/lgpd.md`, `docs/07-security/security.md` |
 | JWT | JSON Web Tokens (RS256) for API sessions: access 15 min, refresh 30 days (opaque, rotation) | `docs/04-api/authentication.md`, `docs/07-security/security.md` |
-| JWT Bearer / API Key / Internal Token | Authentication header types: `Authorization: Bearer`, `X-API-Key`, `X-Internal-Token` | `docs/04-api/overview.md` |
+| JWT Bearer / API Key | Authentication header types: `Authorization: Bearer`, `X-API-Key` | `docs/04-api/overview.md` |
 | Auth.js v5 | Auth library (`next-auth@5.0.0-beta.32` pinned, ADR-010; supersedes the NextAuth.js v4 clause of ADR-009): JWT strategy; Google OAuth + magic link (MVP); Facebook + credentials (Sprint 1) | `docs/04-api/authentication.md`, ADR-010, `docs/02-architecture/architecture.md` |
 | Prisma | TypeScript ORM; Docker Postgres 16 (dev) → Neon PostgreSQL (prod) | `docs/03-database/*`, ADR-002 |
 | PostgreSQL (Docker Postgres 16 dev / Neon prod) | Dev/prod databases — same engine since F1 (no SQLite) | `docs/02-architecture/deployment.md` §1 |
@@ -37,7 +37,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | BullMQ | Background job queue (worker :3005) — planned | `docs/02-architecture/architecture.md`, `docs/02-architecture/scalability.md` |
 | openai SDK | Official OpenAI Node client used for AI interpretations (OpenAI GPT-4o / GPT-4o-mini) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md` |
 | Model Router | Feature → model mapping with fallback chain | `docs/05-ai/providers.md` |
-| Event Bus | Inter-service event propagation (EventEmitter dev / Redis Pub/Sub prod) | `docs/02-architecture/architecture.md` §6 |
+| Event Bus | Inter-service event propagation — Redis Pub/Sub (`realtime:events` + `auth:kicks` for revocation kicks) when `REDIS_URL` is set (docker dev + prod), in-process EventEmitter otherwise (tests); realtime events only, business events planned; fail-fast per publish + auto-heal (`socket-service/src/bus.ts`) | `docs/02-architecture/architecture.md` §6 |
 | Kotlin/Expo — N/A | Placeholder; mobile client planned as Expo React Native | `docs/02-architecture/architecture.md` §7 |
 
 ## Disambiguation

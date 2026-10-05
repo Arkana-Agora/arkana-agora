@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-09-24
+> Versão: 1.2 | Última atualização: 2026-10-02
 
 ---
 
@@ -376,6 +376,8 @@ observer.observe({ entryTypes: ['resource'] });
 
 Endpoints de métricas expostos via `/api/metrics`:
 
+> **Status (estado-alvo, NÃO implementado):** `src/lib/metrics.ts` e a rota `/api/metrics` **não existem** no repo, `prom-client` não está nas dependências — o bloco abaixo é o design (o mesmo "planejado" já registrado na tabela de `docs/infrastructure.md`). Em particular **`socketio_connections_active` continua planejado**: o `socket-service/` (Sprint 2 Phase 2.5, 2026-10-02) **não instrumenta** conexões, emites nem relay — só logs estruturados; o fallback de observabilidade real-time hoje é o log de boot/`warn` do próprio serviço. Não assuma métricas de WebSocket disponíveis em dashboards.
+
 ```typescript
 // src/lib/metrics.ts
 import { Counter, Histogram, Gauge } from 'prom-client';
@@ -439,6 +441,8 @@ export async function GET() {
 
 > **Contrato (implementado):** `database` é a única dependência dura do envelope `{status, timestamp, version, services: { database, redis }}`. HTTP 200 é alcançável assim que o check de banco passa; 503 em falha dura de banco **ou** de um serviço opcional configurado. `status` no corpo é derivado dos checks (`ok`/`degraded`) e nunca contradiz o código HTTP. As probes rodam em paralelo (`Promise.allSettled`) e cada uma é time-boxed. Redis entrou no envelope como serviço **opcional**: com `REDIS_URL` configurada, a probe real falha → `error` (degrada); sem `REDIS_URL`, reporta `{ status: 'not-configured' }`, neutro — não derruba o endpoint. A IA **ainda não faz parte do envelope** — quando for adicionada como serviço real, implemente `checkAI()` seguindo `docs/solutions/patterns/backend/health-check-envelope.md` e estenda `services`. Falhas são logadas via Pino (`@/lib/logger`) com prefixo `[health]`.
 
+> **Segundo health endpoint (Sprint 2 Phase 2.5, 2026-10-02):** o mini-service `socket-service/` expõe `GET /health` em `SOCKET_PORT` (default 3003) retornando **`{"status":"ok"}` com HTTP 200** (`socket-service/src/server.ts` — `url.startsWith("/health")`; `socket-service/index.ts` é só o entry point). É uma **liveness probe** deliberadamente minimalista — processo separado, sem Prisma/Redis no request path — e **não** segue o envelope `{status, timestamp, version, services}` deste §6.3 nem `docs/solutions/patterns/backend/health-check-envelope.md`. É o que o `HEALTHCHECK` do Dockerfile/proxy do T067 espera; o processo só sobe com env válida (Zod em `socket-service/src/lib/env.ts`), então "processo vivo" é sinal suficiente. Se no futuro a probe passar a checar Redis pub/sub, adote o envelope.
+
 > **Integração Sentry (Fase 4 do Sprint 0):** `@sentry/nextjs` inicializado condicionalmente — server/edge via `src/instrumentation.ts` (`NEXT_PUBLIC_SENTRY_DSN`), client via `src/instrumentation-client.ts` (`NEXT_PUBLIC_SENTRY_DSN`). Sem DSN configurado, o SDK permanece desabilitado e o build não depende de credenciais. `next.config.ts` usa `withSentryConfig`; erros globais de render são capturados em `src/app/global-error.tsx` — e todos os `error.tsx` (6 segmentos + global) delegam para `src/components/route-error.tsx`, que chama `Sentry.captureException(error)` explicitamente no `useEffect` (erros engolidos por error boundary não chegam ao `onerror` global do SDK; no-op sem DSN). O `register()` de `src/instrumentation.ts` valida as env vars obrigatórias via `getEnv()` no boot (fail-fast — `REDIS_URL`/`JWT_*` inválidos derrubam o processo cedo, teste `tests/instrumentation.test.ts`). `sentry.properties`, `.sentryclirc` e `.env.sentry-build-plugin` ficam fora do git e do build context Docker.
 
 ---
@@ -499,7 +503,7 @@ Para a fase de microsserviços, será implementado **OpenTelemetry** para distri
 - **Span por query de banco**: Tempo de cada query Prisma
 - **Span por chamada IA**: Duração completa da interpretação GPT-4o
 - **Span por evento WebSocket**: Evento emitido até entrega ao cliente
-- **Context propagation**: Trace ID propagado entre web, ws-service e ai-service
+- **Context propagation**: Trace ID propagado entre web, socket-service e ai-service
 
 ### 8.2 Backends Considerados
 

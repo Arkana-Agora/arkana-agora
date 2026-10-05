@@ -6,6 +6,8 @@ Every authenticated API call (`/users/me/profile`, `/readings/...`, `/ai/...`) a
 
 Root cause: `verifyAccessToken()` (src/services/token-service.ts) parses the RSA public key **inside** the `jwtVerify` try/catch. When `JWT_PUBLIC_KEY` is absent in the runtime environment, `createPublicKey()` throws, the catch swallows it, and EVERY token is reported as `AUTH_TOKEN_INVALID` — including tokens just minted with the valid `JWT_PRIVATE_KEY`.
 
+Second consumer: the **socket-service handshake** (`socket-service/src/auth.ts` → `verifySocketToken()`) parses the same key. Without it every WebSocket connection is refused with `Unauthorized` and the client silently stays on the polling fallback (no visible error — the UI keeps working, just without realtime).
+
 ## Trigger
 
 - Browser: dashboard flashes login, pages bounce back to `/login`, `AuthGuard` loops.
@@ -23,7 +25,7 @@ Root cause: `verifyAccessToken()` (src/services/token-service.ts) parses the RSA
    - Local: `bun run dev` loads `.env.local` (Next) over `.env` (bun scripts). A quoted multi-line PEM block loads correctly under bun but may break under plain dotenv loaders — prefer the multiline PEM form.
    - Vercel/Railway: check the project env var; remember pasting a PEM as a single line with `\n` inside a JSON value breaks the key.
 2. If `.env.local` only has `JWT_PRIVATE_KEY`, derive the matching public key and add it in the same PEM block format (see `docs/07-security/security.md` §JWT / keypair generation).
-3. Restart the dev server (`bun run dev`) — env vars are read at process start.
+3. Restart the dev server (`bun run dev`) — env vars are read at process start. Restart the **socket-service too** (separate process — PM2 `socket-service/ecosystem.config.js` / Railway): it reads `JWT_PUBLIC_KEY` at startup and fails every handshake while the env is stale.
 4. Sign in again. First API call must return a real payload (or a legitimate per-endpoint error), not `AUTH_TOKEN_INVALID`; the terminal must now log `[auth:config]` **only** if a key is actually broken.
 5. Smoke-test the guard: navigate `/dashboard` → `/perfil` → `/tirar`; the pages must stay mounted (no login flash), and deck-art fallbacks (gradient placeholder) must render instead of broken images while `/images/decks/**` is absent.
 
