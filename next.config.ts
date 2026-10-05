@@ -1,6 +1,23 @@
 import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
+// Revisão I-e: NEXT_PUBLIC_WS_URL é inlined em BUILD time — `next build`
+// de produção sem a variável deixa o client SEM endpoint WebSocket: em
+// produção resolveSocketUrl devolve null e o realtime fica desabilitado
+// (fallback de polling; C1 revisão nextjs — nunca localhost, que
+// mandaria o access token para um processo local). WARN, não erro: o CI
+// (ci.yml) builda sem a var e não pode quebrar. Ver
+// docs/02-architecture/deployment.md (seção de build).
+if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_WS_URL) {
+  console.warn(
+    "[next.config] NEXT_PUBLIC_WS_URL ausente no build de produção — " +
+      "o client NÃO abrirá socket: resolveSocketUrl devolve null em " +
+      "produção e o realtime fica desabilitado (fallback de polling cobre " +
+      "posts/notificações). Defina a variável ANTES de `next build` " +
+      "(inlined no bundle; ver docs/02-architecture/deployment.md).",
+  )
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@prisma/client", "pino"],
