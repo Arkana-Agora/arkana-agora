@@ -96,7 +96,7 @@ Os presentes variam desde opções acessíveis (Estrela Cadente, 10 Versos) até
 | Profissionais | Módulo interno | Conversão para receita |
 | Pagamentos | Módulo interno | Compra de Versos via Mercado Pago |
 | Notificações | Módulo interno | Alerta de presente recebido |
-| WebSocket | Infraestrutura | Exibição em tempo real da animação |
+| WebSocket | Infraestrutura | Exibição em tempo real da animação — **serviço pronto desde a Phase 2.5 (2026-10-02): `socket-service/` na 3003 e o evento `gift-received` já existe no `RealtimeEventMap` (`socket-service/src/emitters.ts`), mas ninguém ainda o emite — o wiring é T120/Phase 3** |
 
 ---
 

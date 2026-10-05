@@ -25,6 +25,10 @@ arkana-agora-spec.html
 arkana-agora.code-workspace
 *.cjs
 
-# Documentação — formatação manual deliberada (tabelas largas)
+# Documentação — DECISÃO deliberada, registrada na revisão Phase 2.5
+# (2026-10-03): docs/ e .specs/ ficam fora do prettier e os gates de
+# formatação (prettier --check) NÃO validam os .md alterados. Motivo:
+# markdown manual (tabelas largas, hard-breaks intencionais) quebra com
+# formatação automática — .md é revisado por review, não por formatação.
 docs/
 .specs/

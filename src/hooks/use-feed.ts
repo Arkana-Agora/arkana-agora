@@ -7,10 +7,11 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { z } from "zod"
 
 import authApi from "@/lib/api"
+import { useSocket } from "@/hooks/use-socket"
 import type { CreatePostInput } from "@/lib/validators/social"
 
 const feedAuthorSchema = z
@@ -87,6 +88,13 @@ function feedKey(cursor?: string | null) {
 type PendingListener = (post: FeedPost) => void
 const pendingListeners = new Set<PendingListener>()
 
+/**
+ * Revisão T: teto da fila do pill — flood de `new-post` (ou polling
+ * offline prolongado) não cresce a fila sem limite; o corte mantém os
+ * MAIS NOVOS (inserção no topo) e descarta os mais antigos.
+ */
+export const PENDING_POSTS_CAP = 50
+
 export function emitPendingPost(post: FeedPost): void {
   for (const listener of pendingListeners) listener(post)
 }
@@ -107,9 +115,11 @@ export function useFeed(cursor?: string | null) {
 
   useEffect(() => {
     const listener: PendingListener = (post) =>
-      setPendingPosts((prev) =>
-        prev.some((item) => item.id === post.id) ? prev : [post, ...prev],
-      )
+      setPendingPosts((prev) => {
+        if (prev.some((item) => item.id === post.id)) return prev
+        // Revisão T: cap de 50 mantendo os mais novos (topo)
+        return [post, ...prev].slice(0, PENDING_POSTS_CAP)
+      })
     pendingListeners.add(listener)
     return () => {
       pendingListeners.delete(listener)
@@ -161,6 +171,111 @@ export function useFeed(cursor?: string | null) {
   }, [cursor, pendingPosts, queryClient])
 
   return { ...query, pendingPosts, flushPending }
+}
+
+/**
+ * Janela de batching do realtime do feed (revisão Q): rajadas de
+ * `new-post` viram UMA chamada ao endpoint de polling
+ * (`GET /social/polling/posts?since=`) — sem N+1 (antes: 1 GET por
+ * evento). A janela abre no primeiro evento e dura 300ms; ids do lote
+ * só saem da fila em caso de sucesso (falha re-enfileira p/ retry).
+ */
+const FEED_REALTIME_BATCH_MS = 300
+
+// Revisão R1: re-tenta o lote que falhou sem esperar um novo evento —
+// 3s (não os 300ms da janela normal) para não martelar o bucket de rate
+// limit "polling" (60/min) quando o servidor está fora.
+const FEED_REALTIME_RETRY_MS = 3000
+
+const pollingPostsEnvelopeSchema = z.object({
+  data: z.object({ posts: z.array(feedPostSchema) }),
+  serverTime: z.string().optional(),
+})
+
+/**
+ * Revisão R1 (mesma semântica de `pollingCursor` em use-socket, revisão S):
+ * o cursor só avança até o `serverTime` da resposta — nunca além do
+ * relógio do cliente — para não pular posts por skew de relógio.
+ */
+function advanceSinceCursor(requestedAt: string, serverTime?: string): string {
+  if (serverTime === undefined) return requestedAt
+  const serverMs = Date.parse(serverTime)
+  if (Number.isNaN(serverMs)) return requestedAt
+  return serverMs < Date.parse(requestedAt) ? serverTime : requestedAt
+}
+
+/**
+ * Listener realtime do feed (T072/Q27): eventos `new-post` do WebSocket
+ * são agrupados numa janela de 300ms e resolvidos com UMA consulta ao
+ * fallback de polling (revisão Q — sem 1 GET por evento); apenas os ids
+ * que chegaram por evento viram pill "N novos posts" via
+ * `emitPendingPost` (dedup por id acontece na fila, `useFeed`). Falha
+ * offline: janela preservada para retry e falha engolida (sem crash).
+ */
+export function useFeedRealtime(): void {
+  const idsRef = useRef<Set<string>>(new Set())
+  const sinceRef = useRef<string>(new Date().toISOString())
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Revisão R1: o retry do catch re-agenda via ref (o flush não pode se
+  // referenciar antes da própria declaração no useCallback)
+  const flushRef = useRef<() => void>(() => undefined)
+
+  const flush = useCallback(() => {
+    timerRef.current = null
+    const batch = idsRef.current
+    idsRef.current = new Set()
+    const since = sinceRef.current
+    const requestedAt = new Date().toISOString()
+    void authApi
+      .get("/social/polling/posts", { params: { since } })
+      .then((res) => {
+        const envelope = pollingPostsEnvelopeSchema.parse(res.data)
+        const posts = envelope.data.posts
+        // só avança a janela quando não há backlog (um evento que chegou
+        // durante o voo seria perdido por `createdAt > since`) e nunca
+        // além do serverTime do servidor (revisão R1 — skew de relógio)
+        if (idsRef.current.size === 0) {
+          sinceRef.current = advanceSinceCursor(
+            requestedAt,
+            envelope.serverTime,
+          )
+        }
+        const wanted = posts.filter((post) => batch.has(post.id))
+        // mais novo por último no prepend → topo do pill = post mais novo
+        for (const post of [...wanted].reverse()) emitPendingPost(post)
+      })
+      .catch(() => {
+        // Revisão R1: re-enfileira o lote E re-agenda o retry — sem um
+        // novo evento o pill nunca sairia da fila (timer já zerado)
+        idsRef.current = new Set([...idsRef.current, ...batch])
+        if (timerRef.current === null) {
+          timerRef.current = setTimeout(
+            () => flushRef.current(),
+            FEED_REALTIME_RETRY_MS,
+          )
+        }
+      })
+  }, [])
+
+  useEffect(() => {
+    flushRef.current = flush
+  })
+
+  useSocket({
+    "new-post": (event) => {
+      idsRef.current.add(event.postId)
+      if (timerRef.current === null) {
+        timerRef.current = setTimeout(flush, FEED_REALTIME_BATCH_MS)
+      }
+    },
+  })
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current)
+    },
+    [],
+  )
 }
 
 /**

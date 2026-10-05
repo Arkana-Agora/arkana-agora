@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react"
 import { PostCard } from "@/components/social/post-card"
 import { PostComposer } from "@/components/social/post-composer"
 import { Button } from "@/components/ui/button"
-import { useFeed } from "@/hooks/use-feed"
+import { useFeed, useFeedRealtime } from "@/hooks/use-feed"
 
 /** Distância (px) de arrasto para disparar o pull-to-refresh. */
 const PULL_THRESHOLD = 60
@@ -33,6 +33,7 @@ export default function FeedPage() {
     pendingPosts,
     flushPending,
   } = useFeed()
+  useFeedRealtime()
   const [composerOpen, setComposerOpen] = useState(false)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const startY = useRef<number | null>(null)
@@ -56,6 +57,9 @@ export default function FeedPage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    // Revisão UX: o composer renderiza dentro deste <main> (sem portal) —
+    // com o modal aberto, arrastar sobre ele não dispara pull-to-refresh.
+    if (composerOpen) return
     if (event.currentTarget.scrollTop <= 0) {
       startY.current = event.touches[0]?.clientY ?? null
     } else {

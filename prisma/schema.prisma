@@ -285,6 +285,9 @@ model Follow {
   @@unique([followerId, followingId])
   @@index([followingId, createdAt, id])
   @@index([followerId, createdAt, id])
+  // Revisão R: membership "quem me segue" (followingId [+ followerId])
+  // index-only, sem varrer createdAt
+  @@index([followingId, followerId])
   @@map("follows")
 }
 
@@ -342,6 +345,8 @@ model Comment {
   @@index([postId, createdAt])
   @@index([authorId])
   @@index([parentCommentId])
+  // Revisão R: polling/comments range + order em createdAt
+  @@index([createdAt])
   @@map("comments")
 }
 
@@ -356,6 +361,8 @@ model PostLike {
 
   @@unique([postId, userId])
   @@index([userId])
+  // Revisão R: polling/likes range + order em createdAt
+  @@index([createdAt])
   @@map("post_likes")
 }
 
@@ -414,6 +421,8 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
+  // Revisão R: polling/notifications range + order em createdAt
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 

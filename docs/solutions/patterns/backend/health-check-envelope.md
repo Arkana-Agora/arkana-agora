@@ -25,6 +25,8 @@ established_in: "Health endpoint fixed and hardened in the Next.js 16 skeleton (
 
 Use this pattern whenever you build or extend a status/health endpoint in this repo: the existing `GET /api/health` (skeleton ops baseline, per `docs/infrastructure.md`, `docs/02-architecture/observability.md` §6.3 and `docs/08-sprints/sprint-0.md`), the planned `GET /admin/system/health` (`docs/04-api/admin.md`), or any future probe endpoint. It answers three recurring questions: (1) how do I add a real service check (Redis, AI provider) without breaking the envelope contract? (2) how do I make optional dependencies degrade nothing when unconfigured? (3) how do I keep the HTTP status, the body `status`, and the version consistent?
 
+> **Scope note (2026-10-02):** this envelope applies to **Next.js app routes** (`src/app/api/**`). Process-level liveness probes of separate services stay outside it — e.g. `socket-service` `GET /health` returns bare `{"status":"ok"}` because its Docker `HEALTHCHECK`/PM2 watchdog only needs process liveness (see `docs/02-architecture/observability.md` §6.3).
+
 ## Source of Truth Files
 
 - `src/app/api/health/route.ts` — the implemented envelope (contract in code)

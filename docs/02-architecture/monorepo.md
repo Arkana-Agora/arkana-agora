@@ -1,6 +1,6 @@
 # Estratégia de Monorepo — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2026-08-13
+> Versão: 1.1 | Última atualização: 2026-10-02
 
 ---
 
@@ -124,7 +124,7 @@ arkana-agora/
 │   │   │   └── prompts/       # Templates de prompts
 │   │   └── package.json
 │   │
-│   ├── ws-service/            # Serviço WebSocket (atual mini-service)
+│   ├── socket-service/         # Serviço WebSocket (hoje na raiz do repo como `socket-service/` — mover aqui na Fase 3)
 │   │   ├── src/
 │   │   │   ├── index.ts
 │   │   │   ├── handlers/      # Event handlers
@@ -224,7 +224,7 @@ packages:
 
 ### 4.1 Matriz de Compartilhamento
 
-| Pacote | web | mobile | admin | ws-service | ai-service |
+| Pacote | web | mobile | admin | socket-service | ai-service |
 |--------|:---:|:------:|:-----:|:----------:|:----------:|
 | `@arkana/types` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `@arkana/ui` | ✅ | ❌* | ✅ | ❌ | ❌ |
@@ -252,7 +252,7 @@ pnpm changeset publish  # Publica pacotes no registry
 
 - **Pacotes**: `@arkana/{nome}` — ex: `@arkana/types`, `@arkana/ui`
 - **Apps**: sem prefixo — ex: `web`, `mobile`, `admin`
-- **Services**: sem prefixo — ex: `ai-service`, `ws-service`
+- **Services**: sem prefixo — ex: `ai-service`, `socket-service`
 
 ---
 
@@ -277,10 +277,10 @@ pnpm changeset publish  # Publica pacotes no registry
 - [ ] Adicionar `apps/mobile/` (Expo) consumindo `@arkana/api-client`
 
 ### Fase 3: Microsserviços (Sprint 7-8)
-- [ ] Mover ws-service para `services/ws-service/`
+- [ ] Mover `socket-service/` da raiz para `services/socket-service/` (o serviço já existe na raiz desde a Phase 2.5 — 2026-10-02 — como `socket-service/`, não `ws-service`)
 - [ ] Criar `services/ai-service/` (separar lógica IA do web)
 - [ ] Criar `services/worker/` (jobs em background com BullMQ)
-- [ ] Configurar Event Bus inter-service (Redis Pub/Sub)
+- [ ] Configurar Event Bus inter-service (Redis Pub/Sub) — o bus **dentro** do socket-service já existe (`socket-service/src/bus.ts`, canal `realtime:events`, Redis Pub/Sub ou EventEmitter in-process); falta o bus **entre serviços distintos** (feed → ai-service/worker)
 
 ### Fase 4: Admin e Expansão (Sprint 9+)
 - [ ] Adicionar `apps/admin/` (painel administrativo)

@@ -7,7 +7,6 @@ import { useEffect, useState } from "react"
 
 import { AnalyticsConsentBanner } from "@/components/analytics/consent-banner"
 import { ErrorBoundary } from "@/components/error-boundary"
-import { MobileNav } from "@/components/layout/mobile-nav"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 
@@ -60,7 +59,6 @@ export function Providers({ children }: { children: ReactNode }) {
         >
           <ServiceWorkerRegistration />
           <ErrorBoundary>{children}</ErrorBoundary>
-          <MobileNav />
           <AnalyticsConsentBanner />
           <Toaster position="bottom-right" richColors />
         </ThemeProvider>

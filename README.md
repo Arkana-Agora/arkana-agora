@@ -10,9 +10,9 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ## Current Status
 
-- **Sprint 0 implemented at the repo root:** Next.js 16 (App Router) modular-monolith app per ADR-001/ADR-002 — `bun` toolchain (`package.json`), `src/app/` (layout/page/error/loading/not-found + `src/app/api/health/route.ts`), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (5 models: User, UserProfile, Subscription, Session, VerificationToken), `prisma/migrations/` (init `20260813000605_init`), `prisma/seed.ts` (admin + test), `tests/` (vitest), Docker infra (`Dockerfile`, `docker-compose.yml` — Postgres 16 + Redis + migrate + web), `.env.example` (var names only, no secrets). Dev DB: Docker Postgres 16 via `bunx prisma migrate dev`. Full tree: `docs/02-architecture/monorepo.md` §1.
-- **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth**, em `src/auth/`, `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`. Credenciais e-mail/senha e Facebook OAuth ficam para o **Sprint 1**. Envs: `AUTH_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `AUTH_EMAIL_SKIP_SEND` (dev loga o magic link no console), `SMTP_*`/`EMAIL_FROM`. `/api/health` retorna 200 quando o DB check passa e 503 apenas quando falha (envelope `{status,timestamp,version,services:{database}}`; top-level `status` espelha o HTTP como `ok`/`degraded`; Redis/AI checks entram quando esses serviços forem ligados, per `docs/02-architecture/observability.md` §6.3). **Resto da camada auth (Custom JWT Layer, credentials, Facebook) e todos os demais domínios (IA, pagamentos, social, admin) ainda são planejados** — tudo em `docs/` e `.specs/` descreve o **design documentado** (SDD, ADRs, specs). Nada está provisionado/deployado.
-- `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root (aux services live in `services/` per `docs/02-architecture/deployment.md` §2.1).
+- **Sprint 0 implemented at the repo root:** Next.js 16 (App Router) modular-monolith app per ADR-001/ADR-002 — `bun` toolchain (`package.json`), `src/app/` (layout/page/error/loading/not-found + `src/app/api/health/route.ts`), `src/lib/prisma.ts` (Prisma singleton), `prisma/schema.prisma` (**25 models today** — Sprint 0 shipped 5: User, UserProfile, Subscription, Session, VerificationToken; social models landed in Sprint 2 Phase 0), `prisma/migrations/` (init `20260813000605_init`), `prisma/seed.ts` (admin + test), `tests/` (vitest), Docker infra (`Dockerfile`, `docker-compose.yml` — Postgres 16 + Redis + migrate + web), `.env.example` (var names only, no secrets). Dev DB: Docker Postgres 16 via `bunx prisma migrate dev`. Full tree: `docs/02-architecture/monorepo.md` §1.
+- **Auth de login implementado (Sprint 0, F2A — ADR-010):** Auth.js v5 (`next-auth@5.0.0-beta.32`, adapter Prisma mínimo, JWT strategy) com **magic link** (e-mail) e **Google OAuth**, em `src/auth/`, `src/app/(auth)/login`, `src/app/api/auth/[...nextauth]/route.ts`. Credenciais e-mail/senha e Facebook OAuth ficam para o **Sprint 1**. Envs: `AUTH_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `AUTH_EMAIL_SKIP_SEND` (dev loga o magic link no console), `SMTP_*`/`EMAIL_FROM`. `/api/health` retorna 200 quando o DB check passa e 503 apenas quando falha (envelope `{status,timestamp,version,services:{database}}`; top-level `status` espelha o HTTP como `ok`/`degraded`; Redis/AI checks entram quando esses serviços forem ligados, per `docs/02-architecture/observability.md` §6.3). Resto da camada auth (Custom JWT Layer, credentials, Facebook) e os domínios IA, pagamentos e admin ainda são planejados — **exceto social**: Sprint 1/2/2.5 entregaram follow (T043–T050), posts/feed/explore/search (T051–T065) e realtime/polling (T066–T075, `socket-service/` + `GET /api/v1/social/polling/*`), descritos em `docs/04-api/social.md` e `docs/08-sprints/sprint-2.md`. O que não foi listado continua como **design documentado** (SDD, ADRs, specs). CI existe (`.github/workflows/ci.yml`); estado de provisionamento/deploy: `docs/02-architecture/deployment.md` e `docs/environments.md` (fonte da verdade — não assumir deploy a partir deste README).
+- `backend/` and `frontend/` remain **empty placeholders** and are NOT part of the documented structure — the MVP is a single Next.js app at the repo root. Aux service today: **`socket-service/` at the repo root** (no `services/` directory exists yet — that layout is the Sprint 7-8 target, `docs/02-architecture/monorepo.md` §Fase 3; `docs/02-architecture/deployment.md` §2.1).
 - **No AWS usage is documented.** Planned providers are fully managed SaaS: Vercel, Railway, Neon, Upstash, Cloudflare (CDN/WAF **and** R2 storage — not AWS S3), OpenAI, Mercado Pago, Sentry, PostHog.
 - **Tooling rule (resolved):** **`bun`** for the MVP single app; **`pnpm`** for the planned Turborepo monorepo (ADR-005). Storage = **Cloudflare R2** (env vars `R2_*`; no AWS S3). Canonical rules in `docs/02-architecture/deployment.md` §2.0 and `docs/glossary.md`.
 
@@ -21,12 +21,13 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 ```
 .
 ├── src/              # Next.js 16 monolith (MVP): app/ (App Router + API + auth), auth/, lib/, services/, stores/, types/
-├── prisma/           # schema.prisma (5 models) + migrations/ + seed.ts
-├── tests/            # vitest (tests/health.test.ts, tests/auth.test.ts)
+├── socket-service/   # Socket.io realtime mini-service (port 3003, ADR-007; runs via `bun run dev:ws`)
+├── prisma/           # schema.prisma (Sprint 0-2: auth + social) + migrations/ + seed.ts
+├── tests/            # vitest (unit/integration/hooks/components) + tests/e2e (Playwright)
 ├── public/           # static assets (empty)
-├── package.json      # bun toolchain: dev, build, lint, type-check, test, seed
+├── package.json      # bun toolchain: dev, dev:ws, build, lint, type-check, test, seed
 ├── next.config.ts    # reactStrictMode
-├── tsconfig.json     # strict; paths @/* → ./src/*
+├── tsconfig.json     # strict; paths @/* → ./src/*, @socket/* → ./socket-service/*
 ├── eslint.config.mjs # eslint-config-next (flat)
 ├── vitest.config.ts  # tsconfig-paths
 ├── .env.example      # documented env var names (no secrets)
@@ -65,7 +66,7 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ### Workflow-managed directories (`docs/`)
 
-`brainstorms/`, `plans/`, `work-plans/`, `solutions/`, `modules/`, `features/`, `lambdas/`, `runbooks/`, `decisions/`, `workflow/` — mostly empty templates (`.gitkeep`/README stubs) managed by the project workflow. `docs/runbooks/` and `docs/lambdas/` are empty indexes; no runbooks or Lambda definitions exist yet.
+`brainstorms/`, `plans/`, `work-plans/`, `solutions/`, `modules/`, `features/`, `lambdas/`, `runbooks/`, `decisions/`, `workflow/`, `infrastructure/` — workflow-managed directories under `docs/`. **With content today:** `solutions/` (patterns + solved-problem records), `plans/` + `work-plans/` (historical execution records — do not edit as living docs), `decisions/` (3 ADR-addendum notes), `runbooks/` (4: `jwt-public-key-missing-all-401`, `local-jwt-session-decryption`, `vercel-deploy-auth-url`, `vercel-deploy-github-token`), `modules/auth.md`, `features/authentication.md`, `workflow/operational-overrides.md`. **Empty stubs (`.gitkeep`/README only):** `brainstorms/`, `lambdas/` (no Lambda definitions exist yet), `infrastructure/`.
 
 ### Module specs (`.specs/`)
 
@@ -73,52 +74,52 @@ The platform combines esoteric reading tools (Tarot, Lenormand, numerology, Maya
 
 ## Tech Stack Snapshot
 
-All entries are **documented design** except what is flagged as implemented in Current Status: the Next.js 16 skeleton, Prisma + PostgreSQL, Docker infra, vitest, and the **login auth layer** (Auth.js v5 — magic link + Google). Everything else (AI, payments, social, Custom JWT Layer) is **planned**. (MVP = MVP target; **[planned]** = explicitly future).
+All entries are **documented design** except what is flagged as implemented in Current Status: the Next.js 16 skeleton, Prisma + PostgreSQL, Docker infra, vitest, the **login auth layer** (Auth.js v5 — magic link + Google), and **social realtime** (Socket.io mini-service + REST polling — Sprint 2 Phase 2.5). AI, payments, Custom JWT Layer and the remaining social writes (like/comment/gift, notification centre) are **planned**. (MVP = MVP target; **[planned]** = explicitly future).
 
-| Technology                                 | Role                                                                   | Status                                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Next.js (App Router)                       | Web framework: SSR, RSC, API Routes, SSE streaming                     | MVP                                                                             |
-| Prisma ORM                                 | Data access; PostgreSQL (Docker dev / Neon prod); migrations           | MVP                                                                             |
-| Auth.js v5 (`next-auth@5.0.0-beta.32`)     | Auth login: JWT session, Google OAuth + magic link (ADR-010)           | MVP — **implemented (login)**; credentials/Facebook/Custom JWT Layer = Sprint 1 |
-| OpenAI SDK (openai) + GPT-4o               | AI interpretations, SSE streaming, model router (GPT-4o-mini fallback) | MVP                                                                             |
-| Mercado Pago                               | Payments: PIX, card, boleto; split payment; Arkana Plus subscription   | MVP                                                                             |
-| Zustand                                    | Client-side state (UI, reading session, auth)                          | MVP                                                                             |
-| TanStack Query                             | Server-state cache, invalidation, mutations                            | MVP                                                                             |
-| shadcn/ui (New York) + Tailwind CSS 4      | Design system and styling                                              | MVP                                                                             |
-| Framer Motion                              | Card reveal/flip animations                                            | MVP                                                                             |
-| PostgreSQL (Neon + local Docker)           | Local dev DB → serverless prod DB                                      | MVP                                                                             |
-| Redis (Upstash)                            | Sessions, cache, rate limiting, WS adapter, BullMQ queues              | MVP                                                                             |
-| Cloudflare (CDN/DNS/WAF + R2)              | Edge, object storage (card images, uploads)                            | MVP                                                                             |
-| Socket.io mini-service (:3003)             | Real-time: feed, notifications, presence                               | MVP                                                                             |
-| Docker / docker-compose                    | Local full-stack stack (web, ws, postgres, redis, caddy)               | MVP                                                                             |
-| Pino + Sentry + PostHog + Vercel Analytics | Logging, error tracking, analytics                                     | MVP                                                                             |
-| Turborepo + pnpm workspaces                | Monorepo orchestration                                                 | **[planned]** (V1+)                                                             |
-| BullMQ worker (:3005)                      | Background jobs (daily horoscope, emails)                              | **[planned]**                                                                   |
-| Expo React Native                          | Mobile app                                                             | **[planned]**                                                                   |
+| Technology                                 | Role                                                                                                   | Status                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Next.js (App Router)                       | Web framework: SSR, RSC, API Routes, SSE streaming                                                     | MVP                                                                             |
+| Prisma ORM                                 | Data access; PostgreSQL (Docker dev / Neon prod); migrations                                           | MVP                                                                             |
+| Auth.js v5 (`next-auth@5.0.0-beta.32`)     | Auth login: JWT session, Google OAuth + magic link (ADR-010)                                           | MVP — **implemented (login)**; credentials/Facebook/Custom JWT Layer = Sprint 1 |
+| OpenAI SDK (openai) + GPT-4o               | AI interpretations, SSE streaming, model router (GPT-4o-mini fallback)                                 | MVP                                                                             |
+| Mercado Pago                               | Payments: PIX, card, boleto; split payment; Arkana Plus subscription                                   | MVP                                                                             |
+| Zustand                                    | Client-side state (UI, reading session, auth)                                                          | MVP                                                                             |
+| TanStack Query                             | Server-state cache, invalidation, mutations                                                            | MVP                                                                             |
+| shadcn/ui (New York) + Tailwind CSS 4      | Design system and styling                                                                              | MVP                                                                             |
+| Framer Motion                              | Card reveal/flip animations                                                                            | MVP                                                                             |
+| PostgreSQL (Neon + local Docker)           | Local dev DB → serverless prod DB                                                                      | MVP                                                                             |
+| Redis (Upstash)                            | Sessions, cache, rate limiting, WS adapter, BullMQ queues                                              | MVP                                                                             |
+| Cloudflare (CDN/DNS/WAF + R2)              | Edge, object storage (card images, uploads)                                                            | MVP                                                                             |
+| Socket.io mini-service (:3003)             | Real-time: feed + notifications (socket-service/ + REST polling fallback)                              | MVP — **implemented (Sprint 2 Phase 2.5, `bun run dev:ws`)**                    |
+| Docker / docker-compose                    | Local stack (postgres, redis, migrate, web — **no `ws` service**; `socket-service/` runs via `dev:ws`) | MVP                                                                             |
+| Pino + Sentry + PostHog + Vercel Analytics | Logging, error tracking, analytics                                                                     | MVP                                                                             |
+| Turborepo + pnpm workspaces                | Monorepo orchestration                                                                                 | **[planned]** (V1+)                                                             |
+| BullMQ worker (:3005)                      | Background jobs (daily horoscope, emails)                                                              | **[planned]**                                                                   |
+| Expo React Native                          | Mobile app                                                                                             | **[planned]**                                                                   |
 
 ## Getting Started
 
-A minimal skeleton is runnable (see Current Status); most feature work is still **planned**. Start by reading the SDD:
+A minimal skeleton is runnable (see Current Status); most feature work is still **planned** (social — follow/feed/realtime — is the exception, shipped in Sprint 2). Start by reading the SDD:
 
 1. `docs/00-overview/README.md` — project overview and conventions (pt-BR).
 2. `docs/architecture.md` — architecture reference and invariants (English).
 3. `docs/infrastructure.md` — target infrastructure and constraints (English).
 4. `docs/environments.md` — environment matrix and domains (English).
-5. `docs/02-architecture/deployment.md` — deployment plan (pt-BR, planned; no pipeline exists yet).
+5. `docs/02-architecture/deployment.md` — deployment reference (pt-BR; Vercel + CI in `.github/workflows/ci.yml`, Railway for `socket-service/` = planned).
 
-Local skeleton commands (repo root, `bun`): `docker compose up -d postgres` → `bun install` → copy `.env.example` → `.env` → `bunx prisma migrate dev` (applies `20260813000605_init`) → `bun run seed` → `bun run dev` (:3000). Checks: `bun run lint`, `bun run type-check`, `bun run test` (vitest — run the `test` **script**, not bare `bun test`/`npx vitest run`: only the script carries the `node --max-old-space-size=4096` heap flag that the full suite needs on constrained RAM, see `docs/solutions/ci-cd/turbopack-postcss-oom.md`). `/api/health` returns 200 when the DB check passes, 503 only on DB failure (`src/app/api/health/route.ts`). Login: `/login` (magic link + Google; in dev, `AUTH_EMAIL_SKIP_SEND=true` logs the link to the console).
+Local skeleton commands (repo root, `bun`): `docker compose up -d postgres` → `bun install` → copy `.env.example` → `.env` → `bunx prisma migrate dev` (applies `20260813000605_init`) → `bun run seed` → `bun run dev` (:3000); add a second terminal with `bun run dev:ws` (:3003) for realtime — `socket-service/` boots only with `AUTH_URL`, `JWT_PUBLIC_KEY` and (optionally) `REDIS_URL` (Zod in `socket-service/src/lib/env.ts`). Checks: `bun run lint`, `bun run type-check`, `bun run test` (vitest — run the `test` **script**, not bare `bun test`/`npx vitest run`: only the script carries the `node --max-old-space-size=4096` heap flag that the full suite needs on constrained RAM, see `docs/solutions/ci-cd/turbopack-postcss-oom.md`). `/api/health` returns 200 when the DB check passes, 503 only on DB failure (`src/app/api/health/route.ts`). Login: `/login` (magic link + Google; in dev, `AUTH_EMAIL_SKIP_SEND=true` logs the link to the console).
 
 Before any implementation work, load the mandatory baseline per `AGENTS.md`: `docs/`, `.specs/`, and the ADRs in `docs/02-architecture/decisions.md`. Never implement requirements that are not documented.
 
 ### Starting backend & frontend (concise)
 
-The documented architecture is a **Next.js modular monolith** — backend and frontend live in the same app at MVP; mini-services live in `services/`. Full bootstrap table: `docs/02-architecture/deployment.md` §2.1.
+The documented architecture is a **Next.js modular monolith** — backend and frontend live in the same app at MVP; the only aux service today is **`socket-service/` at the repo root** (`services/*` is the planned Sprint 7-8 layout). Full bootstrap table: `docs/02-architecture/deployment.md` §2.1.
 
 | Part                         | Framework                                      | Runs on                                  | Start                    |
 | ---------------------------- | ---------------------------------------------- | ---------------------------------------- | ------------------------ |
 | Frontend web                 | Next.js 16 (App Router), shadcn/ui, Tailwind 4 | `apps/web` (monorepo) / app root (MVP)   | `bun run dev` (:3000)    |
 | Backend API                  | Next.js API Routes + Prisma + Auth.js v5 + Zod | `src/app/api/v1/*` (same app)            | served by the same app   |
-| Backend WS                   | Node.js + Socket.io                            | `services/ws-service`                    | `bun run dev:ws` (:3003) |
+| Backend WS                   | Node.js + Socket.io                            | `socket-service/` (repo root)            | `bun run dev:ws` (:3003) |
 | Backend IA / Worker (future) | Node.js (+ BullMQ)                             | `services/ai-service`, `services/worker` | —                        |
 
 Toolchain: **`bun`** for MVP; **`pnpm`** for the planned monorepo (ADR-005). Storage: **Cloudflare R2** (`R2_*` env vars).

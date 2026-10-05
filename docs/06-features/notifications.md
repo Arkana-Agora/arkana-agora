@@ -2,7 +2,7 @@
 
 > **Identificador**: `arkana-agora` | **Módulo**: Notificações | **Versão**: V1
 >
-> **Status (2026-09-26; atualizado 2026-09-28)**: **parcialmente implementado.** O model `Notification` existe no schema desde o Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`) com as colunas reais `userId`, `type`, `message`, `data Json?`, `isRead`, `createdAt` — e **desde o Sprint 2 Phase 1 (T043) existe um writer**: a rota `POST /api/v1/social/follow/:userId` grava `Notification { type: "follow", data.followerId }` no mesmo `$transaction` do follow (sem emit WS — `follow-update`/`notification` ficaram para T088). **Ainda não existem** rota `GET /social/notifications`, serviço de push, fila nem UI de centro de notificações. **Divergência conhecida**: este doc descreve **8 categorias** (curtida, comentário, novo seguidor, presente, pagamento, leitura compartilhada, atualização de sistema, lembrete diário) enquanto `Notification.type` documenta **6 valores** (`follow`, `like`, `comment`, `gift`, `mention`, `horoscope`) — alinhar quando as rotas forem implementadas.
+> **Status (2026-09-26; atualizado 2026-10-02)**: **parcialmente implementado.** O model `Notification` existe no schema desde o Sprint 2 Phase 0 (migração `20260926182325_sprint2_social_horoscopes`) com as colunas reais `userId`, `type`, `message`, `data Json?`, `isRead`, `createdAt` — e **desde o Sprint 2 Phase 1 (T043) existe um writer**: a rota `POST /api/v1/social/follow/:userId` grava `Notification { type: "follow", data.followerId }` no mesmo `$transaction` do follow. **Desde a Sprint 2 Phase 2.5 (2026-10-02) o emit WS está ligado**: `emitFollowUpdate` + `emitNotification` (`socket-service/src/emitters.ts`, room `user:{targetId}`, pós-commit e fire-and-forget — T088 parcial) e existe **badge em tempo real**: `NotificationsProvider` (`src/components/social/notifications-provider.tsx`, montado em `src/app/(app)/layout.tsx`) carrega `unreadCount` one-shot via `GET /social/polling/notifications?since=` e incrementa a cada evento `notification` (**dedup por id** com `SEEN_IDS_CAP` = 500, revisão C), exibido por `src/components/layout/app-header.tsx` (`data-testid="unread-notifications-badge"`) e pela badge mobile em `src/components/layout/mobile-nav.tsx` (`data-testid="unread-notifications-badge-mobile"`, revisão U — testid distinto evita strict-mode violation no E2E; ambos dentro do `NotificationsProvider` montado no `(app)/layout.tsx`). **Ainda não existem** rota `GET /social/notifications`, serviço de push, fila nem UI de centro de notificações/marcação de lida (T083, Phase 6). **Divergência conhecida**: este doc descreve **8 categorias** (curtida, comentário, novo seguidor, presente, pagamento, leitura compartilhada, atualização de sistema, lembrete diário) enquanto `Notification.type` documenta **6 valores** (`follow`, `like`, `comment`, `gift`, `mention`, `horoscope`) — alinhar quando as rotas forem implementadas.
 
 ---
 
@@ -50,7 +50,7 @@ As notificações push utilizam o padrão Web Push API para navegadores e FCM (F
 3. O sistema consulta as preferências do destinatário para a categoria
 4. Se push habilitado, envia notificação push (FCM/Web Push)
 5. A notificação é persistida no banco de dados (in-app)
-6. O badge count é atualizado via WebSocket para o cliente conectado
+6. O badge count é atualizado via WebSocket para o cliente conectado — **implementado para o badge in-app desde a Phase 2.5** (`notification` → `NotificationsProvider`); push continua planejado
 7. O usuário visualiza a notificação no centro de notificações in-app
 8. O usuário pode tocar na notificação para navegar até o conteúdo relacionado
 9. O usuário pode marcar como lida individualmente ou limpar todas
@@ -84,7 +84,7 @@ As notificações push utilizam o padrão Web Push API para navegadores e FCM (F
 | FCM (Firebase) | API externa | Push notifications mobile |
 | Web Push API | API do navegador | Push notifications web |
 | Message Queue (Bull/Redis) | Infraestrutura | Fila de entrega com retry |
-| WebSocket | Infraestrutura | Badge count em tempo real |
+| WebSocket | Infraestrutura | Badge count em tempo real — **in-app implementado (Phase 2.5)**; push/FCM planejado |
 
 ---
 

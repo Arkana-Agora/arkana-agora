@@ -54,7 +54,6 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 |------|-----|--------|
 | JWT Bearer | Requisições autenticadas | `Authorization: Bearer <token>` |
 | API Key | Webhooks Mercado Pago | `X-API-Key: <key>` |
-| Interno | Serviço-a-serviço (WebSocket) | `X-Internal-Token: <token>` |
 
 ---
 

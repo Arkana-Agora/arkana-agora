@@ -1,9 +1,18 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { useNotifications } from "@/components/social/notifications-provider"
 import type { AppNavHref } from "@/lib/navigation"
 import { isAppNavActive } from "@/lib/navigation"
-import { History, Home, Sparkles, SquarePen, User } from "lucide-react"
+import {
+  Bell,
+  History,
+  Home,
+  Newspaper,
+  Sparkles,
+  SquarePen,
+  User,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -13,6 +22,7 @@ const NAV_ITEMS: ReadonlyArray<{
   icon: typeof Home
 }> = [
   { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/feed", label: "Feed", icon: Newspaper },
   { href: "/tirar", label: "Tirar", icon: SquarePen },
   { href: "/minhas-tiragens", label: "Histórico", icon: History },
   { href: "/meu-arcano", label: "Meu Arcano", icon: Sparkles },
@@ -21,6 +31,7 @@ const NAV_ITEMS: ReadonlyArray<{
 
 export function AppHeader() {
   const pathname = usePathname()
+  const { unreadCount } = useNotifications()
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:block">
@@ -57,6 +68,17 @@ export function AppHeader() {
             )
           })}
         </div>
+        {unreadCount > 0 ? (
+          <span
+            aria-label={`${unreadCount} notificações não lidas`}
+            data-testid="unread-notifications-badge"
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        ) : (
+          <Bell className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        )}
       </nav>
     </header>
   )

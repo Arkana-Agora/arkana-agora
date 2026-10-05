@@ -96,3 +96,18 @@ describe("schema Sprint 2 — campos críticos", () => {
     expect(schema).toContain(field)
   })
 })
+
+describe("schema - indices de polling/reverse-lookup (revisao R)", () => {
+  it.each([
+    ["Follow", "@@index([followingId, followerId])"],
+    ["PostLike", "@@index([createdAt])"],
+    ["Comment", "@@index([createdAt])"],
+    ["Notification", "@@index([userId, createdAt])"],
+  ])("%s declara %s", (model, constraint) => {
+    const block = schema.match(
+      new RegExp(`^model ${model} \\{[\\s\\S]*?^\\}`, "m"),
+    )
+    expect(block, `model ${model} nao encontrado`).toBeTruthy()
+    expect(block![0]).toContain(constraint)
+  })
+})

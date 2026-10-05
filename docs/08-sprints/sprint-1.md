@@ -76,7 +76,7 @@ Entregar o MVP funcional da plataforma Arkana Agora, permitindo que usuários se
 - [x] 26. Service worker para cache de assets e dados — **T107**
 - [x] 27. Offline fallback page para funcionalidades básicas — **T108**
 - [x] 28. Responsive design mobile-first em todas as telas — **shadcn + Tailwind**
-- [x] 29. Navegação mobile (bottom tabs): Home, Tirar, Histórico, Perfil — **T110 MobileNav** — **2026-09-24:** adicionado `AppHeader` desktop (5 itens, active-state prefix via `isAppNavActive` de `src/lib/navigation.ts`) + `BackLink` compartilhado; MobileNav permanece mobile-only (4 itens, exact-match)
+- [x] 29. Navegação mobile (bottom tabs): Home, Tirar, Histórico, Perfil — **T110 MobileNav** — **2026-09-24:** adicionado `AppHeader` desktop (5 itens, active-state prefix via `isAppNavActive` de `src/lib/navigation.ts`) + `BackLink` compartilhado; MobileNav permanece mobile-only (4 itens, exact-match) — **2026-10-04 (revisão UX, fora do Sprint 1):** aba **Feed** adicionada aos dois navs (CHK009 — `/feed` alcançável pelo login; 6 itens no AppHeader, 5 no MobileNav) e o MobileNav passou a usar `isAppNavActive` (active-state unificado, sem mais exact-match)
 
 ### UX e Qualidade
 - [x] 30. Loading states e skeleton screens em todas as telas — **T111 Skeleton + skeletons nas páginas**

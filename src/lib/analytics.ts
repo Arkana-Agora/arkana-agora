@@ -1,5 +1,3 @@
-"use client"
-
 import type { UserPlan } from "@prisma/client"
 
 import posthog from "posthog-js"

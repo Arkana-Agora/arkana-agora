@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client"
 
+import { emitNewPost } from "@socket/src/emitters"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { trackPostCreate, trackPostLimitHit } from "@/lib/analytics"
 import { apiError } from "@/lib/api-response"
@@ -9,12 +10,17 @@ import { enforceCsrf } from "@/lib/middleware/csrf"
 import { enforceSocialLimit } from "@/lib/middleware/rate-limit"
 import { checkContent } from "@/lib/moderation"
 import { prisma } from "@/lib/prisma"
+import { headObjectSize } from "@/lib/r2"
 import { parseHashtags } from "@/lib/social/mentions"
 import { getSocialLimitValue } from "@/lib/social/limits"
+import { postPreview } from "@/lib/social/post-preview"
 import { earnVersos, VersosSource } from "@/lib/social/versos"
 import { createPostSchema } from "@/lib/validators/social"
 
 export const dynamic = "force-dynamic"
+
+// Mesmo limite de upload do avatar/confirm: 5MB por imagem (S2-12).
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 const AUTHOR_SELECT = {
   id: true,
@@ -31,6 +37,9 @@ const AUTHOR_SELECT = {
  * viewer → rate limit `post` (T027/S2-10: 10/dia FREE, 50/dia PLUS, com
  * `Retry-After` no 429) → checagens de negócio → 1 `$transaction`.
  *
+ * - S2-12: após validar a chave, `HeadObject` por imagem rejeita objeto
+ *   acima de 5MB (`MAX_IMAGE_BYTES`) sem re-baixar — null segue o caminho
+ *   normal (padrão de `avatar/confirm`).
  * - Moderação (CHK011, decisão do dono 2026-09-30): `checkContent` flaggou →
  *   **bloqueia** com 403 `CONTENT_BLOCKED` + `details.flaggedWords`.
  * - Tiragem alheia/inexistente → 403 `READING_ACCESS_DENIED` (uniforme,
@@ -41,7 +50,8 @@ const AUTHOR_SELECT = {
  *   `PostHashtag` na mesma transação do post.
  * - `type=reading` paga +10 Versos (T037) dentro da tx; `earnVersos` null
  *   (sem `UserProfile`) aborta a transação (padrão K2 da Phase 1).
- * - Emit `post:new` (rooms dos seguidores) fica para T088.
+ * - Emit `new-post` para as rooms dos seguidores (T070/T088 parcial,
+ *   puxado para a Phase 2.5) após o commit — fire-and-forget.
  */
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()
@@ -113,6 +123,23 @@ export async function POST(request: Request): Promise<Response> {
         reqId,
         422,
         { field: "imageUrls", message: "Chave de imagem invalida" },
+        rate.headers,
+      )
+    }
+  }
+
+  // S2-12: o guard de 5MB é do objeto APÓS o PUT — HeadObject por chave
+  // rejeita imagem grande sem re-baixar (null = objeto ausente segue o
+  // caminho normal; mesmo padrão de avatar/confirm).
+  for (const key of imageUrls) {
+    const size = await headObjectSize(key)
+    if (size !== null && size > MAX_IMAGE_BYTES) {
+      return apiError(
+        "VALIDATION_ERROR",
+        "Imagem muito grande. Maximo 5MB.",
+        reqId,
+        422,
+        { field: "imageUrls", message: "Imagem muito grande. Maximo 5MB." },
         rate.headers,
       )
     }
@@ -202,7 +229,15 @@ export async function POST(request: Request): Promise<Response> {
     // Reconstrói a página materializada do autor para o post novo aparecer
     // sem esperar o TTL do cache (review). `refreshFeedCache` engole erros
     // internamente (Redis fora nunca falha o 201).
-    await refreshFeedCache(auth.userId)
+    void refreshFeedCache(auth.userId)
+
+    // Realtime (T070/T088 parcial): rooms `user:{id}`/`feed:{id}` dos
+    // seguidores. emitNewPost engole erros internos (fire-and-forget).
+    void emitNewPost({
+      authorId: auth.userId,
+      postId: post.id,
+      preview: postPreview(post.content),
+    })
 
     return Response.json(
       { data: { post } },

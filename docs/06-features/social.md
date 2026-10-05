@@ -2,12 +2,19 @@
 
 > **Identificador**: `arkana-agora` | **Módulo**: Rede Social | **Versão**: V1
 >
-> **Status (2026-10-01)**: **parcialmente implementado — follow (Phase 1) + posts/feed/explore (Phase 2) entregues.**
+> **Status (2026-10-02)**: **parcialmente implementado — follow (Phase 1) + posts/feed/explore (Phase 2) + realtime (Phase 2.5) entregues.**
+>
+> **Phase 2.5 — realtime (2026-10-02, T066–T075/T088 parcial):**
+> - **Pill "N novos posts" (Q27/T061+T072)**: `useFeedRealtime` (`src/hooks/use-feed.ts`) escuta o evento `new-post` do `socket-service`, busca o post completo via `GET /social/posts/:id` e acumula em `emitPendingPost` com **dedup por id**; o feed insere com slide-in no clique.
+> - **Emits**: `POST /social/posts` → `emitNewPost` (rooms `user:/feed:` dos **seguidores** do autor, pós-commit, fire-and-forget); `POST /social/follow/:userId` → `emitFollowUpdate` + `emitNotification` (room `user:{alvo}`) — ambos puxados do T088 para a Phase 2.5.
+> - **Fallback**: `GET /social/polling/{posts,notifications}?since=` a cada 30s enquanto o WS está desconectado (`src/hooks/use-socket.ts`, janela inicial de 5min); suprimido quando conectado.
+> - **E2E**: `tests/e2e/social-realtime.spec.ts` (T075) — 3 cenários verdes (post→pill, follow→badge, WS bloqueado→polling+reconexão) + 3 `fixme` (like/comment/gift → Phase 3 T076/T077/T120).
+> - **Pendências**: ~~join de rooms `post:`/`comment:` sem checagem de visibilidade~~ — **resolvido para `post:`** na revisão M (`verifyRoomAccess` em `socket-service/src/room-access.ts`; 401/403/404 → `room_forbidden`, 5xx/timeout → fail-open), `comment:{id}` **segue fail-open** até T077/Phase 3; ~~badge de notificação **sem dedup por id**~~ — **resolvido na revisão C** (dedup por id, `SEEN_IDS_CAP` = 500 em `src/components/social/notifications-provider.tsx`); ~~rotas de polling sem rate limit próprio~~ — **resolvido na revisão O** (60/min por usuário, chave compartilhada `rl:polling:<userId>`); eventos emitidos com o cliente offline **não têm catch-up** após reconexão (pendência aberta).
 >
 > **Correções pós-revisão (2026-10-01, W4–W7):**
 > - **Feed cache**: hit serve a página **completa** (cursor = pivot do algoritmo com `include`; cortar no `limit` reencodava pelo último do ranking → posts duplicados/pulados) e `POST /social/posts` chama `refreshFeedCache(authorId)` após criar.
 > - **Headers**: erros 404/500 de todas as rotas sociais saem com `Cache-Control: private, no-store` + `Vary: Authorization`; og-image público sai **sem** `Vary` (resposta idêntica com/sem token), gated e erros com `private, no-store`.
-> - **Presign de posts**: checagem de `Content-Length` removida (era morta — media o JSON do request, não a imagem; 5MB é guard do PUT assinado; pendência S2-12 = HEAD pós-PUT); ext canônica unificada em `EXT_BY_TYPE` (`src/lib/validators/social.ts`).
+> - **Presign de posts**: checagem de `Content-Length` removida (era morta — media o JSON do request, não a imagem; **S2-12 resolvida em 2026-10-04**: a criação do post faz `HeadObject` por chave e rejeita >5MB sem re-baixar); ext canônica unificada em `EXT_BY_TYPE` (`src/lib/validators/social.ts`).
 > - **Avatar**: `enforceCsrf` em `presign` + `confirm` + `DELETE /users/me/avatar` (**6 rotas CSRF no total** — o DELETE entrou na review 2026-10-01, W4–W8; antes contado como 5) e `enforceSocialLimit({ limit: "upload" })` (20/dia) em `presign` + `confirm`; `confirm` checa o tamanho via `headObjectSize()` **antes** de baixar o objeto (review C3).
 > - **Composer**: presign em lote (uma requisição para as ≤4 imagens).
 > - **Busca/explore**: cursor keyset estável `(createdAt, id)`, `take = 10× SEARCH_LIMIT` para hashtags (paginação sem repor), filtros de privacidade fail-closed (perfil `private` excluído de resultados).

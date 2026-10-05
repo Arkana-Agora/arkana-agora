@@ -1,6 +1,6 @@
 # Documentation Maintenance — Pattern Registry
 
-> **Date**: 2026-09-10 | **Updated**: 2026-09-29
+> **Date**: 2026-09-10 | **Updated**: 2026-10-05
 > **Session**: Documentation refresh to align pattern registry with current state
 
 ## Context
@@ -123,18 +123,23 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - Access-token TTL cache 60s; `network_error`/`server_error` keep the logged-in user; logout clears token+session caches
     - **Implemented**: `src/lib/auth-refresh.ts`, `src/lib/api.ts`, `src/stores/auth-store.ts`; tests `tests/auth-refresh.test.ts` (12), `tests/api.test.ts`, `tests/auth-store.test.ts` (81)
 
+19. **`docs/solutions/patterns/testing/e2e-realtime-harness.md`** (2026-10-02, Current)
+    - Four-process Playwright harness for realtime E2E (`next dev` :3000 + `socket-service` :3003 + Redis + test process): pin `DATABASE_URL` to `.env.local`, `AUTH_URL` local, `REDIS_URL` on **both** webServers, consent `addInitScript`, relative pill asserts, positive `framereceived` handshake before creating the event that must arrive over WS
+    - **Established**: T075 `tests/e2e/social-realtime.spec.ts` (3 passed / 3 fixme, 2026-10-02)
+
 ## Pattern Coverage
 
 | Pattern Category | Files Created | Status |
 |------------------|--------------|--------|
 | Security | 6 | 5 Current, 1 Pending (account lifecycle) |
-| Backend | 2 | 1 Current, 1 Pending (admin health) |
+| Backend | 5 | 4 Current, 1 Pending (admin health) |
 | Observability | 2 | 2 Current |
 | CI/CD | 5 | 1 Current, 4 Resolved |
 | Operations | 1 | 1 Resolved |
 | Auth | 2 | 2 Current |
 | **Calculation/Determinism** | **2** | **2 Current** |
-| **Total** | **20** | **13 Current, 2 Pending, 5 Resolved** |
+| Testing | 1 | 1 Current |
+| **Total** | **24** | **17 Current, 2 Pending, 5 Resolved** |
 
 ## Related Changes
 
@@ -168,6 +173,27 @@ This refresh ensures the pattern registry reflects all documented solutions in `
       3. **Enrichment OAuth** (`events.signIn` + `enrichUserFromOAuthProfile`): invalida `personalArcana` **apenas quando** nome do Google muda **E** `birthDate` presente no usuário. Se não há `birthDate`, não há base para recalcular → não toca no arcano.
     - **Implementation**: `src/app/api/v1/users/me/profile/route.ts`, `src/app/api/v1/arcana/calculate/route.ts`, `src/services/account-service.ts` (`enrichUserFromOAuthProfile`), `src/auth/auth.config.ts` (`events.signIn`).
     - **Key invariant**: Campo derivado **nunca** fica stale silenciosamente — ou é recalculado no write, ou curado no read (CAS), ou invalidado condicionalmente no enrichment. Null-out explícito evita "arcano fantasma" quando a fonte (`name`) desaparece.
+
+### New Patterns (2026-10-03)
+
+21. **`docs/solutions/patterns/backend/fail-fast-redis-client-auto-heal.md`** (2026-10-03, Current)
+    - **Problem**: ioredis clients created with the repo's fail-fast set (`retryStrategy: () => null`, `enableOfflineQueue: false`, `maxRetriesPerRequest: 1`) **never reconnect** — after a real `ECONNRESET` the client stays `status === "end" || "close"` forever and every later publish fails with `Connection is closed` (bus permanently mute; E2E T075 root cause)
+    - **Solution**: two halves shipped together — (a) fail-fast **per call** preserved (one attempt per publish, rejected `redisReady` never cached, fire-and-forget `logger.warn`) plus synchronous dead-client detection/discard in `ensureRedis()`/`discardDeadClients()`; (b) healing **outside** the request path — `registerSubCloseHandler(sub)` → `scheduleBusReconnect()` with backoff 1s→30s (2^n), max 5 failures, `busShuttingDown` gate cleared by `resetRealtimeBus()`
+    - **Invariants**: `discardDeadClients()` is synchronous (no double-connect race); close handler identity-checks `sub !== subClient`; no synchronous retry on the publish path; memory mode (`hasRedis()` false) opts out entirely
+    - **Implemented**: `socket-service/src/bus.ts`; tests `tests/integration/realtime-bus.test.ts` (`auto-recuperação de conexão morta (ECONNRESET)` — 4 cases + `fail-fast do Redis (Crítico 4)` — 2 cases); test hooks `injectBusClientsForTests()`/`busConnectAttemptsForTests()`
+    - **Pending**: same auto-heal for the Next.js singleton `src/lib/redis.ts` (fail-fast half only today)
+
+### New Patterns (2026-10-05)
+
+22. **`docs/solutions/patterns/backend/r2-head-object-size-precheck.md`** (2026-10-05, Current)
+    - **Problem**: presign/direct-to-R2 flows never see the bytes on the write path — a `Content-Length` check at presign is dead (it measures the JSON body, removed in W4–W8) and checking size by downloading buffers an unbounded upload (5MB cap must not OOM on a 5GB object)
+    - **Solution**: validate the presign-issued key format first (full regex bound to `auth.userId` — HEAD on a foreign key is an object oracle) → `headObjectSize()` (`HeadObject`, `number | null`, never throws) → `> MAX` → 422 with `details.field` + `rate.headers` **before** `post.create`/`getObjectBuffer`; `null` fails open and the downloading consumer re-checks `buffer.length` (defense in depth); presign routes stay size-blind by design
+    - **Implemented**: `src/lib/r2.ts` (`headObjectSize`), `src/app/api/v1/social/posts/route.ts` (`MAX_IMAGE_BYTES`, S2-12 resolved 2026-10-04), `src/app/api/v1/users/me/avatar/confirm/route.ts` (`MAX_BYTES`, review C3); tests `tests/integration/social-feed.test.ts` (3 S4 cases) + `tests/integration/avatar.test.ts` (HEAD-without-download, 429 ordering)
+
+23. **`docs/solutions/patterns/backend/per-instance-config-resolver.md`** (2026-10-05, Current)
+    - **Problem**: `bus.ts` and `redis-auth.ts` duplicated the configure/resolve/reset Redis-URL flags; shared-singleton or `??` fallback versions break the two real requirements — `configure(undefined)` must mean "explicitly no Redis" (env ignored) and each module must configure/reset independently in tests
+    - **Solution**: `createRedisUrlResolver()` (`socket-service/src/lib/redis-url.ts`) returns `{ configure, reset, resolve }` with **per-instance closure state**; tri-state semantics (`configured ? configuredUrl : process.env.REDIS_URL`); `resolve()` reads env lazily at call time; production configures once from zod-validated env in `createSocketServer` (`server.ts:91-92`, revisão K)
+    - **Implemented**: `socket-service/src/lib/redis-url.ts`; consumers `configureBusRedis`/`resetRealtimeBus` and `configureRedisAuth`/`resetRedisAuthForTests` delegate; tests `tests/unit/socket-redis-url.test.ts` (5 cases) + regressions `redis-auth-config.test.ts`, `realtime-bus.test.ts`
 
 ## Related Changes
 

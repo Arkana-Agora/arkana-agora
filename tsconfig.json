@@ -24,7 +24,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@socket/*": ["./socket-service/*"]
     }
   },
   "include": [

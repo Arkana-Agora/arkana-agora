@@ -368,6 +368,8 @@ AI Provider Health — Últimas 24h
 
 ### Caddy Reverse Proxy
 
+> **Status (design — Caddy adiado, `docs/02-architecture/deployment.md`):** o cliente WebSocket fala hoje **direto** com `NEXT_PUBLIC_WS_URL` (default `http://localhost:3003`) na **path default do socket.io (`/socket.io/`)** — `socket-service/src/server.ts` não configura `path`. O `handle /ws/*` do bloco abaixo é o design original: se/when o Caddy for implementado, troque para `handle /socket.io/*` (ou configure `path` no servidor e no cliente) — o bloco atual **não** casaria com o handshake atual.
+
 ```
                  ┌──────────────┐
                  │   Caddy      │

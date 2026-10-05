@@ -13,6 +13,9 @@ vi.mock("next-auth/react", () => ({
   getSession: vi.fn().mockResolvedValue(null),
   useSession: vi.fn(() => ({ data: null })),
 }))
+vi.mock("@/hooks/use-socket", () => ({
+  useSocket: () => undefined,
+}))
 
 import api from "@/lib/api"
 
@@ -170,6 +173,30 @@ describe("FeedPage (T061/US-022)", () => {
     await waitFor(() =>
       expect(getMock.mock.calls.length).toBeGreaterThanOrEqual(2),
     )
+  })
+
+  // Revisão UX: o composer abre DENTRO do <main> que tem os handlers de
+  // pull-to-refresh (sem portal) — arrastar sobre o modal não pode
+  // disparar refetch do feed.
+  it("composer aberto: pull-to-refresh não dispara refetch (revisão UX)", async () => {
+    getMock.mockResolvedValue(pageOf([POST]))
+    renderPage()
+    await screen.findByTestId("post-p1")
+    const callsBefore = getMock.mock.calls.length
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /o que voce quer compartilhar/i }),
+    )
+    expect(screen.getByRole("dialog")).toBeTruthy()
+
+    const el = screen.getByTestId("feed-container")
+    fireEvent.touchStart(el, { touches: [{ clientY: 0 }] })
+    fireEvent.touchMove(el, { touches: [{ clientY: 120 }] })
+    fireEvent.touchEnd(el)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(getMock.mock.calls.length).toBe(callsBefore)
+    expect(screen.getByRole("dialog")).toBeTruthy()
   })
 
   it("pill de novos posts insere com dedup ao clicar (Q27)", async () => {

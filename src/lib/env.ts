@@ -40,6 +40,22 @@ export const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: optionalText,
   R2_BUCKET_NAME: optionalText,
   NEXT_PUBLIC_R2_PUBLIC_URL: optionalUrl,
+  // Revisão P: validada no boot (instrumentation getEnv) — formato também
+  // checado no client por src/lib/socket-url.ts (resolveSocketUrl).
+  // `localhost:3003` sem esquema passa no url() do Zod (protocolo
+  // "localhost:"), então o refine de protocolo é obrigatório.
+  NEXT_PUBLIC_WS_URL: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .url("Deve ser uma URL válida")
+      .refine(
+        (value) =>
+          ["http:", "https:", "ws:", "wss:"].includes(new URL(value).protocol),
+        { message: "protocolo deve ser http, https, ws ou wss" },
+      )
+      .optional(),
+  ),
 })
 
 export type Env = z.infer<typeof envSchema>

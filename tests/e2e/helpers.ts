@@ -1,15 +1,39 @@
-import { APIRequestContext } from "@playwright/test"
+import "dotenv/config"
+import { existsSync, readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import type { APIRequestContext } from "@playwright/test"
+import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "@prisma/client"
 
 import {
   csrfCookieName,
   generateCsrfToken,
 } from "../../src/lib/csrf-cookie-name"
+import { resolveE2eDatabaseUrl } from "./database-url"
 
 export const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000"
 export const TEST_PASSWORD = "Test@12345678"
 
-const globalPrisma = globalThis.__e2ePrisma ?? new PrismaClient()
+// Prisma 7 exige driver adapter (padrão de src/lib/prisma.ts) — o client
+// crue quebra qualquer spec que importe os helpers.
+// Guard do Crítico 9: o .env.local (banco local, mesma precedência do
+// Next) é a fonte, e resolveE2eDatabaseUrl recusa host remoto — specs
+// destrutivas (cleanupUser, deleteMany) nunca tocam o banco do .env.
+const envLocalPath = resolve(process.cwd(), ".env.local")
+process.env.DATABASE_URL = resolveE2eDatabaseUrl({
+  envLocalContent: existsSync(envLocalPath)
+    ? readFileSync(envLocalPath, "utf8")
+    : undefined,
+  envDatabaseUrl: process.env.DATABASE_URL,
+})
+
+const globalPrisma =
+  globalThis.__e2ePrisma ??
+  new PrismaClient({
+    adapter: new PrismaPg({
+      connectionString: process.env.DATABASE_URL,
+    }),
+  })
 if (process.env.NODE_ENV !== "production") globalThis.__e2ePrisma = globalPrisma
 export const prisma = globalPrisma
 
@@ -44,27 +68,45 @@ export async function registerUser(
   name: string,
 ): Promise<void> {
   const existing = await prisma.user.findFirst({ where: { email } })
-  if (existing) return
-
-  await request.post(`${BASE_URL}/api/v1/auth/register`, {
-    ...csrfHeaders(),
-    data: {
-      name,
-      email,
-      password: TEST_PASSWORD,
-      passwordConfirmation: TEST_PASSWORD,
-      acceptTerms: true,
-    },
-  })
-
-  const vt = await prisma.verificationToken.findFirst({
-    where: { identifier: email, type: "EMAIL" },
-    orderBy: { expiresAt: "desc" },
-  })
-  if (vt) {
-    await request.post(`${BASE_URL}/api/v1/auth/verify-email`, {
-      data: { token: vt.token },
+  if (!existing) {
+    await request.post(`${BASE_URL}/api/v1/auth/register`, {
+      ...csrfHeaders(),
+      data: {
+        name,
+        email,
+        password: TEST_PASSWORD,
+        passwordConfirmation: TEST_PASSWORD,
+        acceptTerms: true,
+      },
     })
+  }
+
+  // Garante email verificado — register pode ter sido bloqueado por rate
+  // limit (429) ou o usuário ter ficado órfão de runs anteriores.
+  const user = await prisma.user.findFirst({ where: { email } })
+  if (user && !user.emailVerified) {
+    const vt = await prisma.verificationToken.findFirst({
+      where: { identifier: email, type: "EMAIL" },
+      orderBy: { expiresAt: "desc" },
+    })
+    if (vt) {
+      await request.post(`${BASE_URL}/api/v1/auth/verify-email`, {
+        data: { token: vt.token },
+      })
+    }
+    const after = await prisma.user.findFirst({
+      where: { email },
+      select: { emailVerified: true },
+    })
+    if (!after?.emailVerified) {
+      // Fallback de fixture: token já consumido/expirado — marca direto no
+      // banco (apenas setup de teste; o fluxo real de verify é coberto por
+      // specs dedicadas de auth).
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: new Date() },
+      })
+    }
   }
 }
 

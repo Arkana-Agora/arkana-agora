@@ -11,6 +11,8 @@ import { parsePrivacy } from "@/lib/validators/profile"
 import { trackFollow, trackVersosEarned } from "@/lib/analytics"
 import { Prisma } from "@prisma/client"
 
+import { emitFollowUpdate, emitNotification } from "@socket/src/emitters"
+
 export const dynamic = "force-dynamic"
 
 /**
@@ -62,6 +64,16 @@ export async function POST(
   let followingCount = 0
   let followersCount = 0
   let statsPrivate = false
+  // Notificação capturada da row criada na tx (id/type/message/data) para
+  // o emit pós-commit — o payload sai da PRÓPRIA row (revisão V5), sem
+  // re-derivar type/data. (`as union` para o CFA não estreitar a leitura
+  // a `null`.)
+  let createdNotification = null as {
+    id: string
+    type: string
+    message: string
+    data: unknown
+  } | null
 
   // Envelope único do contrato 201/200 (SC38 + subject dos counts num só lugar)
   const respond = () =>
@@ -233,14 +245,21 @@ export async function POST(
           },
         })
         const followerName = viewer.displayName ?? viewer.name
-        await tx.notification.create({
+        const message = `${followerName} começou a seguir você`
+        const row = await tx.notification.create({
           data: {
             userId: targetId,
             type: "follow",
-            message: `${followerName} começou a seguir você`,
+            message,
             data: { followerId: auth.userId },
           },
         })
+        createdNotification = {
+          id: row.id,
+          type: row.type,
+          message: row.message,
+          data: row.data,
+        }
         // Cria marker de recompensa se for o primeiro follow deste par
         if (shouldReward) {
           await tx.followReward.create({
@@ -278,6 +297,26 @@ export async function POST(
     }
     if (earnedAmount !== null) {
       trackVersosEarned(VersosSource.Follow, earnedAmount)
+    }
+
+    // Realtime (T070/T088 parcial): room do alvo. Fire-and-forget
+    // (publishRealtime engole falhas de bus) — o 201/200 não espera
+    // o publish (revisão Phase 2.5, Crítico 6).
+    void emitFollowUpdate({
+      followerId: auth.userId,
+      followingId: targetId,
+      isFollowing: following,
+    })
+    if (following && createdNotification !== null) {
+      void emitNotification({
+        userId: targetId,
+        notification: {
+          id: createdNotification.id,
+          type: createdNotification.type,
+          message: createdNotification.message,
+          data: createdNotification.data,
+        },
+      })
     }
 
     return respond()
@@ -329,6 +368,13 @@ export async function POST(
           { reqId, userId: auth.userId, targetId, code: error.code, following },
           "[follow] corrida resolvida pela fonte de verdade",
         )
+        // A tx abortou (notificação não persistida) — emite só o estado
+        // real do vínculo; a requisição vencedora cuida da notification.
+        void emitFollowUpdate({
+          followerId: auth.userId,
+          followingId: targetId,
+          isFollowing: following,
+        })
         return respond()
       }
       logger.error({ err: error, reqId }, "[follow] erro interno")
