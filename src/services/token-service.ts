@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma"
 import { redis } from "@/lib/redis"
 import { logger } from "@/lib/logger"
 import { sha256 } from "@/lib/crypto"
+import { publishAuthKick } from "@socket/src/bus"
 
 function validatedEnvNumber(
   raw: string | undefined,
@@ -78,7 +79,7 @@ export async function signAccessToken(user: {
   tokenVersion: number
 }): Promise<string> {
   const privateKey = getPrivateKey()
-  return new SignJWT({
+  const token = await new SignJWT({
     role: user.role,
     plan: user.plan,
     tokenVersion: user.tokenVersion,
@@ -88,6 +89,33 @@ export async function signAccessToken(user: {
     .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL_SECONDS)
     .sign(createPrivateKey(privateKey))
+  // S3 (revisão 2026-10-04): espelho "quente" a cada emissão — a
+  // presença da chave acompanha a vida do access token (EX = TTL),
+  // então o cache miss do handshake no socket-service vira exceção
+  // (Redis fora/flush) e não o estado normal, restringindo a janela
+  // fail-open documentada a incidentes reais de Redis. NX: só preenche
+  // lacunas e nunca regride a escrita mais nova de um bump (corrida
+  // emissão × revogação).
+  await warmTokenVersionMirror(user.id, user.tokenVersion)
+  return token
+}
+
+async function warmTokenVersionMirror(
+  userId: string,
+  tokenVersion: number,
+): Promise<void> {
+  if (!redis) return
+  try {
+    await redis.set(
+      tokenVersionCacheKey(userId),
+      String(tokenVersion),
+      "EX",
+      ACCESS_TOKEN_TTL_SECONDS,
+      "NX",
+    )
+  } catch {
+    logger.warn("[auth:token] falha ao espelhar tokenVersion na emissao")
+  }
 }
 
 export interface VerifiedAccess {
@@ -427,6 +455,8 @@ export async function bumpTokenVersion(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
+  // Revogação instantânea no socket-service (Crítico 5 / ADR-009).
+  void publishAuthKick(userId)
   logger.info({ userId }, "[auth:token] tokenVersion bumped")
 }
 
@@ -491,6 +521,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
+  void publishAuthKick(userId)
   logger.info({ userId }, "[auth:logout] todas as sessoes revogadas")
 }
 
@@ -511,5 +542,6 @@ export async function softDeleteAccount(userId: string): Promise<void> {
   })
 
   await mirrorTokenVersion(userId)
+  void publishAuthKick(userId)
   logger.info({ userId }, "[auth:account] conta soft-deletada (LGPD)")
 }

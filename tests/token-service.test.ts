@@ -118,6 +118,26 @@ describe("token service T7a", () => {
     const ttl = payload.exp - payload.iat
     expect(ttl).toBe(15 * 60)
   })
+
+  it("signAccessToken espelha o tokenVersion com NX a cada emissão (S3)", async () => {
+    const { signAccessToken } = await import("@/services/token-service")
+    await signAccessToken({ ...createdUser })
+
+    expect(redisMock.set).toHaveBeenCalledWith(
+      "auth:tokenVersion:usr_1",
+      "0",
+      "EX",
+      15 * 60,
+      "NX",
+    )
+  })
+
+  it("falha ao espelhar não impede a emissão do token (S3)", async () => {
+    redisMock.set.mockRejectedValueOnce(new Error("redis down"))
+    const { signAccessToken } = await import("@/services/token-service")
+    const token = await signAccessToken({ ...createdUser })
+    expect(typeof token).toBe("string")
+  })
 })
 
 describe("token service T7a - verifyAccessToken", () => {
@@ -523,6 +543,23 @@ describe("token service T7a - bumpTokenVersion", () => {
       "EX",
       expect.any(Number),
     )
+  })
+
+  it("publica auth kick para o socket-service (Crítico 5)", async () => {
+    prismaMock.user.update.mockResolvedValue({
+      id: "usr_1",
+      tokenVersion: 1,
+    })
+    prismaMock.user.findUnique.mockResolvedValue({ tokenVersion: 1 })
+    const { bumpTokenVersion } = await import("@/services/token-service")
+    const { subscribeAuthKick } = await import("@socket/src/bus")
+    const kicks: string[] = []
+    const stop = subscribeAuthKick((userId) => kicks.push(userId))
+
+    await bumpTokenVersion("usr_1")
+    stop()
+
+    expect(kicks).toContain("usr_1")
   })
 })
 
