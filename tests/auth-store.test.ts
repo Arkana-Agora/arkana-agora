@@ -13,6 +13,10 @@ vi.mock("@/lib/api", () => ({
   resetAuthApiSessionCache: vi.fn(),
 }))
 
+vi.mock("@/hooks/use-socket", () => ({
+  resetRealtimeClient: vi.fn(),
+}))
+
 vi.mock("@/lib/analytics", () => ({
   resetUser: vi.fn(),
 }))
@@ -21,6 +25,7 @@ import { getSession, signIn, signOut } from "next-auth/react"
 
 import { resetUser } from "@/lib/analytics"
 import { resetAuthApiSessionCache } from "@/lib/api"
+import { resetRealtimeClient } from "@/hooks/use-socket"
 
 const user: User = {
   id: "user-1",
@@ -1537,6 +1542,19 @@ describe("auth-store", () => {
       expect(state.user).toBeNull()
       expect(state.isAuthenticated).toBe(false)
       expect(state.isLoading).toBe(false)
+    })
+    it("derruba o singleton realtime (socket/polling/cursors) (revisao T)", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        accessToken: "access-123",
+      } as never)
+      useAuthStore.setState({ user, isAuthenticated: true })
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(mockJsonResponse({ message: "Sessao encerrada" }))
+
+      await useAuthStore.getState().logout()
+
+      expect(resetRealtimeClient).toHaveBeenCalledTimes(1)
     })
   })
 

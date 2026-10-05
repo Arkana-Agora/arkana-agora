@@ -152,3 +152,16 @@ describe("getEnv / resetEnvCache (T022)", () => {
     expect(() => getEnv()).toThrow(/Variáveis de ambiente inválidas:/)
   })
 })
+
+describe("NEXT_PUBLIC_WS_URL (revisao P)", () => {
+  it("valida o formato quando presente no boot", () => {
+    expect(
+      envSchema.safeParse({ NEXT_PUBLIC_WS_URL: "wss://ws.exemplo.com" })
+        .success,
+    ).toBe(true)
+    expect(
+      envSchema.safeParse({ NEXT_PUBLIC_WS_URL: "localhost:3003" }).success,
+    ).toBe(false)
+    expect(envSchema.safeParse({}).data?.NEXT_PUBLIC_WS_URL).toBeUndefined()
+  })
+})

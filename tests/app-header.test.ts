@@ -31,6 +31,11 @@ describe("isAppNavActive", () => {
     expect(isAppNavActive("/perfil/firefox", "/perfil")).toBe(true)
     expect(isAppNavActive("/dashboard", "/perfil")).toBe(false)
   })
+
+  it("highlights Feed for /feed (CHK009 — alcançar /feed pela nav)", () => {
+    expect(isAppNavActive("/feed", "/feed")).toBe(true)
+    expect(isAppNavActive("/dashboard", "/feed")).toBe(false)
+  })
 })
 
 describe("App Header Navigation", () => {
@@ -60,12 +65,17 @@ describe("App Header Navigation", () => {
     expect(headerContent).toContain('href="/dashboard"')
   })
 
-  it("has 5 navigation items", () => {
+  it("has 6 navigation items", () => {
     expect(headerContent).toContain("Home")
+    expect(headerContent).toContain("Feed")
     expect(headerContent).toContain("Tirar")
     expect(headerContent).toContain("Histórico")
     expect(headerContent).toContain("Meu Arcano")
     expect(headerContent).toContain("Perfil")
+  })
+
+  it("inclui /feed nos itens (CHK009 — rota alcançável pelo login)", () => {
+    expect(headerContent).toContain('href: "/feed"')
   })
 
   it("uses Lucide icons", () => {

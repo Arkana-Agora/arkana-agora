@@ -2,6 +2,8 @@ import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
 import { auth } from "@/auth/auth"
 import { AppHeader } from "@/components/layout/app-header"
+import { MobileNav } from "@/components/layout/mobile-nav"
+import { NotificationsProvider } from "@/components/social/notifications-provider"
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await auth()
@@ -12,8 +14,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AppHeader />
-      <div className="flex-1 pb-16 md:pb-0">{children}</div>
+      <NotificationsProvider>
+        <AppHeader />
+        <div className="flex-1 pb-16 md:pb-0">{children}</div>
+        <MobileNav />
+      </NotificationsProvider>
     </div>
   )
 }

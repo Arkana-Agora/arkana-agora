@@ -140,6 +140,27 @@ describe("useFeed (T062/Q27)", () => {
     expect(posts.map((p) => p.id)).toEqual(["p1", "p2"])
   })
 
+  it("fila de pendentes tem cap de 50 - mantem os mais novos (revisao T)", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: { data: [], pagination: { nextCursor: null } },
+    } as never)
+
+    const { useFeed, emitPendingPost } = await importModule()
+    const { result } = renderHook(() => useFeed(), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    act(() => {
+      for (let i = 0; i < 60; i += 1) {
+        emitPendingPost(basePost(`p${i}`) as never)
+      }
+    })
+    expect(result.current.pendingPosts).toHaveLength(50)
+    expect(result.current.pendingPosts[0]?.id).toBe("p59")
+    expect(result.current.pendingPosts[49]?.id).toBe("p10")
+  })
   it("flushPending antes de os dados carregarem mantém os pendentes (não descarta)", async () => {
     const { default: authApi } = await import("@/lib/api")
     let resolveFeed!: (value: unknown) => void
