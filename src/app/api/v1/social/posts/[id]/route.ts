@@ -66,14 +66,18 @@ export async function GET(
         comments: {
           where: {
             parentCommentId: null,
-            author: { isBanned: false, deletedAt: null },
+            // Revisão R: mesma regra LGPD do predicado do post — autores
+            // inativos (deactivated) também não aparecem
+            author: { isActive: true, isBanned: false, deletedAt: null },
           },
           orderBy: { createdAt: "desc" },
           take: COMMENTS_PREVIEW_LIMIT,
           include: {
             author: { select: COMMENT_AUTHOR_SELECT },
             replies: {
-              where: { author: { isBanned: false, deletedAt: null } },
+              where: {
+                author: { isActive: true, isBanned: false, deletedAt: null },
+              },
               orderBy: { createdAt: "desc" },
               take: REPLIES_PREVIEW_LIMIT,
               include: { author: { select: COMMENT_AUTHOR_SELECT } },

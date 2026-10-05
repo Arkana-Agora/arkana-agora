@@ -18,14 +18,16 @@ export const dynamic = "force-dynamic"
  * (20/dia S2-10 via `enforceSocialLimit` → núcleo `checkUploadLimit` do
  * T027; 429 com `Retry-After`) → presign. Tamanho NÃO é checado aqui: o
  * `Content-Length` deste request é o do JSON (não da imagem) — o guard de
- * 5MB é do PUT autorizado pela assinatura (decisão S2-12; verificação
- * HEAD pós-PUT pendente de decisão do dono).
+ * 5MB é do objeto APÓS o PUT: a criação do post (T051) faz `HeadObject`
+ * por chave e rejeita imagem acima do limite (decisão S2-12, resolvida em
+ * 2026-10-04; sem re-baixar o objeto).
  *
  * Keys `posts/{userId}/{ts}-{i}.{ext}` — prefixo validado por T051 na
  * criação do post (S2-12). Resposta `{ uploads: [{ uploadUrl, key }] }`
  * (mesmo shape top-level do presign de avatar): o cliente faz PUT direto
- * ao R2 (expiração 300s — CHK014). Bytes NÃO são revalidados após o PUT
- * (decisão S2-12: sem re-baixar).
+ * ao R2 (expiração 300s — CHK014). Bytes NÃO são revalidados no presign
+ * (S2-12: sem re-baixar; o tamanho é checado na criação do post via
+ * `HeadObject`).
  */
 export async function POST(request: Request): Promise<Response> {
   const reqId = newReqId()

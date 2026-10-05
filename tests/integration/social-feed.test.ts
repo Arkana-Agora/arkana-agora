@@ -55,6 +55,7 @@ const ogMock = vi.hoisted(() => ({
 
 const r2Mock = vi.hoisted(() => ({
   generatePresignedUrl: vi.fn(),
+  headObjectSize: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
@@ -149,6 +150,7 @@ beforeEach(() => {
     userId: "usr_1",
   })
   prismaMock.post.create.mockResolvedValue(createdPost)
+  r2Mock.headObjectSize.mockResolvedValue(null)
   prismaMock.postHashtag.createMany.mockResolvedValue({ count: 0 })
   versosMock.earnVersos.mockResolvedValue(10)
   feedMock.getFeed.mockResolvedValue({ posts: [], nextCursor: null })
@@ -302,6 +304,58 @@ describe("POST /api/v1/social/posts — criar post (T051/AC-5)", () => {
     const body = await res.json()
     expect(body.error.code).toBe("VALIDATION_ERROR")
     expect(prismaMock.post.create).not.toHaveBeenCalled()
+  })
+
+  // S2-12: o guard de 5MB é do objeto APÓS o PUT — a criação do post faz
+  // HeadObject por chave e rejeita imagem acima do limite (sem re-baixar).
+  it("imageUrls acima de 5MB (HeadObject) → 422 sem criar o post (S2-12)", async () => {
+    r2Mock.headObjectSize.mockResolvedValue(5 * 1024 * 1024 + 1)
+
+    const res = await callPost({
+      type: "image",
+      content: "vejam",
+      imageUrls: ["posts/usr_1/1770000000-0.jpg"],
+    })
+
+    expect(res.status).toBe(422)
+    const body = await res.json()
+    expect(body.error.code).toBe("VALIDATION_ERROR")
+    expect(body.error.message).toContain("5MB")
+    expect(r2Mock.headObjectSize).toHaveBeenCalledWith(
+      "posts/usr_1/1770000000-0.jpg",
+    )
+    expect(prismaMock.post.create).not.toHaveBeenCalled()
+  })
+
+  it("uma chave gigante entre válidas → 422 (todas são checadas)", async () => {
+    r2Mock.headObjectSize.mockImplementation(async (key: string) =>
+      key.endsWith("-1.jpg") ? 10 * 1024 * 1024 : 1024,
+    )
+
+    const res = await callPost({
+      type: "image",
+      content: "vejam",
+      imageUrls: [
+        "posts/usr_1/1770000000-0.jpg",
+        "posts/usr_1/1770000000-1.jpg",
+      ],
+    })
+
+    expect(res.status).toBe(422)
+    expect(prismaMock.post.create).not.toHaveBeenCalled()
+  })
+
+  it("imageUrls dentro de 5MB segue a criação normalmente (S2-12)", async () => {
+    r2Mock.headObjectSize.mockResolvedValue(1024)
+
+    const res = await callPost({
+      type: "image",
+      content: "vejam",
+      imageUrls: ["posts/usr_1/1770000000-0.jpg"],
+    })
+
+    expect(res.status).toBe(201)
+    expect(prismaMock.post.create).toHaveBeenCalledTimes(1)
   })
 
   it("reading de outro usuário → 403 READING_ACCESS_DENIED sem tocar no DB de posts", async () => {
@@ -772,6 +826,22 @@ describe("GET /api/v1/social/posts/:id — detalhe (T057)", () => {
     expect(prismaMock.follow.findUnique).not.toHaveBeenCalled()
   })
 
+  it("comentarios de autores inativos sao filtrados na preview (revisao R: isActive)", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(detailPost({ comments: [] }))
+
+    await callDetail("post_1")
+
+    const args = prismaMock.post.findUnique.mock.calls[0]![0]!
+    const authorFilter = {
+      isBanned: false,
+      deletedAt: null,
+      isActive: true,
+    }
+    expect(args.include.comments.where.author).toEqual(authorFilter)
+    expect(args.include.comments.include.replies.where.author).toEqual(
+      authorFilter,
+    )
+  })
   it("erro de DB → 500 INTERNAL_ERROR JSON", async () => {
     prismaMock.post.findUnique.mockRejectedValue(new Error("db down"))
 
