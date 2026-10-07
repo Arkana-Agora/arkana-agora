@@ -13,6 +13,7 @@ import { z } from "zod"
 import authApi from "@/lib/api"
 import { useSocket } from "@/hooks/use-socket"
 import type { CreatePostInput } from "@/lib/validators/social"
+import { useSocialStore } from "@/stores/social-store"
 
 const feedAuthorSchema = z
   .object({
@@ -211,6 +212,11 @@ function advanceSinceCursor(requestedAt: string, serverTime?: string): string {
  * que chegaram por evento viram pill "N novos posts" via
  * `emitPendingPost` (dedup por id acontece na fila, `useFeed`). Falha
  * offline: janela preservada para retry e falha engolida (sem crash).
+ *
+ * Também escuta `like-updated` (T076/T088) para reconciliar o overlay
+ * `postLikes` do SocialStore com o contador vindo do servidor — evita
+ * que o overlay otimista permaneça stale quando outros usuários curtam/
+ * descurtam.
  */
 export function useFeedRealtime(): void {
   const idsRef = useRef<Set<string>>(new Set())
@@ -219,6 +225,9 @@ export function useFeedRealtime(): void {
   // Revisão R1: o retry do catch re-agenda via ref (o flush não pode se
   // referenciar antes da própria declaração no useCallback)
   const flushRef = useRef<() => void>(() => undefined)
+
+  const updatePostLike = useSocialStore((state) => state.updatePostLike)
+  const updateCommentLike = useSocialStore((state) => state.updateCommentLike)
 
   const flush = useCallback(() => {
     timerRef.current = null
@@ -267,6 +276,16 @@ export function useFeedRealtime(): void {
       if (timerRef.current === null) {
         timerRef.current = setTimeout(flush, FEED_REALTIME_BATCH_MS)
       }
+    },
+    "like-updated": (event) => {
+      // Reconcilia o overlay otimista com o contador real do servidor
+      // event: { postId, newCount }
+      updatePostLike(event.postId, undefined, event.newCount)
+    },
+    "comment-like-updated": (event) => {
+      // Reconcilia o overlay de like de comentário
+      // event: { commentId, postId, newCount }
+      updateCommentLike(event.commentId, undefined, event.newCount)
     },
   })
 
