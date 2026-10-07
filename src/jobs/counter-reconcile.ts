@@ -22,9 +22,9 @@ export async function runCounterReconcileJob(
   const posts = await prisma.$executeRaw`
     UPDATE posts p SET
       "likeCount" = (SELECT COUNT(*) FROM post_likes pl WHERE pl."postId" = p.id),
-      "commentCount" = (SELECT COUNT(*) FROM comments c WHERE c."postId" = p.id)
+      "commentCount" = (SELECT COUNT(*) FROM comments c WHERE c."postId" = p.id AND c.content <> '[removido]')
     WHERE p."likeCount" <> (SELECT COUNT(*) FROM post_likes pl WHERE pl."postId" = p.id)
-       OR p."commentCount" <> (SELECT COUNT(*) FROM comments c WHERE c."postId" = p.id)
+       OR p."commentCount" <> (SELECT COUNT(*) FROM comments c WHERE c."postId" = p.id AND c.content <> '[removido]')
   `
   const comments = await prisma.$executeRaw`
     UPDATE comments c SET
