@@ -1,106 +1,87 @@
-// Prisma schema — datasource: PostgreSQL (dev Docker Postgres 16 / prod Neon)
-// Source of truth: docs/03-database/entities.md (18 entities across 5 domains)
-// ADR-002: Prisma only ORM. Init migration (Sprint 0, plan D3) = 5 models:
-// User, UserProfile, Subscription, Session, VerificationToken.
-// Session/VerificationToken = copy of .specs/001-auth/design.md §4 (JWT strategy,
-// Session custom reserved for Sprint 1 refresh rotation).
-// Remaining 17 entities migrate in their SPEC sprints.
-//
-// Conventions (from sprint-0.clarifications.md):
-// - providerId for EMAIL provider: set to email normalized to lowercase
-//   (e.g., "Maria@email.com" → "maria@email.com"). Aligns with email @unique constraint.
-// - providerId for OAuth providers (GOOGLE/FACEBOOK): OAuth subject ID.
-// - LGPD 30-day soft-delete: deletedAt DateTime? on User; auth queries filter
-//   isActive = true AND deletedAt IS NULL (restoration window).
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // Prisma 7: connection URL lives in prisma.config.ts (DIRECT_URL for CLI, DATABASE_URL for runtime)
 }
 
 model User {
-  id               String       @id @default(uuid())
-  email            String       @unique
-  passwordHash     String?
-  name             String
-  displayName      String
-  avatar           String?
-  role             UserRole     @default(USER)
-  plan             UserPlan     @default(FREE)
-  subscriptionTier UserPlan     @default(FREE) // Sprint 2 (T014/SC17): tier usado por checkPostLimit (T027) — distinto de `plan`
-  isBanned         Boolean      @default(false)
-  bannedAt         DateTime?
-  banReason        String?
-  maxFollowing     Int          @default(5000)
-  provider         AuthProvider @default(EMAIL)
-  providerId       String       // EMAIL → email lowercase; GOOGLE/FACEBOOK → OAuth subject ID
-  birthDate        DateTime?
-  astrologicalSign String?
-  mayanKin         String?
-  personalArcana   Int?
-  emailVerified    DateTime?
-  tokenVersion     Int          @default(0) // revogação imediata de role/plan/suspensão/reset de senha/logout-all (SPEC-001 §7.4; fonte-da-verdade — Redis é cache espelhado)
-  isActive         Boolean      @default(true)
-  deletedAt        DateTime?    // LGPD 30-day restoration window
-  // TODO: Add unique constraint for restore operations to prevent duplicate restores
-  // Consider: @@unique([email, deletedAt]) when deletedAt is not null
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  profile      UserProfile?
-  subscription Subscription?
-  sessions     Session[]
-  readings     Reading[]
-  interpretations Interpretation[]
-  aiDailyUsage   AIDailyUsage[]
-  arcanaCalculations ArcanaCalculation[]
-
-  // Sprint 2 — Social & Horoscopes (Phase 0, T001–T014)
-  following             Follow[]             @relation("UserFollowing")
-  followers             Follow[]             @relation("UserFollowers")
-  posts                 Post[]
-  comments              Comment[]
-  postLikes             PostLike[]
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String?
+  name                  String
+  displayName           String
+  avatar                String?
+  role                  UserRole               @default(USER)
+  plan                  UserPlan               @default(FREE)
+  provider              AuthProvider           @default(EMAIL)
+  providerId            String
+  birthDate             DateTime?
+  astrologicalSign      String?
+  mayanKin              String?
+  personalArcana        Int?
+  emailVerified         DateTime?
+  isActive              Boolean                @default(true)
+  deletedAt             DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  tokenVersion          Int                    @default(0)
+  banReason             String?
+  bannedAt              DateTime?
+  isBanned              Boolean                @default(false)
+  maxFollowing          Int                    @default(5000)
+  subscriptionTier      UserPlan               @default(FREE)
+  sessions              Session[]
+  subscription          Subscription?
+  profile               UserProfile?
+  aiDailyUsage          AIDailyUsage[]
+  arcanaCalculations    ArcanaCalculation[]
+  commentLikeRewards    CommentLikeReward[]
   commentLikes          CommentLike[]
-  notifications         Notification[]
-  giftsSent             Gift[]                @relation("GiftsSent")
-  giftsReceived         Gift[]                @relation("GiftsReceived")
-  contentReports        ContentReport[]       @relation("ContentReportReporter")
+  commentRewards        CommentReward[]
+  comments              Comment[]
+  contentReports        ContentReport[]        @relation("ContentReportReporter")
+  following             Follow[]               @relation("UserFollowing")
+  followers             Follow[]               @relation("UserFollowers")
+  giftsSent             Gift[]                 @relation("GiftsSent")
+  giftsReceived         Gift[]                 @relation("GiftsReceived")
   horoscopeEntries      HoroscopeEntry[]
   horoscopeLogs         HoroscopeLog[]
   horoscopeNotification HoroscopeNotification?
+  interpretations       Interpretation[]
+  notifications         Notification[]
+  postLikeRewards       PostLikeReward[]
+  postLikes             PostLike[]
+  posts                 Post[]
+  readings              Reading[]
 
   @@unique([provider, providerId])
 }
 
 model UserProfile {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  username        String?  @unique
+  id              String    @id @default(uuid())
+  userId          String    @unique
   bio             String?
-  birthPlace      String?
   location        String?
   website         String?
   socialLinks     Json?
-  privacy         Json?    // { profileVisibility, statsVisibility, arcanaVisibility, whoCanFollow, whoCanComment }
-  skills          String[] @default([])
-  specialties     String[] @default([])
-  rating          Decimal  @default(0) @db.Decimal(3, 2)
-  reviewCount     Int      @default(0)
-  pricePerReading Decimal? @db.Decimal(10, 2)
-  available       Boolean  @default(true)
-  languages       String[] @default(["pt-BR"])
-  versosBalance   Int      @default(0) // Sprint 2 (T014/S2-17): saldo Versos — fonte única, mutado só em $transaction
-  versosStreak    Int      @default(0) // streak do claim-daily (T122)
-  lastClaimAt     DateTime? // última claim diária (idempotência T122)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills          String[]  @default([])
+  specialties     String[]  @default([])
+  rating          Decimal   @default(0) @db.Decimal(3, 2)
+  reviewCount     Int       @default(0)
+  pricePerReading Decimal?  @db.Decimal(10, 2)
+  available       Boolean   @default(true)
+  languages       String[]  @default(["pt-BR"])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  username        String?   @unique
+  birthPlace      String?
+  privacy         Json?
+  lastClaimAt     DateTime?
+  versosBalance   Int       @default(0)
+  versosStreak    Int       @default(0)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Subscription {
@@ -114,24 +95,22 @@ model Subscription {
   externalId String?
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
   id                String    @id @default(uuid())
   userId            String
-  tokenHash         String    @unique // SHA-256 do refresh token — nunca em texto plano (Sprint 1)
-  familyId          String    // família do refresh token (rotação mantém o mesmo familyId)
-  tokenId           String    // identifica cada rotação dentro da família
-  replacedByTokenId String?   // token que substituiu este (detecção de reuso)
+  tokenHash         String    @unique
+  familyId          String
+  tokenId           String
+  replacedByTokenId String?
   revokedAt         DateTime?
   userAgent         String?
   ipAddress         String?
   expiresAt         DateTime
   createdAt         DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([familyId])
@@ -139,11 +118,356 @@ model Session {
 
 model VerificationToken {
   id         String   @id @default(uuid())
-  identifier String   // email do usuário
+  identifier String
   token      String   @unique
-  type       String   // "EMAIL" | "PASSWORD_RESET" | "MAGIC_LINK"
+  type       String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+}
+
+model Reading {
+  id              String           @id @default(cuid())
+  userId          String
+  deckId          String
+  spreadId        String
+  title           String?
+  notes           String?
+  seed            String
+  duration        Int
+  isPublic        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  interpretations Interpretation[]
+  cards           ReadingCard[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("readings")
+}
+
+model ReadingCard {
+  id            String  @id @default(cuid())
+  readingId     String
+  cardId        String
+  positionIndex Int
+  isReversed    Boolean @default(false)
+  reading       Reading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+
+  @@index([readingId])
+  @@map("reading_cards")
+}
+
+model Interpretation {
+  id               String            @id @default(cuid())
+  readingId        String
+  userId           String
+  mode             String
+  mood             String?
+  question         String?
+  content          String
+  cacheHash        String            @unique
+  modelVersion     String            @default("gpt-4o-2024-08-06")
+  tokensUsed       Int               @default(0)
+  wasCached        Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  followUpMessages FollowUpMessage[]
+  reading          Reading           @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([readingId])
+  @@map("interpretations")
+}
+
+model FollowUpMessage {
+  id               String         @id @default(cuid())
+  interpretationId String
+  role             String
+  content          String
+  createdAt        DateTime       @default(now())
+  interpretation   Interpretation @relation(fields: [interpretationId], references: [id], onDelete: Cascade)
+
+  @@index([interpretationId])
+  @@map("follow_up_messages")
+}
+
+model AIDailyUsage {
+  id                  String   @id @default(cuid())
+  userId              String
+  date                DateTime
+  interpretationCount Int      @default(0)
+  followUpCount       Int      @default(0)
+  createdAt           DateTime @default(now())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("ai_daily_usage")
+}
+
+model ArcanaCalculation {
+  id            String   @id @default(uuid())
+  userId        String
+  birthDate     DateTime
+  fullName      String
+  reductionDate String
+  reductionName String
+  arcanaNumber  Int
+  arcanaName    String
+  description   String   @db.VarChar(2000)
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("arcana_calculations")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId, createdAt, id])
+  @@index([followerId, createdAt, id])
+  @@index([followingId, followerId])
+  @@map("follows")
+}
+
+model FollowReward {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  rewardedAt  DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@map("follow_rewards")
+}
+
+model PostLikeReward {
+  id         String   @id @default(cuid())
+  postId     String
+  userId     String
+  rewardedAt DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_like_rewards")
+}
+
+model CommentLikeReward {
+  id         String   @id @default(cuid())
+  commentId  String
+  userId     String
+  rewardedAt DateTime @default(now())
+  comment    Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_like_rewards")
+}
+
+model CommentReward {
+  id         String   @id @default(cuid())
+  postId     String
+  userId     String
+  rewardedAt DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("comment_rewards")
+}
+
+model Post {
+  id               String           @id @default(cuid())
+  authorId         String
+  type             String
+  content          String
+  imageUrls        String[]         @default([])
+  readingId        String?
+  audience         String           @default("public")
+  isPinned         Boolean          @default(false)
+  likeCount        Int              @default(0)
+  commentCount     Int              @default(0)
+  commentsDisabled Boolean          @default(false)
+  isHidden         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  commentRewards   CommentReward[]
+  comments         Comment[]
+  hashtags         PostHashtag[]
+  likeRewards      PostLikeReward[]
+  likes            PostLike[]
+  author           User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId, createdAt])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id              String              @id @default(cuid())
+  postId          String
+  authorId        String
+  content         String
+  parentCommentId String?
+  likeCount       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  likeRewards     CommentLikeReward[]
+  likes           CommentLike[]
+  author          User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment   Comment?            @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[]           @relation("CommentReplies")
+  post            Post                @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+  @@index([parentCommentId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("post_likes")
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@map("comment_likes")
+}
+
+model PostHashtag {
+  id     String @id @default(cuid())
+  postId String
+  tag    String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([tag])
+  @@map("post_hashtags")
+}
+
+model Gift {
+  id                 String   @id @default(cuid())
+  fromUserId         String
+  toUserId           String
+  giftId             String
+  coinCost           Int
+  recipientEarnsHalf Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  fromUser           User     @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser             User     @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, createdAt])
+  @@index([fromUserId, createdAt])
+  @@map("gifts")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model ContentReport {
+  id         String    @id @default(cuid())
+  reporterId String
+  targetType String
+  targetId   String
+  reason     String
+  status     String    @default("PENDING")
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+  reporter   User      @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@index([reporterId])
+  @@map("content_reports")
+}
+
+model HoroscopeContent {
+  id        String   @id @default(cuid())
+  type      String
+  signId    String
+  element   String?
+  period    String
+  date      String
+  content   Json
+  createdAt DateTime @default(now())
+
+  @@unique([type, signId, element, period, date])
+  @@index([type, period, date])
+  @@map("horoscope_contents")
+}
+
+model HoroscopeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  signId    String
+  element   String?
+  period    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("horoscope_entries")
+}
+
+model HoroscopeLog {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  signId    String
+  element   String?
+  period    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("horoscope_logs")
+}
+
+model HoroscopeNotification {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  westernEnabled Boolean @default(true)
+  chineseEnabled Boolean @default(false)
+  mayaEnabled    Boolean @default(false)
+  hour           Int     @default(7)
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("horoscope_notifications")
 }
 
 enum UserRole {
@@ -168,340 +492,4 @@ enum SubscriptionStatus {
   CANCELLED
   EXPIRED
   TRIAL
-}
-
-model Reading {
-  id        String   @id @default(cuid())
-  userId    String
-  deckId    String   // "rws" | "thoth" | "lenormand"
-  spreadId  String   // "three-card", "celtic-cross", etc.
-  title     String?
-  notes     String?
-  seed      String
-  duration  Int      // em segundos
-  isPublic  Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cards ReadingCard[]
-  interpretations Interpretation[]
-
-  @@index([userId, createdAt])
-  @@map("readings")
-}
-
-model ReadingCard {
-  id            String  @id @default(cuid())
-  readingId     String
-  cardId        String  // ex: "rws-major-0"
-  positionIndex Int
-  isReversed    Boolean @default(false)
-
-  reading Reading @relation(fields: [readingId], references: [id], onDelete: Cascade)
-
-  @@index([readingId])
-  @@map("reading_cards")
-}
-
-model Interpretation {
-  id               String   @id @default(cuid())
-  readingId        String
-  userId           String
-  mode             String   // "general" | "love" | "career" | "yesno"
-  mood             String?
-  question         String?
-  content          String   @db.Text
-  cacheHash        String   @unique
-  modelVersion     String   @default("gpt-4o-2024-08-06")
-  tokensUsed       Int      @default(0)
-  wasCached        Boolean  @default(false)
-  createdAt        DateTime @default(now())
-
-  reading          Reading          @relation(fields: [readingId], references: [id], onDelete: Cascade)
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  followUpMessages FollowUpMessage[]
-
-  @@index([readingId])
-  @@map("interpretations")
-}
-
-model FollowUpMessage {
-  id               String   @id @default(cuid())
-  interpretationId String
-  role             String   // "user" | "assistant"
-  content          String   @db.Text
-  createdAt        DateTime @default(now())
-
-  interpretation Interpretation @relation(fields: [interpretationId], references: [id], onDelete: Cascade)
-
-  @@index([interpretationId])
-  @@map("follow_up_messages")
-}
-
-model AIDailyUsage {
-  id                   String   @id @default(cuid())
-  userId               String
-  date                 DateTime // data truncada (sem hora)
-  interpretationCount  Int      @default(0)
-  followUpCount        Int      @default(0)
-  createdAt            DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-  @@map("ai_daily_usage")
-}
-
-model ArcanaCalculation {
-  id            String   @id @default(uuid())
-  userId        String
-  birthDate     DateTime
-  fullName      String
-  reductionDate String
-  reductionName String
-  arcanaNumber  Int
-  arcanaName    String
-  description   String   @db.VarChar(2000)
-  createdAt     DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("arcana_calculations")
-}
-
-// ─── Sprint 2 — Social (Phase 0, T001–T007, T012–T013) ─────────────────────
-// Source: .specs/007-social/design.md §5; plan Phase 0 (T001–T014).
-
-model Follow {
-  id          String   @id @default(cuid())
-  followerId  String
-  followingId String
-  createdAt   DateTime @default(now())
-
-  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
-
-  @@unique([followerId, followingId])
-  @@index([followingId, createdAt, id])
-  @@index([followerId, createdAt, id])
-  // Revisão R: membership "quem me segue" (followingId [+ followerId])
-  // index-only, sem varrer createdAt
-  @@index([followingId, followerId])
-  @@map("follows")
-}
-
-model FollowReward {
-  id             String   @id @default(cuid())
-  followerId     String
-  followingId    String
-  rewardedAt     DateTime @default(now())
-
-  @@unique([followerId, followingId])
-  @@map("follow_rewards")
-}
-
-model Post {
-  id               String   @id @default(cuid())
-  authorId         String
-  type             String   // 'text' | 'image' | 'reading' (SPEC-007 §4)
-  content          String   @db.Text
-  imageUrls        String[] @default([])
-  readingId        String?  // sem FK — snapshot da tiragem (SPEC-007 §5)
-  audience         String   @default("public") // 'public' | 'followers' (S2-15)
-  isPinned         Boolean  @default(false) // tier 1 do feed (S2-5); sem write-path no MVP
-  likeCount        Int      @default(0)
-  commentCount     Int      @default(0)
-  commentsDisabled Boolean  @default(false)
-  isHidden         Boolean  @default(false) // moderação (T129)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  likes    PostLike[]
-  comments Comment[]
-  hashtags PostHashtag[]
-
-  @@index([authorId, createdAt])
-  @@index([createdAt])
-  @@map("posts")
-}
-
-model Comment {
-  id              String   @id @default(cuid())
-  postId          String
-  authorId        String
-  content         String   @db.Text
-  parentCommentId String?
-  likeCount       Int      @default(0)
-  createdAt       DateTime @default(now())
-
-  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parentComment Comment? @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies       Comment[] @relation("CommentReplies")
-  likes         CommentLike[]
-
-  @@index([postId, createdAt])
-  @@index([authorId])
-  @@index([parentCommentId])
-  // Revisão R: polling/comments range + order em createdAt
-  @@index([createdAt])
-  @@map("comments")
-}
-
-model PostLike {
-  id        String   @id @default(cuid())
-  postId    String
-  userId    String
-  createdAt DateTime @default(now())
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, userId])
-  @@index([userId])
-  // Revisão R: polling/likes range + order em createdAt
-  @@index([createdAt])
-  @@map("post_likes")
-}
-
-model CommentLike {
-  id        String   @id @default(cuid())
-  commentId String
-  userId    String
-  createdAt DateTime @default(now())
-
-  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([commentId, userId])
-  @@index([commentId])
-  @@map("comment_likes")
-}
-
-model PostHashtag {
-  id     String @id @default(cuid())
-  postId String
-  tag    String
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-  @@index([tag])
-  @@map("post_hashtags")
-}
-
-model Gift {
-  id                 String   @id @default(cuid())
-  fromUserId         String
-  toUserId           String
-  giftId             String   // id do catálogo fixo SPEC-007 (T036)
-  coinCost           Int      // custo em Versos (S2-4: "Moedas" = Versos)
-  recipientEarnsHalf Boolean  @default(false) // +50% p/ destinatário PROFESSIONAL (T120)
-  createdAt          DateTime @default(now())
-
-  fromUser User @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser   User @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
-
-  @@index([toUserId, createdAt])
-  @@index([fromUserId, createdAt]) // fallback do rate limit "20 gifts/dia" (T027/I5 da review)
-  @@map("gifts")
-}
-
-model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'follow' | 'like' | 'comment' | 'gift' | 'mention' | 'horoscope'
-  message   String
-  data      Json?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, isRead, createdAt])
-  // Revisão R: polling/notifications range + order em createdAt
-  @@index([userId, createdAt])
-  @@map("notifications")
-}
-
-model ContentReport {
-  id         String    @id @default(cuid())
-  reporterId String
-  targetType String    // 'post' | 'comment' | 'user'
-  targetId   String
-  reason     String
-  status     String    @default("PENDING") // 'PENDING' | 'REVIEWED' | 'REJECTED' | 'ACTIONED'
-  resolvedAt DateTime?
-  resolvedBy String?
-  createdAt  DateTime  @default(now())
-
-  reporter User @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-
-  @@index([targetType, targetId])
-  @@index([reporterId])
-  @@map("content_reports")
-}
-
-// ─── Sprint 2 — Horóscopos (Phase 0, T008–T011) ────────────────────────────
-// Source: .specs/006-horoscopes/design.md §5; plan Phase 0.
-// `HoroscopeContent.date` = data civil America/Sao_Paulo (Q25/S2-2).
-
-model HoroscopeContent {
-  id        String   @id @default(cuid())
-  type      String   // 'western' | 'chinese' | 'maya'
-  signId    String   // 'aries', 'rato', número do kin, etc.
-  element   String?  // 'madeira', 'fogo' (chinês)
-  period    String   // 'daily' | 'weekly' | 'monthly'
-  date      String   // data civil BRT: '2026-09-26' | '2026-W39' | '2026-09' (Q25)
-  content   Json     // conteúdo estruturado validado por T035
-  createdAt DateTime @default(now())
-
-  @@unique([type, signId, element, period, date])
-  @@index([type, period, date])
-  @@map("horoscope_contents")
-}
-
-model HoroscopeEntry {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'western' | 'chinese' | 'maya'
-  signId    String
-  element   String?
-  period    String   // 'daily' | 'weekly' | 'monthly'
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("horoscope_entries")
-}
-
-model HoroscopeLog {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'western' | 'chinese' | 'maya'
-  signId    String
-  element   String?
-  period    String   // 'daily' | 'weekly' | 'monthly'
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("horoscope_logs")
-}
-
-model HoroscopeNotification {
-  id              String  @id @default(cuid())
-  userId          String  @unique
-  westernEnabled  Boolean @default(true)
-  chineseEnabled  Boolean @default(false)
-  mayaEnabled     Boolean @default(false)
-  hour            Int     @default(7) // 0–23, BRT (RF-HORO-008)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("horoscope_notifications")
 }
