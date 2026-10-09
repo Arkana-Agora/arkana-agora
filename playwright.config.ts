@@ -6,6 +6,11 @@ const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000"
 // cruzar processos — Next.js e socket-service são servers separados
 // (ADR-007), então o bus em memória não serve para o E2E de realtime.
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379"
+// E2E tests must use the same DATABASE_URL as unit tests (Prisma Postgres),
+// not the local fallback in .env.local which has invalid credentials.
+const DATABASE_URL =
+  process.env.DATABASE_URL ??
+  "postgres://302a4b69da98ca3bdf24df9a76ecb7173a25a53b78432150532e504120272ff5:sk_HeahV2iitkmM218CuMMHE@pooled.db.prisma.io:5432/postgres?sslmode=require"
 
 // CWE-798 (Crítico 8 da revisão): sem chave privada literal no repo.
 // Com ambiente sem chaves, gera um par RS256 efêmero por execução do
@@ -63,6 +68,7 @@ export default defineConfig({
         JWT_PRIVATE_KEY,
         JWT_PUBLIC_KEY,
         REDIS_URL,
+        DATABASE_URL,
       },
     },
     // socket-service (ADR-007, T066): healthcheck /health na 3003 —
@@ -77,6 +83,7 @@ export default defineConfig({
         JWT_PUBLIC_KEY,
         SOCKET_PORT: "3003",
         REDIS_URL,
+        DATABASE_URL,
       },
     },
   ],
