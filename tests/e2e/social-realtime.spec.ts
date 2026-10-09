@@ -22,7 +22,8 @@ import {
 // 2. follow de A em B → badge de notificação no AppHeader de B (WS);
 // 3. WS bloqueado → fallback polling T071 entrega a pill; reconexão
 //    posterior recupera a entrega (backoff 1s→30s do T072);
-// 4. like/comment/gift ficam fixme até as rotas da Phase 3 (T076/T077/T120).
+// 4. like/comment de B em post de A → notification + badge no AppHeader de A
+//    via WS (T076/T077, rotas da Phase 3); gift segue fixme (T120 pendente).
 // Reconnect puro (drop → re-join de rooms) é coberto em
 // tests/integration/websocket.test.ts (T074).
 
@@ -56,10 +57,32 @@ async function createPostViaApi(
   return res.status()
 }
 
+async function createAuthorPost(
+  request: APIRequestContext,
+  token: string,
+  author: string,
+  content: string,
+): Promise<string> {
+  const csrf = csrfHeaders()
+  const res = await request.post(`${BASE_URL}/api/v1/social/posts`, {
+    headers: { ...csrf.headers, Authorization: `Bearer ${token}` },
+    data: { type: "text", content },
+  })
+  expect(res.status()).toBe(201)
+  const post = await prisma.post.findFirst({
+    where: { authorId: author, content },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  })
+  if (!post) throw new Error("post e2e de realtime nao foi encontrado")
+  return post.id
+}
+
 test.describe("T075: realtime social — 2 browsers", () => {
   test.describe.configure({ mode: "serial" })
 
   let authorToken = ""
+  let followerToken = ""
   let followerId = ""
   let authorId = ""
 
@@ -90,31 +113,61 @@ test.describe("T075: realtime social — 2 browsers", () => {
     }
 
     authorToken = (await attachSession(request, EMAIL_AUTHOR)).accessToken
+    followerToken = (await attachSession(request, EMAIL_FOLLOWER)).accessToken
   })
 
   test.afterAll(async () => {
-    await prisma.post.deleteMany({ where: { authorId } })
-    await prisma.followReward.deleteMany({
-      where: {
-        OR: [
-          { followerId, followingId: authorId },
-          { followerId: authorId, followingId: followerId },
-        ],
-      },
+    // Retry logic for transient database connection issues during cleanup
+    const retryCleanup = async (
+      fn: () => Promise<void>,
+      retries = 3,
+      delay = 1000,
+    ) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await fn()
+          return
+        } catch (e) {
+          if (i === retries - 1) throw e
+          await new Promise((r) => setTimeout(r, delay * (i + 1)))
+        }
+      }
+    }
+
+    await retryCleanup(async () => {
+      await prisma.post.deleteMany({ where: { authorId } })
     })
-    await prisma.follow.deleteMany({
-      where: {
-        OR: [
-          { followerId: { in: [authorId, followerId] } },
-          { followingId: { in: [authorId, followerId] } },
-        ],
-      },
+    await retryCleanup(async () => {
+      await prisma.followReward.deleteMany({
+        where: {
+          OR: [
+            { followerId, followingId: authorId },
+            { followerId: authorId, followingId: followerId },
+          ],
+        },
+      })
     })
-    await prisma.notification.deleteMany({
-      where: { userId: { in: [authorId, followerId] } },
+    await retryCleanup(async () => {
+      await prisma.follow.deleteMany({
+        where: {
+          OR: [
+            { followerId: { in: [authorId, followerId] } },
+            { followingId: { in: [authorId, followerId] } },
+          ],
+        },
+      })
     })
-    await cleanupUser(EMAIL_AUTHOR)
-    await cleanupUser(EMAIL_FOLLOWER)
+    await retryCleanup(async () => {
+      await prisma.notification.deleteMany({
+        where: { userId: { in: [authorId, followerId] } },
+      })
+    })
+    await retryCleanup(async () => {
+      await cleanupUser(EMAIL_AUTHOR)
+    })
+    await retryCleanup(async () => {
+      await cleanupUser(EMAIL_FOLLOWER)
+    })
   })
 
   test("post criado por A aparece no feed de B como pill '1 novo post' via WebSocket", async ({
@@ -300,7 +353,108 @@ test.describe("T075: realtime social — 2 browsers", () => {
     }
   })
 
-  test.fixme("like em post dispara notification real-time (T076 — rota de like na Phase 3)", async () => {})
-  test.fixme("comment em post dispara notification real-time (T077 — rota de comment na Phase 3)", async () => {})
+  test("like de B em post de A dispara notification e badge '1' no AppHeader de A via WebSocket (T076)", async ({
+    browser,
+    request,
+  }) => {
+    const ctx = await browser.newContext()
+    const page = await ctx.newPage()
+    const csrf = csrfHeaders()
+    let postId = ""
+    try {
+      await uiLogin(page, EMAIL_AUTHOR)
+      await page.goto("/dashboard")
+      await expect(
+        page.getByRole("navigation", {
+          name: /navega[çc][aã]o principal/i,
+        }),
+      ).toBeVisible()
+      await expect(page.getByTestId("unread-notifications-badge")).toHaveCount(
+        0,
+      )
+
+      postId = await createAuthorPost(
+        request,
+        authorToken,
+        authorId,
+        `like realtime e2e ${Date.now()}`,
+      )
+
+      const likeRes = await request.post(
+        `${BASE_URL}/api/v1/social/posts/${postId}/like`,
+        {
+          headers: {
+            ...csrf.headers,
+            Authorization: `Bearer ${followerToken}`,
+          },
+        },
+      )
+      expect(likeRes.status()).toBe(200)
+
+      // Provider só incrementa via evento WS (carga inicial é one-shot)
+      await expect(page.getByTestId("unread-notifications-badge")).toHaveText(
+        "1",
+        { timeout: 15_000 },
+      )
+    } finally {
+      await prisma.postLike.deleteMany({ where: { postId } })
+      await prisma.notification.deleteMany({ where: { userId: authorId } })
+      if (postId) await prisma.post.deleteMany({ where: { id: postId } })
+      await ctx.close()
+    }
+  })
+
+  test("comment de B em post de A dispara notification e badge '1' no AppHeader de A via WebSocket (T077)", async ({
+    browser,
+    request,
+  }) => {
+    const ctx = await browser.newContext()
+    const page = await ctx.newPage()
+    const csrf = csrfHeaders()
+    let postId = ""
+    try {
+      await uiLogin(page, EMAIL_AUTHOR)
+      await page.goto("/dashboard")
+      await expect(
+        page.getByRole("navigation", {
+          name: /navega[çc][aã]o principal/i,
+        }),
+      ).toBeVisible()
+      await expect(page.getByTestId("unread-notifications-badge")).toHaveCount(
+        0,
+      )
+
+      postId = await createAuthorPost(
+        request,
+        authorToken,
+        authorId,
+        `comment realtime e2e ${Date.now()}`,
+      )
+
+      const commentRes = await request.post(
+        `${BASE_URL}/api/v1/social/posts/${postId}/comments`,
+        {
+          headers: {
+            ...csrf.headers,
+            Authorization: `Bearer ${followerToken}`,
+          },
+          data: { content: "comentario realtime e2e" },
+        },
+      )
+      expect(commentRes.status()).toBe(201)
+
+      // Provider só incrementa via evento WS (carga inicial é one-shot)
+      await expect(page.getByTestId("unread-notifications-badge")).toHaveText(
+        "1",
+        { timeout: 15_000 },
+      )
+    } finally {
+      await prisma.comment.deleteMany({ where: { postId } })
+      await prisma.notification.deleteMany({ where: { userId: authorId } })
+      if (postId) await prisma.post.deleteMany({ where: { id: postId } })
+      await ctx.close()
+    }
+  })
+
   test.fixme("gift dispara notification real-time (T120 — gift na Phase 3)", async () => {})
 })

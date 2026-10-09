@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import React from "react"
 
 const apiGetMock = vi.hoisted(() => vi.fn())
 let socketHandlers: Record<string, (payload: unknown) => void> = vi.hoisted(
@@ -23,6 +25,21 @@ import {
   useNotifications,
 } from "@/components/social/notifications-provider"
 
+function createWrapper(): React.FC<{ children: React.ReactNode }> {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+    },
+  })
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <NotificationsProvider>{children}</NotificationsProvider>
+    </QueryClientProvider>
+  )
+  Wrapper.displayName = "QueryClientAndNotificationsWrapper"
+  return Wrapper
+}
+
 function Probe() {
   const { unreadCount } = useNotifications()
   return <span data-testid="count">{String(unreadCount)}</span>
@@ -42,11 +59,7 @@ describe("NotificationsProvider (T073)", () => {
   })
 
   it("carrega unreadCount inicial do polling", async () => {
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
 
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("3"),
@@ -57,11 +70,7 @@ describe("NotificationsProvider (T073)", () => {
   })
 
   it("evento notification do WebSocket incrementa o unreadCount", async () => {
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("3"),
     )
@@ -78,11 +87,7 @@ describe("NotificationsProvider (T073)", () => {
   })
 
   it("mesmo id de notification não conta duas vezes", async () => {
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("3"),
     )
@@ -112,11 +117,7 @@ describe("NotificationsProvider (T073)", () => {
         },
       },
     })
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("3"),
     )
@@ -134,11 +135,7 @@ describe("NotificationsProvider (T073)", () => {
   })
 
   it("ids diferentes continuam incrementando", async () => {
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("3"),
     )
@@ -153,11 +150,7 @@ describe("NotificationsProvider (T073)", () => {
 
   it("falha de polling não derruba o provider (unreadCount 0)", async () => {
     apiGetMock.mockRejectedValue(new Error("offline"))
-    render(
-      <NotificationsProvider>
-        <Probe />
-      </NotificationsProvider>,
-    )
+    render(<Probe />, { wrapper: createWrapper() })
 
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("0"),
@@ -169,24 +162,43 @@ describe("AppHeader badge (T073)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     socketHandlers = {}
-    apiGetMock.mockResolvedValue({
-      data: { data: { unreadCount: 3, notifications: [] } },
+    // useUnreadCount calls /social/notifications?limit=1&unreadOnly=true
+    // NotificationsProvider calls /social/polling/notifications?since=...
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.includes("/social/polling/notifications")) {
+        return Promise.resolve({
+          data: { data: { unreadCount: 3, notifications: [] } },
+        })
+      }
+      if (url.includes("/social/notifications")) {
+        return Promise.resolve({
+          data: {
+            notifications: [],
+            unreadCount: 3,
+            nextCursor: null,
+          },
+        })
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`))
     })
   })
 
   it("mostra badge com o unreadCount dentro do provider", async () => {
-    render(
-      <NotificationsProvider>
-        <AppHeader />
-      </NotificationsProvider>,
-    )
+    render(<AppHeader />, { wrapper: createWrapper() })
 
     const badge = await screen.findByLabelText(/notificações não lidas/i)
     expect(badge).toHaveTextContent("3")
   })
 
   it("renderiza sem provider (contexto default, sem badge)", () => {
-    render(<AppHeader />)
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppHeader />
+      </QueryClientProvider>,
+    )
     expect(
       screen.queryByLabelText(/notificações não lidas/i),
     ).not.toBeInTheDocument()
@@ -203,11 +215,7 @@ describe("MobileNav badge (revisão U)", () => {
   })
 
   it("mostra badge mobile com o unreadCount dentro do provider", async () => {
-    render(
-      <NotificationsProvider>
-        <MobileNav />
-      </NotificationsProvider>,
-    )
+    render(<MobileNav />, { wrapper: createWrapper() })
 
     const badge = await screen.findByTestId("unread-notifications-badge-mobile")
     expect(badge).toHaveTextContent("3")
@@ -218,11 +226,7 @@ describe("MobileNav badge (revisão U)", () => {
     apiGetMock.mockResolvedValue({
       data: { data: { unreadCount: 150, notifications: [] } },
     })
-    render(
-      <NotificationsProvider>
-        <MobileNav />
-      </NotificationsProvider>,
-    )
+    render(<MobileNav />, { wrapper: createWrapper() })
 
     const badge = await screen.findByTestId("unread-notifications-badge-mobile")
     expect(badge).toHaveTextContent("99+")
