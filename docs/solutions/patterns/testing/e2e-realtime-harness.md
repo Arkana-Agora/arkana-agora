@@ -21,7 +21,7 @@ tags:
   - prisma
 module: realtime / social feed (T075)
 date: 2026-10-02
-established_in: "Playwright harness for T075 realtime social (2-browser WS test, fallback polling + reconnect) built during Phase 2.5 WebSocket Foundation — green run `npx playwright test tests/e2e/social-realtime.spec.ts` 3 passed / 3 fixme, 2026-10-02"
+established_in: "Playwright harness for T075 realtime social (2-browser WS test, fallback polling + reconnect) built during Phase 2.5 WebSocket Foundation — green run `npx playwright test tests/e2e/social-realtime.spec.ts` 3 passed / 3 fixme, 2026-10-02; updated after Sprint 2 Phase 3 (2026-10-05): **5 passed / 1 fixme** (like T076 and comment T077 promoted from fixme; only gift T120 remains)"
 ---
 
 # Pattern: E2E Realtime Harness (Playwright × Next dev × socket-service)

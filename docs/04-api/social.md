@@ -1,8 +1,8 @@
 # API Social — arkana-agora
 
-> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória em todas as rotas deste módulo **exceto** `GET /social/posts/:id/og-image` (`optionalAuth` — crawlers de preview chegam sem token) e as listas `GET /users/:username/{followers,following}` (auth opcional, o Bearer só habilita `isFollowing`); as rotas de escrita (`POST /social/follow/:userId`, `POST /social/posts`, `POST /social/posts/images/presign`) exigem Bearer **+ CSRF** (`enforceCsrf`) | **Paginação**: Cursor-based
+> **Módulo**: `src/app/api/v1/social/` | **Autenticação**: Obrigatória em todas as rotas deste módulo **exceto** `GET /social/posts/:id/og-image` (`optionalAuth` — crawlers de preview chegam sem token) e as listas `GET /users/:username/{followers,following}` (auth opcional, o Bearer só habilita `isFollowing`); as rotas de escrita exigem Bearer **+ CSRF** (`enforceCsrf`) — `POST /social/follow/:userId`, `POST /social/posts`, `POST /social/posts/images/presign` e, **desde a Sprint 2 Phase 3 (T076–T084)**, também `POST /social/posts/:id/like`, `POST /social/posts/:id/comments`, `PATCH|DELETE /social/comments/:id`, `POST /social/comments/:id/like`, `PATCH /social/notifications/:id/read` e `PATCH /social/notifications/read-all` (13 rotas CSRF no total; lista canônica em `docs/07-security/security.md` §CSRF) | **Paginação**: Cursor-based
 >
-> **Status (2026-10-02)**: **implementado — follow (Sprint 2 Phase 1, T043–T050) + posts/feed/explore (Sprint 2 Phase 2, T051–T065) + realtime/polling (Sprint 2 Phase 2.5, T066–T088 parcial)**. Rotas existentes hoje em `src/app/api/v1/social/`: `POST /social/follow/:userId` (toggle, `follow/[userId]/route.ts`), `POST /social/posts`, `GET /social/feed`, `GET /social/explore/{trending,hashtags,suggestions}`, `GET /social/search`, `GET /social/posts/:id`, `GET /social/posts/:id/og-image`, `POST /social/posts/images/presign`, **`GET /social/polling/{posts,likes,comments,notifications}`** (T071, fallback REST do realtime — contrato na seção de polling no fim deste documento) (+ `GET /users/:username/{followers,following}` em `src/app/api/v1/users/[username]/{followers,following}/route.ts`, libs `src/lib/social/{privacy,follow-lists,feed-algorithm,explore,search,post-visibility}.ts` e validadores `src/lib/validators/social.ts`). Testes: `tests/integration/social-follow.test.ts` (43 casos, incl. 3 de corrida), `tests/social-privacy.test.ts`, `tests/find-visible-profile.test.ts` (11 — `findVisibleProfile`/SC38), `tests/integration/social-feed.test.ts` (52) e `tests/integration/social-explore.test.ts` (20) — a cobertura da task T065 está **dividida entre esses dois arquivos + `tests/feed-algorithm.test.ts` (26)** em vez de um único `social-feed.test.ts` (desvio registrado na Phase 2). **Continuam planejados** os endpoints não listados acima (`DELETE /social/posts/:id`, `POST /social/posts/:id/like` T076, `POST|GET /social/posts/:id/comments` T077/T078, `POST /social/gifts` T120, `GET|PATCH /social/notifications*` T082) — nenhum deles existe em `src/app/api/v1/social/`. Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas usam já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
+> **Status (2026-10-02; Phase 3 atualizada em 2026-10-05)**: **implementado — follow (Sprint 2 Phase 1, T043–T050) + posts/feed/explore (Sprint 2 Phase 2, T051–T065) + realtime/polling (Sprint 2 Phase 2.5, T066–T088 parcial) + interações like/comentário/notificações (Sprint 2 Phase 3, T076–T084/T086)**. Rotas existentes hoje em `src/app/api/v1/social/`: `POST /social/follow/:userId` (toggle, `follow/[userId]/route.ts`), `POST /social/posts`, `GET /social/feed`, `GET /social/explore/{trending,hashtags,suggestions}`, `GET /social/search`, `GET /social/posts/:id`, `GET /social/posts/:id/og-image`, `POST /social/posts/images/presign`, **`POST /social/posts/:id/like`** (T076, `posts/[id]/like/route.ts`), **`POST|GET /social/posts/:id/comments`** (T077/T078, `posts/[id]/comments/route.ts`), **`PATCH|DELETE /social/comments/:id`** (T079/T080, `comments/[id]/route.ts`), **`POST /social/comments/:id/like`** (T081, `comments/[id]/like/route.ts`), **`GET /social/notifications`** (T082, `notifications/route.ts`), **`PATCH /social/notifications/:id/read`** (T083, `notifications/[id]/read/route.ts`), **`PATCH /social/notifications/read-all`** (T084, `notifications/read-all/route.ts`), **`GET /social/polling/{posts,likes,comments,notifications}`** (T071, fallback REST do realtime — contrato na seção de polling no fim deste documento) (+ `GET /users/:username/{followers,following}` em `src/app/api/v1/users/[username]/{followers,following}/route.ts`, libs `src/lib/social/{privacy,follow-lists,feed-algorithm,explore,search,post-visibility,comments,relative-time}.ts` e validadores `src/lib/validators/social.ts`). Testes: `tests/integration/social-follow.test.ts` (43 casos, incl. 3 de corrida), `tests/social-privacy.test.ts`, `tests/find-visible-profile.test.ts` (11 — `findVisibleProfile`/SC38), `tests/integration/social-feed.test.ts` (52) e `tests/integration/social-explore.test.ts` (20) — a cobertura da task T065 está **dividida entre esses dois arquivos + `tests/feed-algorithm.test.ts` (26)** em vez de um único `social-feed.test.ts` (desvio registrado na Phase 2). **Continuam planejados** apenas `DELETE /social/posts/:id` (não existe — `posts/[id]/route.ts` só tem o `GET` de detalhe) e `POST /social/gifts` T120; os demais endpoints antes listados aqui como "planejados" (like T076, comentários T077/T078, edição/remoção T079/T080, like de comentário T081, notificações T082–T084) **foram implementados na Phase 3 (2026-10-05)**. Testes da Phase 3: `tests/integration/social-interactions.test.ts`, `tests/stores/social-store.test.ts`, `tests/components/{post-card,comment-section,notifications-dropdown}.test.tsx` + E2E `tests/e2e/social-realtime.spec.ts` (like/comment promovidos de `fixme` a teste real). Desde o Sprint 2 Phase 0 os **models** de suporte existem no schema (`prisma/schema.prisma`, migração `20260926182325_sprint2_social_horoscopes`): `Follow`, `Post`, `Comment`, `PostLike`, `CommentLike`, `PostHashtag`, `Gift`, `Notification`, `ContentReport`. Desde o **Phase 0.5** as **utilidades compartilhadas** que as rotas usam já existem: `src/lib/social/{feed-algorithm,limits,gifts,versos,mentions}.ts`, `src/lib/moderation.ts`, `src/lib/csrf.ts` + `src/lib/middleware/{rate-limit,csrf}.ts`, `src/lib/feed-cache.ts`, `src/hooks/use-social.ts`.
 
 ## Sumário
 
@@ -23,9 +23,13 @@
 - [POST /social/posts/:id/like](#post-socialpostsidlike)
 - [POST /social/posts/:id/comments](#post-socialpostsidcomments)
 - [GET /social/posts/:id/comments](#get-socialpostsidcomments)
+- [PATCH /social/comments/:id](#patch-socialcommentsid)
+- [DELETE /social/comments/:id](#delete-socialcommentsid)
+- [POST /social/comments/:id/like](#post-socialcommentsidlike)
 - [POST /social/gifts](#post-socialgifts)
 - [GET /social/notifications](#get-socialnotifications)
-- [PATCH /social/notifications/read](#patch-socialnotificationsread)
+- [PATCH /social/notifications/:id/read](#patch-socialnotificationsidread)
+- [PATCH /social/notifications/read-all](#patch-socialnotificationsread-all)
 - [GET /social/polling/{posts,likes,comments,notifications}](#get-socialpollingpostslikescommentsnotifications)
 
 ---
@@ -287,7 +291,7 @@ Cursor: base64url de {createdAt, id} = menor (createdAt, id) já lido
 }
 ```
 
-> **Shape real do item (T052)**: cada elemento de `data` é um `FeedPost` — a row de `Post` **flat** (`id`, `type`, `content`, `imageUrls`, `readingId`, `audience`, `commentsDisabled`, `likeCount`, `commentCount`, `isPinned`, `isHidden`, `createdAt`, …) + `author { id, name, displayName, avatar }` (`POST_INCLUDE` em `src/lib/social/feed-algorithm.ts`). Os objetos aninhados `content.{spreadName,cards,…}`, `stats` e `currentUserActions` do exemplo acima são o **contrato de produto aspiracional** e **não são emitidos hoje**; `likeCount`/`commentCount` vêm zerados na criação (S2-19 — os incrementos pertencem a T076/T077/T081).
+> **Shape real do item (T052)**: cada elemento de `data` é um `FeedPost` — a row de `Post` **flat** (`id`, `type`, `content`, `imageUrls`, `readingId`, `audience`, `commentsDisabled`, `likeCount`, `commentCount`, `isPinned`, `isHidden`, `createdAt`, …) + `author { id, name, displayName, avatar }` (`POST_INCLUDE` em `src/lib/social/feed-algorithm.ts`). Os objetos aninhados `content.{spreadName,cards,…}`, `stats` e `currentUserActions` do exemplo acima são o **contrato de produto aspiracional** e **não são emitidos hoje**; `likeCount`/`commentCount` nascem zerados na criação (S2-19) e passaram a ser mutados **no mesmo `$transaction`** das rotas de like/comentário da Phase 3 (T076/T077/T080/T081 — reconciliação via `src/jobs/counter-reconcile.ts`, T147).
 
 ### Erros
 
@@ -549,7 +553,7 @@ x-csrf-token: <csrf-token>
 6. **Moderação** (`checkContent`, `src/lib/moderation.ts`; decisão do dono 2026-09-30/CHK011): conteúdo flaggado → **403 `CONTENT_BLOCKED` com `details.flaggedWords`**.
 7. `type=reading`: `Reading.userId` precisa ser do viewer → senão 403 `READING_ACCESS_DENIED` (uniforme, anti-oráculo).
 8. **1 `$transaction`**: `earnVersos(viewer, Reading)` **antes** de criar (só para `type=reading`; retorno `null` = sem `UserProfile` → lança e aborta a tx, padrão K2) → `post.create` → `postHashtag.createMany` (`parseHashtags`, dedupe case-insensitive) da mesma transação.
-9. **Contadores intocados**: a criação **não** escreve `likeCount`/`commentCount` (defaults 0) — incrementos pertencem a **T076/T077/T081** (S2-19).
+9. **Contadores intocados na criação**: `POST /social/posts` **não** escreve `likeCount`/`commentCount` (defaults 0 — S2-19); a mutação acontece **nas próprias rotas de interação** da Phase 3 (T076/T077/T081 — increment/decrement no mesmo `$transaction` do toggle/insert).
 10. **Emit `new-post`** (rooms `user:{id}`/`feed:{id}` dos **seguidores** do autor) — implementado na Phase 2.5 (`emitNewPost` de `socket-service/src/emitters.ts`, pós-commit, fire-and-forget). ⚠️ O nome do plano antigo (`post:new`) **não existe**: o canônico é `new-post` (`RealtimeEventMap`).
 11. **Analytics** (T136 no-op server-side até deploy, mesmo estado do follow): `trackPostCreate(type, hasImages)` após a tx e `trackPostLimitHit(tier, limit)` quando o 429 diário dispara.
 
@@ -649,13 +653,13 @@ Authorization: Bearer <accessToken>
     "comments": [
       {
         "id": "cmt_xyz789",
-        "text": "Que bela leitura!",
+        "content": "Que bela leitura!",
         "author": { "id": "usr_a1b2c3d4", "name": "Maria Silva", "displayName": null, "avatar": null },
         "createdAt": "2026-09-28T10:35:00Z",
         "replies": [
           {
             "id": "cmt_rst001",
-            "text": "Concordo!",
+            "content": "Concordo!",
             "author": { "id": "usr_e5f6g7", "name": "Pedro Luz", "displayName": null, "avatar": null },
             "createdAt": "2026-09-28T10:40:00Z"
           }
@@ -666,7 +670,7 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-> `comments` sai **de dentro** de `data` (junto com `post`) para não duplicar o payload; **não há paginação nesta rota** — é o preview de 10/10; a listagem paginada completa é `GET /social/posts/:id/comments` (T078, planejado).
+> `comments` sai **de dentro** de `data` (junto com `post`) para não duplicar o payload; **não há paginação nesta rota** — é o preview de 10/10 (rows cruas de `Comment`, campo **`content`**); a listagem paginada completa é `GET /social/posts/:id/comments` (T078, **implementado na Phase 3**).
 >
 > **Headers e projeção (review Phase 2)**: sucesso e erros saem com `Cache-Control: private, no-store` + `Vary: Authorization` (o post pode ser gated). O `post` da resposta passa por `toPublicPost` (`src/lib/social/post-visibility.ts`) — campos de predicado do autor (`isBanned`, `deletedAt`, `isActive`, `profile.privacy`) **nunca saem na resposta** (mesmo princípio do Explore).
 
@@ -803,9 +807,9 @@ Authorization: Bearer <accessToken>
 
 ## POST /social/posts/:id/like
 
-Curtir (ou descurtir) uma publicação.
+Curtir (ou descurtir) uma publicação — **toggle** num POST único.
 
-> **Planejado (T076) — rota não existe.** Até lá o `PostCard` (`src/components/social/post-card.tsx`) renderiza o botão de like com `aria-disabled` (placeholder até T076/T077) e `likeCount`/`commentCount` nascem em **0** na criação (S2-19 — os incrementos pertencem a T076/T077/T081).
+> **Implementado (Sprint 2 Phase 3, T076)** em `src/app/api/v1/social/posts/[id]/like/route.ts`. UI: `PostCard` (`src/components/social/post-card.tsx`) chama a rota com overlay otimista em `useSocialStore.postLikes` (`src/stores/social-store.ts`, rollback no erro); o botão de like fica sempre habilitado no cliente (o 403 `SELF_LIKE` do servidor é tratado como erro da mutação), e o `aria-disabled` do card é só do **botão de comentário** quando `commentsDisabled`.
 
 ### Requisição
 
@@ -814,29 +818,50 @@ POST /api/v1/social/posts/post_abc123/like
 Authorization: Bearer <accessToken>
 ```
 
-### Comportamento
+Sem corpo (toggle puro).
 
-- **Toggle**: Se já curtiu → descurte. Se não curtiu → curte.
-- Dispara notificação ao autor (se curtiu).
+### Comportamento (ordem exata do handler)
 
-### Resposta — 200 OK
+1. **CSRF** (`enforceCsrf`) → 403 `CSRF_TOKEN_INVALID` (sem rate headers)
+2. **`requireAuth`** → 401/403
+3. Rate limit `enforceSocialLimit({ limit: "like" })` — **100/min** (bucket `like`) → 429 `RATE_LIMITED`
+4. Lookup do post + `canViewPost` → inexistente/oculto/gated → **404 `POST_NOT_FOUND` uniforme** (mesmo predicado do `GET /social/posts/:id`, Q28/anti-timing)
+5. `post.authorId === viewer` → **403 `SELF_LIKE`** com `details.reason: "self_like"` (RF-SOC-004 — proibido curtir a própria publicação)
+6. **`$transaction`**: toggle `PostLike` + `Post.likeCount` `increment`/`decrement` **no mesmo tx** (S2-19); no like novo cria `Notification { type: "like", data: { postId, likerId } }` com **dedupe do par antes de criar** (`notification.deleteMany`) e, no unlike, **remove** a notificação do par (anti-flood, espelho do unfollow T043); `earnVersos(Like)` só na criação (`null` → aborta a tx)
+7. Pós-commit fire-and-forget: emit **`like-updated`** (room `post:{id}`) e, quando `liked`, **`notification`** (room `user:{authorId}`) — payload sai da row criada; corridas `P2002`/`P2025` são resolvidas re-ler o banco (não infere constraint) e respondem 200 coerente
+
+### Resposta — 200 OK (nos dois sentidos)
 
 ```json
 {
   "data": {
     "liked": true,
-    "likesCount": 24
+    "likeCount": 24
   }
 }
 ```
+
+> ⚠️ O campo é **`likeCount`** (singular) — o nome antigo deste documento, `likesCount`, era rascunho e **não existe na rota**. RF-SOC-004: a resposta só expõe `{liked, likeCount}` — **nenhuma lista de quem curtiu**.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | `enforceCsrf` (etapa 1, antes do rate limit — sem `rate.headers`) |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | Falha do `requireAuth` |
+| 429 | `RATE_LIMITED` | Bucket `like` 100/min (`details.limit: "like"`) |
+| 404 | `POST_NOT_FOUND` | Post inexistente/oculto/gated para este viewer (uniforme, Q28) |
+| 403 | `SELF_LIKE` | Tentativa de curtir a própria publicação (`details.reason: "self_like"`) |
+| 401 | `AUTH_TOKEN_INVALID` | Usuário sumiu do DB depois do rate limit |
+| 500 | `INTERNAL_ERROR` | Falha interna ou de re-query de corrida — sempre JSON com `rate.headers` |
 
 ---
 
 ## POST /social/posts/:id/comments
 
-Comentar em uma publicação.
+Comentar em uma publicação ou responder um comentário (**1 nível** — RF-SOC-005: resposta de resposta é rejeitada).
 
-> **Planejado (T077) — rota não existe.** O preview de comentários já vem embutido em `GET /social/posts/:id` (raízes + 1 nível, lote 10).
+> **Implementado (Sprint 2 Phase 3, T077)** em `src/app/api/v1/social/posts/[id]/comments/route.ts`. O preview embutido do `GET /social/posts/:id` (raízes + 1 nível, lote 10) continua valendo; a UI (`CommentSection`, `src/components/social/comment-section.tsx`) usa React Query `["comments", postId]` e espelha no `SocialStore` (`addCommentToPost`).
 
 ### Requisição
 
@@ -848,17 +873,32 @@ Content-Type: application/json
 
 ```json
 {
-  "text": "Que bela leitura! O Sol no futuro é um ótimo sinal. ✨",
+  "content": "Que bela leitura! O Sol no futuro é um ótimo sinal. ✨",
   "parentCommentId": null
 }
 ```
+
+> ⚠️ O campo é **`content`** (não `text`) — `createCommentSchema` em `src/lib/validators/social.ts`.
 
 ### Validação
 
 | Campo | Tipo | Obrigatório | Regras |
 |-------|------|-------------|--------|
-| `text` | string | Sim | 1–300 caracteres |
-| `parentCommentId` | string | Não | ID do comentário pai (resposta) |
+| `content` | string | Sim | 1–300 caracteres (`MAX_COMMENT_CONTENT`), sem só-espaços (422 `VALIDATION_ERROR` com `details[].field: "content"`) |
+| `parentCommentId` | string | Não | ID do comentário pai — precisa existir, ser do **mesmo post** e ser **raiz** (`parentCommentId === null`); qualquer caso inválido → **422 uniforme** `VALIDATION_ERROR` (`field: "parentCommentId"`, anti-enumeration) |
+
+### Comportamento (ordem exata do handler)
+
+1. **CSRF** → 403 `CSRF_TOKEN_INVALID`
+2. **`requireAuth`** → 401/403
+3. **Zod** (`createCommentSchema`) → 422 `VALIDATION_ERROR`
+4. Rate limit `enforceSocialLimit({ limit: "comment" })` — **30/min** → 429 `RATE_LIMITED`
+5. Lookup do post + `canViewPost` → **404 `POST_NOT_FOUND` uniforme**
+6. `post.commentsDisabled` → **403 `COMMENTS_DISABLED`** (`details.reason: "post_comments_disabled"`)
+7. `canComment(viewer, autor)` (`src/lib/social/privacy.ts`, T077) → **403 `WHO_CAN_COMMENT`** com `details.reason` = `privacy_nobody` \| `privacy_following` \| `privacy_invalid` (fail-closed: privacy JSON inválido nega)
+8. Validação do parent (tabela acima)
+9. **`$transaction`**: insert do `Comment` + `Post.commentCount` `increment` **no mesmo tx** (S2-19) + `Notification { type: "comment" }` para o autor do post e, em resposta, para o autor do pai (**nunca** ao próprio comentarista; pai == autor do post → uma só) + `earnVersos(Comment)` (2 Versos; `null` → aborta a tx)
+10. Pós-commit fire-and-forget: emit **`comment-added`** (rooms `post:{id}` + `user:{postAuthorId}`) e **`notification`** para cada notificado
 
 ### Resposta — 201 Created
 
@@ -868,33 +908,58 @@ Content-Type: application/json
     "comment": {
       "id": "cmt_xyz789",
       "postId": "post_abc123",
+      "authorId": "usr_a1b2c3d4",
+      "content": "Que bela leitura! O Sol no futuro é um ótimo sinal. ✨",
+      "parentCommentId": null,
+      "likeCount": 0,
+      "createdAt": "2026-10-05T10:35:00.000Z",
       "author": {
         "id": "usr_a1b2c3d4",
         "name": "Maria Silva",
+        "displayName": "Maria",
         "avatar": "/avatars/usr_a1b2c3d4.jpg"
-      },
-      "text": "Que bela leitura! O Sol no futuro é um ótimo sinal. ✨",
-      "parentCommentId": null,
-      "replies": 0,
-      "createdAt": "2025-01-15T10:35:00Z"
+      }
     }
   }
 }
 ```
 
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | Etapa 1, antes do rate limit (sem `rate.headers`) |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 422 | `VALIDATION_ERROR` | Body inválido, `content` fora de 1–300, ou `parentCommentId` inexistente/alheio/resposta |
+| 429 | `RATE_LIMITED` | Bucket `comment` 30/min (`details.limit: "comment"`) |
+| 404 | `POST_NOT_FOUND` | Post invisível para o viewer (uniforme, Q28) |
+| 403 | `COMMENTS_DISABLED` | `Post.commentsDisabled = true` (`details.reason: "post_comments_disabled"`) |
+| 403 | `WHO_CAN_COMMENT` | `UserProfile.privacy.whoCanComment` do autor negou (`details.reason`) |
+| 500 | `INTERNAL_ERROR` | Falha interna — sempre JSON com `rate.headers` |
+
+> ⚠️ **Segurança (follow-up aberto)**: ao contrário de `POST /social/posts`, esta rota **não chama `checkContent`** (`src/lib/moderation.ts`) — o plano é silente sobre moderação de comentários; ver `docs/05-ai/moderation.md`.
+
 ---
 
 ## GET /social/posts/:id/comments
 
-Lista comentários de uma publicação.
+Lista comentários de uma publicação — raízes com respostas aninhadas de **1 nível** (RF-SOC-005), mais recentes primeiro.
 
-> **Planejado (T078) — rota não existe.** ⚠️ **Divergência de contrato**: o plano T078 prevê resposta **cursor-based com lote default 10**; o exemplo abaixo (offset `page`/`totalItems`) é o rascunho antigo deste documento — alinhar ao envelope S2-18 `{ data, pagination: { nextCursor } }` na implementação.
+> **Implementado (Sprint 2 Phase 3, T078)** em `src/app/api/v1/social/posts/[id]/comments/route.ts` (função `GET`). O envelope é o **S2-18** `{ data, pagination: { nextCursor } }` — o rascunho offset (`page`/`totalItems`) que este documento descrevia foi superado (a nota de divergência antiga está fechada). Cursor no **mesmo formato do feed** (`encodeFeedCursor`/`decodeFeedCursor`, T026).
 
 ### Requisição
 
 ```http
-GET /api/v1/social/posts/post_abc123/comments?page=1&limit=20
+GET /api/v1/social/posts/post_abc123/comments?limit=10&cursor=eyJjcmVhdGVkQXQiOi...
+Authorization: Bearer <accessToken>
 ```
+
+### Parâmetros de Query
+
+| Parâmetro | Tipo | Padrão | Regras |
+|-----------|------|--------|--------|
+| `limit` | number | **10** (`COMMENTS_DEFAULT_LIMIT`) | 1–**50** (`COMMENTS_MAX_LIMIT`); fora da faixa → 422 `VALIDATION_ERROR` |
+| `cursor` | string | — | max 200 chars; **cursor inválido → `{ data: [], pagination: { nextCursor: null } }`** (página vazia, sem restart no topo — contrato do feed T026) |
 
 ### Resposta — 200 OK
 
@@ -903,31 +968,155 @@ GET /api/v1/social/posts/post_abc123/comments?page=1&limit=20
   "data": [
     {
       "id": "cmt_xyz789",
-      "author": {
-        "id": "usr_a1b2c3d4",
-        "name": "Maria Silva",
-        "avatar": "/avatars/usr_a1b2c3d4.jpg"
-      },
-      "text": "Que bela leitura!",
+      "postId": "post_abc123",
+      "authorId": "usr_a1b2c3d4",
+      "content": "Que bela leitura!",
+      "parentCommentId": null,
+      "likeCount": 2,
+      "createdAt": "2026-10-05T10:35:00.000Z",
+      "author": { "id": "usr_a1b2c3d4", "name": "Maria Silva", "displayName": "Maria", "avatar": "/avatars/usr_a1b2c3d4.jpg" },
       "replies": [
         {
           "id": "cmt_rst001",
-          "author": { "id": "usr_b2c3d4", "name": "Ana Costa" },
-          "text": "Concordo! E as cartas estão bem posicionadas.",
-          "createdAt": "2025-01-15T10:40:00Z"
+          "postId": "post_abc123",
+          "authorId": "usr_b2c3d4",
+          "content": "Concordo! E as cartas estão bem posicionadas.",
+          "parentCommentId": "cmt_xyz789",
+          "likeCount": 0,
+          "createdAt": "2026-10-05T10:40:00.000Z",
+          "author": { "id": "usr_b2c3d4", "name": "Ana Costa", "displayName": "Ana", "avatar": null }
         }
-      ],
-      "createdAt": "2025-01-15T10:35:00Z"
+      ]
     }
   ],
   "pagination": {
-    "page": 1,
-    "limit": 20,
-    "totalItems": 5,
-    "totalPages": 1
+    "nextCursor": "eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTA1VDEwOjM1OjAwLjAwMFoiLCJpZCI6ImNtdF94eXc3ODkifQ"
   }
 }
 ```
+
+### Comportamento
+
+- Só raízes (`parentCommentId: null`) na página; cada raiz traz até **10 `replies`** (`REPLIES_TAKE`) ordenados `createdAt desc, id desc`.
+- Autores **banidos/soft-deleted/inativos são filtrados** (LGPD — `COMMENT_AUTHOR_WHERE`, mesma regra do preview T057).
+- Post invisível → **404 `POST_NOT_FOUND` uniforme** (Q28); headers `Cache-Control: private, no-store` + `Vary: Authorization`; sem rate limit (rota GET).
+- `nextCursor: null` = fim da lista (keyset `(createdAt, id)` desc).
+
+---
+
+## PATCH /social/comments/:id
+
+Edita o **próprio** comentário dentro da janela de **15 minutos** (CHK003).
+
+> **Implementado (Sprint 2 Phase 3, T079)** em `src/app/api/v1/social/comments/[id]/route.ts` (`EDIT_WINDOW_MS = 15 * 60 * 1000`).
+
+### Requisição
+
+```http
+PATCH /api/v1/social/comments/cmt_xyz789
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{ "content": "Texto revisado (até 300 caracteres)" }
+```
+
+### Comportamento (ordem exata do handler)
+
+1. **CSRF** → 403 `CSRF_TOKEN_INVALID`
+2. **`requireAuth`** → 401/403
+3. **Zod** (`updateCommentSchema` — `content` 1–300, sem só-espaços) → 422 `VALIDATION_ERROR`
+4. Rate limit `limit: "comment"` — 30/min → 429 `RATE_LIMITED`
+5. Lookup `findOwnComment` — **inexistente, alheio ou já removido (`content == "[removido]"`) → 404 `COMMENT_NOT_FOUND` idêntico** (anti-enumeration, Q28)
+6. `Date.now() - createdAt > 15 min` → **403 `COMMENT_EDIT_EXPIRED`**
+7. Update único (sem transaction/contadores — sem emit; o plano não prevê evento de edição)
+
+### Resposta — 200 OK
+
+```json
+{ "data": { "comment": { "id": "cmt_xyz789", "content": "Texto revisado", "...": "row completa + author (COMMENT_AUTHOR_SELECT)" } } }
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | Etapa 1 (sem `rate.headers`) |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 422 | `VALIDATION_ERROR` | `content` inválido (1–300) |
+| 429 | `RATE_LIMITED` | Bucket `comment` 30/min |
+| 404 | `COMMENT_NOT_FOUND` | Inexistente, alheio ou já removido (404 uniforme) |
+| 403 | `COMMENT_EDIT_EXPIRED` | Fora da janela de 15 min |
+| 500 | `INTERNAL_ERROR` | Falha interna (JSON com `rate.headers`) |
+
+---
+
+## DELETE /social/comments/:id
+
+Remove (soft delete) o **próprio** comentário — **sem janela de tempo**.
+
+> **Implementado (Sprint 2 Phase 3, T080)** em `src/app/api/v1/social/comments/[id]/route.ts`. A row permanece com `content = "[removido]"` (`REMOVED_COMMENT_CONTENT`, `src/lib/social/comments.ts`) preservando vínculo pai e contadores de resposta (S2-19).
+
+### Requisição
+
+```http
+DELETE /api/v1/social/comments/cmt_xyz789
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento
+
+1. **CSRF** → `requireAuth` → rate `comment` (30/min) — mesmo fluxo do PATCH.
+2. `findOwnComment` → qualquer caso não-elegível → **404 `COMMENT_NOT_FOUND` uniforme** (segundo delete também 404 — a marcação `[removido]` conta como "não existe", sem duplo decremento).
+3. **`$transaction`**: `content → "[removido]"` + `Post.commentCount` `decrement` **no mesmo tx** (S2-19). Sem emit (sem evento documentado no plano).
+
+### Resposta — 200 OK
+
+```json
+{ "data": { "deleted": true } }
+```
+
+---
+
+## POST /social/comments/:id/like
+
+Toggle de like de **comentário** — espelho do like de post, sem os itens que o plano T081 não manda (sem auto-like, sem `Notification`, sem `earnVersos`, sem analytics).
+
+> **Implementado (Sprint 2 Phase 3, T081)** em `src/app/api/v1/social/comments/[id]/like/route.ts`.
+
+### Requisição
+
+```http
+POST /api/v1/social/comments/cmt_xyz789/like
+Authorization: Bearer <accessToken>
+```
+
+### Comportamento (ordem exata do handler)
+
+1. **CSRF** → **`requireAuth`** → rate `enforceSocialLimit({ limit: "like" })` (100/min) → 429 `RATE_LIMITED`
+2. Lookup do comentário com o **mesmo predicado do GET/Q28** — inexistente, `content == "[removido]"` ou post inaudível pelo viewer → **404 `COMMENT_NOT_FOUND` uniforme**
+3. **`$transaction`**: toggle `CommentLike` + `Comment.likeCount` `increment`/`decrement` **no mesmo tx** (S2-19)
+4. Pós-commit fire-and-forget: emit **`comment-like-updated`** (room `post:{postId}`, payload `{ commentId, postId, newCount }`) — sem `Notification`
+5. Corrida `P2002`/`P2025` → re-query da fonte de verdade e 200 coerente (espelho do T076)
+
+### Resposta — 200 OK (nos dois sentidos)
+
+```json
+{ "data": { "liked": true, "likeCount": 3 } }
+```
+
+> RF-SOC-005: só `{liked, likeCount}` — nenhuma lista de quem curtiu.
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | Etapa 1 (sem `rate.headers`) |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 429 | `RATE_LIMITED` | Bucket `like` 100/min |
+| 404 | `COMMENT_NOT_FOUND` | Inexistente, removido ou post invisível (uniforme) |
+| 500 | `INTERNAL_ERROR` | Falha interna (JSON com `rate.headers`) |
 
 ---
 
@@ -1005,24 +1194,25 @@ Content-Type: application/json
 
 ## GET /social/notifications
 
-Lista notificações do usuário.
+Lista notificações do usuário autenticado.
 
-> **Planejado (T082) — rota não existe** (Phase 6). A Phase 2 (2026-10-01) entregou posts/feed/explore/search, não notifications.
+> **Implementado (Sprint 2 Phase 3, T082)** em `src/app/api/v1/social/notifications/route.ts`. Envelope **S2-18**: `{ data: { notifications, unreadCount }, pagination: { nextCursor } }` — `unreadCount` **sempre presente** (não mora em `pagination`). Rows são **cruas do Prisma** (colunas reais `id`, `type`, `message`, `data`, `isRead`, `createdAt`), espelho de `GET /social/polling/notifications`. Consumidor: `NotificationsDropdown` (`src/components/social/notifications.tsx`, T086).
 
 ### Requisição
 
 ```http
-GET /api/v1/social/notifications?cursor=eyJpZCI6NTB9&limit=20&unreadOnly=true
+GET /api/v1/social/notifications?cursor=eyJjcmVhdGVkQXQiOi...&limit=20&unreadOnly=true
 Authorization: Bearer <accessToken>
 ```
 
 ### Parâmetros de Query
 
-| Parâmetro | Tipo | Padrão | Descrição |
-|-----------|------|--------|-----------|
-| `cursor` | string | — | Cursor de paginação |
-| `limit` | number | 20 | Itens (máx 50) |
-| `unreadOnly` | boolean | `false` | Apenas não lidas |
+| Parâmetro | Tipo | Padrão | Regras |
+|-----------|------|--------|--------|
+| `cursor` | string | — | max 200 chars; **cursor inválido → página vazia** com `unreadCount` ainda entregue (contrato T026) |
+| `limit` | number | **20** (`NOTIFICATIONS_DEFAULT_LIMIT`) | 1–**50** (`NOTIFICATIONS_MAX_LIMIT`); fora da faixa → 422 `VALIDATION_ERROR` |
+| `isRead` | `"true"\|"false"` | — | filtro por estado de leitura |
+| `unreadOnly` | `"true"\|"false"` | `false` | alias mais estrito do `isRead=false` — **`unreadOnly=true` prevalece** sobre `isRead` quando os dois aparecem |
 
 ### Tipos de notificação
 
@@ -1030,97 +1220,110 @@ Authorization: Bearer <accessToken>
 |------|-----------|
 | `follow` | Alguém seguiu você |
 | `like` | Alguém curtiu sua publicação |
-| `comment` | Alguém comentou sua publicação |
+| `comment` | Alguém comentou/respondeu na sua publicação |
 | `gift` | Alguém te enviou um presente |
 | `mention` | Alguém te mencionou |
-| `system` | Notificação do sistema |
+| `horoscope` | Atualização/leitura de horóscopo |
 
-> **Tipos reais no schema (Sprint 2 Phase 0)**: `Notification.type` documenta `follow`, `like`, `comment`, `gift`, `mention` e **`horoscope`** — este contrato traz **`system`** em vez de `horoscope`, e `docs/06-features/notifications.md` descreve ainda **8 categorias** (inclui pagamento, leitura compartilhada, lembrete diário). Definir o conjunto canônico antes de implementar as rotas. Além disso, o payload `actor`/`resource` tem de caber em `data Json?` — as colunas reais são `userId`, `type`, `message`, `data`, `isRead`, `createdAt`.
-
-### Resposta — 200 OK
-
-```json
-{
-  "data": [
-    {
-      "id": "notif_001",
-      "type": "like",
-      "actor": {
-        "id": "usr_e5f6g7",
-        "name": "Pedro Luz",
-        "avatar": "/avatars/usr_e5f6g7.jpg"
-      },
-      "resource": {
-        "type": "post",
-        "id": "post_abc123"
-      },
-      "message": "Pedro Luz curtiu sua publicação",
-      "isRead": false,
-      "createdAt": "2025-01-15T10:30:00Z"
-    },
-    {
-      "id": "notif_002",
-      "type": "follow",
-      "actor": {
-        "id": "usr_h7i8j9",
-        "name": "Luna Estelar",
-        "avatar": "/avatars/usr_h7i8j9.jpg"
-      },
-      "message": "Luna Estelar começou a te seguir",
-      "isRead": true,
-      "createdAt": "2025-01-15T09:00:00Z"
-    }
-  ],
-  "pagination": {
-    "nextCursor": "eyJpZCI6MzB9",
-    "hasMore": true,
-    "unreadCount": 7
-  }
-}
-```
-
-> **Contrato × hook (divergência conhecida, review Step 5; nota atualizada no Phase 1, 2026-09-28)**: o contrato acima (envelope `{ data, pagination }`) é o de `docs/04-api/overview.md` e **é o vencedor fixado pelo S2-18/SC30** — a primeira rota social existente (`GET /users/:username/{followers,following}`, T044/T045) já responde nele. O T082 do plano ainda especifica resposta **flat** `{ notifications, unreadCount, nextCursor }`. O hook `useNotifications` (`src/hooks/use-social.ts`) **aceita os dois shapes** (zod union, normaliza para `NotificationsPage { notifications, nextCursor, unreadCount }`) porque **a rota de notificações continua inexistente** (Phase 6/T082 — a Phase 1 entregou follow e a Phase 2 posts/feed, não notifications; a Phase 2.5 adicionou **`GET /social/polling/notifications`**, que é outro endpoint — delta desde `since` + `unreadCount`, ver §polling no fim deste documento); quando T082 chegar, entregar no envelope e **estreitar o hook** (union pode ser removida). `useUnreadCount()` não tem endpoint dedicado documentado: usa `GET /social/notifications?limit=1&unreadOnly=true` lendo `unreadCount` (T038 exige o hook) e retorna `number` (`?? 0`). **Atualização Phase 2.5 (2026-10-02)**: o badge do header **não** passa mais por `useUnreadCount()` — `src/components/layout/app-header.tsx` lê `unreadCount` do `NotificationsProvider` (carga inicial one-shot em `GET /social/polling/notifications?since=` + incremento por evento `notification` do WebSocket); `useUnreadCount()` continua exportado por `src/hooks/use-social.ts` mas **não é consumido por nenhum componente de UI** (só por `tests/hooks/use-social.test.tsx`).
-
----
-
-## PATCH /social/notifications/read
-
-Marca notificações como lidas.
-
-> **Planejado — rota não existe.** ⚠️ **Divergência de contrato**: o plano prevê **duas rotas** — `PATCH /social/notifications/:id/read` (T083) e `PATCH /social/notifications/read-all` (T084) — enquanto este documento documenta **uma** rota `PATCH /social/notifications/read` com `{ notificationIds, readAll }`. Resolver na Phase 6 antes de implementar.
-
-### Requisição
-
-```http
-PATCH /api/v1/social/notifications/read
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-```
-
-```json
-{
-  "notificationIds": ["notif_001", "notif_003"],
-  "readAll": false
-}
-```
-
-### Validação
-
-| Campo | Tipo | Regras |
-|-------|------|--------|
-| `notificationIds` | string[] | IDs das notificações (máx 50) |
-| `readAll` | boolean | Se `true`, ignora `notificationIds` e marca todas como lidas |
+> **Tipos reais no schema (Sprint 2 Phase 0)**: `Notification.type` documenta `follow`, `like`, `comment`, `gift`, `mention` e **`horoscope`** — não existe `system`. O dropdown (`TYPE_LABELS` em `src/components/social/notifications.tsx`) cobre exatamente esses 6; tipos fora do mapa caem no próprio `type` crudo. `docs/06-features/notifications.md` ainda descreve **8 categorias** (inclui pagamento, leitura compartilhada, lembrete diário) — divergência de produto **em aberto**. O payload em `data Json?` segue o formato gravado pela rota de origem (ex.: like → `{ postId, likerId }`; comment → `{ postId, commentId }`; follow → `{ followerId }`).
 
 ### Resposta — 200 OK
 
 ```json
 {
   "data": {
-    "markedAsRead": 2,
-    "unreadCount": 5
+    "notifications": [
+      {
+        "id": "notif_001",
+        "userId": "usr_me",
+        "type": "like",
+        "message": "Pedro Luz curtiu sua publicação",
+        "data": { "postId": "post_abc123", "likerId": "usr_e5f6g7" },
+        "isRead": false,
+        "createdAt": "2026-10-05T10:30:00.000Z"
+      },
+      {
+        "id": "notif_002",
+        "userId": "usr_me",
+        "type": "follow",
+        "message": "Luna Estelar começou a te seguir",
+        "data": { "followerId": "usr_h7i8j9" },
+        "isRead": true,
+        "createdAt": "2026-10-05T09:00:00.000Z"
+      }
+    ],
+    "unreadCount": 7
+  },
+  "pagination": {
+    "nextCursor": "eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTA1VDEwOjMwOjAwLjAwMFoiLCJpZCI6Im5vdGlmXzAwMSJ9"
   }
 }
 ```
+
+> **Envelope (divergência fechada na Phase 3, 2026-10-05)**: este doc descrevia um array plano em `data` com `unreadCount` dentro de `pagination` (rascunho) e o plano T082 falava em `{ notifications, unreadCount, nextCursor }` flat — **os dois foram superados**: a rota implementada entrega `{ data: { notifications, unreadCount }, pagination: { nextCursor } }` (S2-18/SC30, mesmo envelope das listas sociais), com rows cruas e **não** o formato `actor`/`resource` do exemplo antigo. Headers: `Cache-Control: private, no-store` + `Vary: Authorization` (dados pessoais). **Sem rate limit próprio** (regra das rotas GET — ver `docs/07-security/security.md` §Rate Limiting). Consumidor: `NotificationsDropdown` faz parse com `notificationsPageSchema` (`src/components/social/notifications.tsx`). Detalhes do hook e do badge: nota seguinte.
+
+> **Nota (atualizada na Phase 3, 2026-10-05)**: o envelope acima é o do `docs/04-api/overview.md` (vencedor fixado pelo S2-18/SC30) e é o que a rota entrega hoje. O hook `useNotifications` (`src/hooks/use-social.ts`) **ainda aceita os dois shapes** (zod union normalizando para `NotificationsPage { notifications, nextCursor, unreadCount }`) — era necessário quando a rota não existia e o badge dependia só do polling; **estreitar/remover a union quando o hook migrar de vez para a rota canônica é pendência de limpeza** (o dropdown `NotificationsDropdown` já consome a rota com o envelope novo, sem union). `useUnreadCount()` (T038) é usado pelo **`NotificationsDropdown`** (`src/components/social/notifications.tsx`, linha 33) para o badge do dropdown (poll `GET /social/notifications?limit=1&unreadOnly=true` a cada 60s). O badge do `AppHeader` e do `MobileNav` usa o contexto do `NotificationsProvider` (`src/components/social/notifications-provider.tsx`, carga inicial one-shot em `GET /social/polling/notifications?since=` + incremento por evento `notification`, dedup por id `SEEN_IDS_CAP` = 500) — **duas fontes de badge coexistem**: dropdown = polling dedicado; header/mobile = contexto real-time.
+
+---
+
+## PATCH /social/notifications/:id/read
+
+Marca **uma** notificação do próprio usuário como lida (idempotente).
+
+> **Implementado (Sprint 2 Phase 3, T083)** em `src/app/api/v1/social/notifications/[id]/read/route.ts`. O plano previa uma rota única `PATCH /social/notifications/read` com `{ notificationIds, readAll }` — **o rascunho antigo deste documento foi substituído pelas duas rotas do plano** (divergência resolvida na implementação). Consumidor: `NotificationsDropdown.markAsRead()` (`src/components/social/notifications.tsx`).
+
+### Requisição
+
+```http
+PATCH /api/v1/social/notifications/notif_001/read
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+Sem corpo. Ordem do handler: **CSRF** → **`requireAuth`** → `prisma.notification.updateMany({ where: { id, userId } , data: { isRead: true } })` — o `userId` no `where` faz **ownership + mutação numa query só**.
+
+### Resposta — 200 OK
+
+```json
+{ "data": { "read": true } }
+```
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 403 | `CSRF_TOKEN_INVALID` | Etapa 1 (sem rate headers) |
+| 401/403 | `AUTH_TOKEN_INVALID` / `AUTH_ACCOUNT_SUSPENDED` | `requireAuth` |
+| 404 | `NOTIFICATION_NOT_FOUND` | Inexistente **ou de outro usuário** (404 uniforme, anti-enumeration) |
+| 500 | `INTERNAL_ERROR` | Falha interna |
+
+> ⚠️ **Sem rate bucket** (pendência de política): o `SocialLimit` union (`src/lib/social/limits.ts`) **não tem chave `notification`** — a rota usa só CSRF + auth (precedente: `DELETE /users/me/avatar`). Ver `docs/07-security/security.md` §Rate Limiting.
+
+---
+
+## PATCH /social/notifications/read-all
+
+Marca **todas** as não-lidas do próprio usuário como lidas (idempotente).
+
+> **Implementado (Sprint 2 Phase 3, T084)** em `src/app/api/v1/social/notifications/read-all/route.ts`. **Hoje não tem consumidor de UI** (o dropdown só marca item a item) — rota entregue conforme o plano, aguardando o botão "marcar todas".
+
+### Requisição
+
+```http
+PATCH /api/v1/social/notifications/read-all
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+Sem corpo. Ordem: **CSRF** → **`requireAuth`** → `updateMany({ where: { userId, isRead: false }, data: { isRead: true } })`.
+
+### Resposta — 200 OK
+
+```json
+{ "data": { "updated": 3 } }
+```
+
+`updated: 0` quando não há pendências (idempotente). Erros: 403 `CSRF_TOKEN_INVALID`, 401/403 de `requireAuth`, 500 `INTERNAL_ERROR` — mesma observação de **sem rate bucket** da rota anterior.
 
 ---
 
@@ -1147,7 +1350,7 @@ Content-Type: application/json
 
 ### Consumo no cliente (estado atual)
 
-- `src/hooks/use-socket.ts` só chama **`posts`** e **`notifications`**, re-disparando os eventos `new-post`/`notification` no mesmo dispatch do WebSocket; **`likes`/`comments` não têm consumidor hoje** (o wiring de like/comment é Phase 3 — T076/T077).
+- `src/hooks/use-socket.ts` só chama **`posts`** e **`notifications`**, re-disparando os eventos `new-post`/`notification` no mesmo dispatch do WebSocket; **`likes`/`comments` ainda não têm consumidor no cliente** — as **rotas** de like/comentário existem desde a Phase 3 (T076–T081) e os eventos `like-updated`/`comment-added`/`comment-like-updated` já são emitidos, mas o polling de `likes`/`comments` continua órfão (wiring do cliente **não** entrou na Phase 3 — pendência).
 - **Cursor anti-skew** (revisão S): o cliente envia `sentAt` (relógio local) no corpo do poll e usa `pollingCursor(sentAt, serverTime)` = o **mais antigo** dos dois como `since` do próximo poll — nunca pula a janela sob nenhum skew de relógio (servidor à frente → `sentAt`; servidor atrás → `serverTime`); qualquer sobreposição é absorvida pelo dedup por id no cliente.
 - **Cursor por endpoint `{since, until, pending}`** (revisão I-1, `PollCursor` em `src/hooks/use-socket.ts`): um poll só avança o cursor do endpoint que deu certo (`postsCursor`/`notificationsCursor` são independentes); página cheia (≥ `POLLING_TAKE`) **trava o `since`, guarda o avanço em `pending` e drena o backlog com `?until=`** — `pending` só vira `since` quando a drenagem termina com página < 50, cobrindo o que foi criado durante a janela travada.
 - `NotificationsProvider` (`src/components/social/notifications-provider.tsx`, montado em `src/app/(app)/layout.tsx`) faz a carga inicial one-shot de `unreadCount` e incrementa a cada evento `notification` — **dedup por id** com `SEEN_IDS_CAP` = 500 (revisão C); o badge fica em `src/components/layout/app-header.tsx`.
@@ -1156,9 +1359,9 @@ Content-Type: application/json
 
 ### Pendências de segurança conhecidas (Phase 2.5 — atualizado nas revisões)
 
-- ~~O join de rooms `post:`/`comment:` no socket-service não checa visibilidade~~ — **resolvido para `post:` na revisão M** (`verifyRoomAccess` em `socket-service/src/room-access.ts`: `GET /api/v1/social/posts/{id}` com o Bearer do socket; 401/403/404 → `room_forbidden`; 5xx/timeout → fail-open). `comment:{id}` **segue fail-open** até o endpoint de comentário existir (T077/Phase 3).
+- ~~O join de rooms `post:`/`comment:` no socket-service não checa visibilidade~~ — **resolvido para `post:` na revisão M** (`verifyRoomAccess` em `socket-service/src/room-access.ts`: `GET /api/v1/social/posts/{id}` com o Bearer do socket; 401/403/404 → `room_forbidden`; **5xx/rede/timeout → `false` = fail-closed desde a S2, revisão 2026-10-04**). `comment:{id}` **é negado (fail-closed)** — a T077 existe hoje, mas **não há endpoint `GET /social/comments/:id`** (comentários são lidos em lote via `GET /social/posts/:id/comments`), então `verifyRoomAccess` não tem URL para checar e devolve `false` sem chamar a API → `room_forbidden` sempre (`tests/unit/room-access.test.ts`, `tests/integration/websocket-server.test.ts`).
 - ~~As 4 rotas de polling sem rate limit~~ — **resolvido na revisão O**: `limit: "polling"` 60/min por usuário, aplicado em `guardPolling()` (item 2 acima; `docs/07-security/security.md` §Rate Limiting). As demais rotas de leitura social (feed/explore/search/posts/:id/og-image) continuam sem rate limit próprio (pendência de política aberta).
 
 ### Testes
 
-`tests/integration/polling.test.ts` (4 rotas — incl. rate limit revisão O, `serverTime` revisão S e **`until`/drenagem de backlog revisão I-1**), `tests/integration/websocket-server.test.ts`, `tests/integration/websocket-relay.test.ts`, `tests/integration/websocket.test.ts`, `tests/integration/realtime-bus.test.ts`, `tests/integration/social-realtime-wiring.test.ts`, `tests/unit/socket-env.test.ts`, `tests/unit/socket-deploy-contract.test.ts`, `tests/unit/socket-auth.test.ts`, `tests/unit/socket-service-boundary.test.ts`, `tests/unit/lockfile-sync.test.ts`, `tests/next-config-ws-warn.test.ts`, `tests/hooks/use-socket.test.tsx`, `tests/components/notifications-provider.test.tsx` + E2E `tests/e2e/social-realtime.spec.ts` (T075 — 3 cenários reais passando: pill via WebSocket, badge de notificação, polling+reconexão; **3 `test.fixme`** para like/comment/gift até a Phase 3).
+`tests/integration/polling.test.ts` (4 rotas — incl. rate limit revisão O, `serverTime` revisão S e **`until`/drenagem de backlog revisão I-1**), `tests/integration/websocket-server.test.ts`, `tests/integration/websocket-relay.test.ts`, `tests/integration/websocket.test.ts`, `tests/integration/realtime-bus.test.ts`, `tests/integration/social-realtime-wiring.test.ts`, `tests/unit/socket-env.test.ts`, `tests/unit/socket-deploy-contract.test.ts`, `tests/unit/socket-auth.test.ts`, `tests/unit/socket-service-boundary.test.ts`, `tests/unit/lockfile-sync.test.ts`, `tests/next-config-ws-warn.test.ts`, `tests/hooks/use-socket.test.tsx`, `tests/components/notifications-provider.test.tsx` + E2E `tests/e2e/social-realtime.spec.ts` (T075 — **5 cenários reais passando**: pill via WebSocket, badge de notificação, polling+reconexão, like (T076) e comment (T077); **1 `test.fixme`** restante: gift T120). Rotas/UI da Phase 3 cobertas por `tests/integration/social-interactions.test.ts`, `tests/stores/social-store.test.ts`, `tests/components/{post-card,comment-section,notifications-dropdown}.test.tsx`.
