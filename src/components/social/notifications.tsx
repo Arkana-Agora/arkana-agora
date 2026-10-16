@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { useUnreadCount, useNotifications } from "@/hooks/use-social"
+import { useSocket } from "@/hooks/use-socket"
 import authApi from "@/lib/api"
 import { formatRelativeTime } from "@/lib/social/relative-time"
 
@@ -24,7 +25,8 @@ const TYPE_LABELS: Record<string, string> = {
  * mark-as-read por item (`PATCH /social/notifications/:id/read`, T083).
  *
  * - Lista via React Query (`useNotifications`, envelope S2-18 da T082).
- * - Badge via `useUnreadCount` (poll `limit=1&unreadOnly=true` a cada 60s).
+ * - Badge via `useUnreadCount` (poll `limit=1&unreadOnly=true` a cada 60s) e
+ *   invalidação imediata no evento WS `notification` (realtime T073).
  * - Badge preserva `data-testid="unread-notifications-badge"` e o aria-label
  *   `${count} notificações não lidas` (T073/E2E).
  * - Mark-as-read invalida queries para atualizar badge e lista.
@@ -34,6 +36,15 @@ export function NotificationsDropdown() {
   const queryClient = useQueryClient()
   const { data: notificationsPage, isLoading, isError } = useNotifications()
   const [open, setOpen] = useState(false)
+
+  // Realtime (T073/E2E T075): evento WS `notification` (ou o poll de 30s do
+  // fallback, que re-dispara o mesmo evento) invalida as queries de badge e
+  // lista na hora — sem esperar o refetchInterval de 60s do useUnreadCount.
+  useSocket({
+    notification: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    },
+  })
 
   // Flatten pages into a single array
   const notifications =

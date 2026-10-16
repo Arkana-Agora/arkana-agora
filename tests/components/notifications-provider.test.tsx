@@ -173,9 +173,8 @@ describe("AppHeader badge (T073)", () => {
       if (url.includes("/social/notifications")) {
         return Promise.resolve({
           data: {
-            notifications: [],
-            unreadCount: 3,
-            nextCursor: null,
+            data: { notifications: [], unreadCount: 3 },
+            pagination: { nextCursor: null },
           },
         })
       }

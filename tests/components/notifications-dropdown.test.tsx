@@ -40,9 +40,10 @@ function envelope(
   notifications: Array<Record<string, unknown>>,
   unreadCount: number,
 ) {
+  // Contrato real da rota T082 (route.ts) — não o rascunho data-array.
   return {
-    data: notifications,
-    pagination: { nextCursor: null, hasMore: false, unreadCount },
+    data: { notifications, unreadCount },
+    pagination: { nextCursor: null, hasMore: false },
   }
 }
 
@@ -76,12 +77,8 @@ describe("NotificationsDropdown (T086)", () => {
         })
       }
       if (url.includes("/social/notifications")) {
-        if (url.includes("unreadOnly=true")) {
-          return Promise.resolve({
-            data: { data: { unreadCount: 2, notifications: [] } },
-          })
-        }
-        // useNotifications uses cursor pagination - handle cursor param
+        // Serve tanto useNotifications quanto useUnreadCount — ambos chamam
+        // /social/notifications (params via config axios, não na URL).
         return Promise.resolve({
           data: envelope(
             notificationsData,
@@ -242,5 +239,51 @@ describe("NotificationsDropdown (T086)", () => {
     await waitFor(() => {
       expect(screen.queryByText("Ana curtiu seu post")).not.toBeInTheDocument()
     })
+  })
+
+  it("aceita o envelope real da rota T082 (data.notifications + pagination)", async () => {
+    // Contrato real de GET /social/notifications (route.ts):
+    // `{ data: { notifications, unreadCount }, pagination: { nextCursor } }`
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/social/notifications")) {
+        return Promise.resolve({
+          data: {
+            data: { notifications: [UNREAD_LIKE], unreadCount: 1 },
+            pagination: { nextCursor: null },
+          },
+        })
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`))
+    })
+
+    renderDropdown()
+    const badge = await screen.findByLabelText(/notificações não lidas/i)
+    expect(badge).toHaveTextContent("1")
+
+    fireEvent.click(screen.getByRole("button", { name: "Notificações" }))
+    expect(await screen.findByText("Ana curtiu seu post")).toBeDefined()
+  })
+
+  it("evento WS 'notification' invalida o badge sem esperar o poll (T073/E2E)", async () => {
+    renderDropdown()
+    const badge = await screen.findByLabelText(/notificações não lidas/i)
+    expect(badge).toHaveTextContent("1")
+
+    const { useSocket } = await import("@/hooks/use-socket")
+    const handlers = vi.mocked(useSocket).mock.calls.at(-1)?.[0]
+    expect(handlers, "dropdown deve assinar o socket realtime").toBeDefined()
+
+    // nova não-lida chega no servidor antes do refetch
+    notificationsData.push({
+      id: "n3",
+      type: "follow",
+      message: "Caio começou a seguir você",
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    })
+
+    handlers!.notification!({ id: "n3", type: "follow", message: "x" })
+
+    await waitFor(() => expect(badge).toHaveTextContent("2"))
   })
 })
