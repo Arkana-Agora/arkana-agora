@@ -12,6 +12,7 @@ import { z } from "zod"
 
 import authApi from "@/lib/api"
 import { useSocket } from "@/hooks/use-socket"
+import { POLLING_DEFAULT_SINCE_MS } from "@/lib/social/polling-window"
 import type { CreatePostInput } from "@/lib/validators/social"
 import { useSocialStore } from "@/stores/social-store"
 
@@ -220,7 +221,13 @@ function advanceSinceCursor(requestedAt: string, serverTime?: string): string {
  */
 export function useFeedRealtime(): void {
   const idsRef = useRef<Set<string>>(new Set())
-  const sinceRef = useRef<string>(new Date().toISOString())
+  // Ancoragem inicial de 5min (paridade com o INITIAL_CURSOR do use-socket),
+  // calculada no PRIMEIRO flush (não durante o render): o teste/usuário pode
+  // criar um post ANTES de o cliente hidratar e montar este hook — com
+  // `since` = instante da montagem esse post cai fora da janela do flush,
+  // a resposta volta vazia, `wanted` esvazia o lote e a pill "N novos
+  // posts" nunca nasce (sem retry: só falha re-agenda).
+  const sinceRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Revisão R1: o retry do catch re-agenda via ref (o flush não pode se
   // referenciar antes da própria declaração no useCallback)
@@ -233,7 +240,9 @@ export function useFeedRealtime(): void {
     timerRef.current = null
     const batch = idsRef.current
     idsRef.current = new Set()
-    const since = sinceRef.current
+    const since =
+      sinceRef.current ??
+      new Date(Date.now() - POLLING_DEFAULT_SINCE_MS).toISOString()
     const requestedAt = new Date().toISOString()
     void authApi
       .get("/social/polling/posts", { params: { since } })

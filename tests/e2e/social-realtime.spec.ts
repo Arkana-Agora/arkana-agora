@@ -278,15 +278,31 @@ test.describe("T075: realtime social — 2 browsers", () => {
     const dbg: string[] = []
     page.on("console", (message) => {
       if (message.type() === "error" || message.type() === "warning") {
-        dbg.push(`[console:${message.type()}] ${message.text().slice(0, 220)}`)
+        dbg.push(
+          `${new Date().toISOString()} [console:${message.type()}] ${message.text().slice(0, 220)}`,
+        )
       }
     })
     page.on("pageerror", (error) => {
-      dbg.push(`[pageerror] ${String(error).slice(0, 300)}`)
+      dbg.push(
+        `${new Date().toISOString()} [pageerror] ${String(error).slice(0, 300)}`,
+      )
     })
     page.on("response", (response) => {
       if (response.url().includes("/social/polling/")) {
-        dbg.push(`[poll ${response.status()}] ${response.url().slice(-80)}`)
+        const at = new Date().toISOString()
+        void response
+          .text()
+          .then((body) => {
+            dbg.push(
+              `${at} [poll ${response.status()}] ${response.url().slice(-80)} body=${body.slice(0, 300)}`,
+            )
+          })
+          .catch(() => {
+            dbg.push(
+              `${at} [poll ${response.status()}] ${response.url().slice(-80)} body=<unreadable>`,
+            )
+          })
       }
     })
     let wsAllowed = false
@@ -310,12 +326,15 @@ test.describe("T075: realtime social — 2 browsers", () => {
 
     try {
       await uiLogin(page, EMAIL_FOLLOWER)
+      dbg.push(`${new Date().toISOString()} [step] login done`)
       await page.goto("/feed")
       await expect(page.getByTestId("feed-container")).toBeVisible()
+      dbg.push(`${new Date().toISOString()} [step] feed visible`)
 
       const content = `post fallback e2e ${Date.now()}`
       const status = await createPostViaApi(request, authorToken, content)
       expect(status).toBe(201)
+      dbg.push(`${new Date().toISOString()} [step] post created 201`)
 
       // primeira rodada do intervalo de 30s do hook (T072/T071) — a janela
       // inicial de 5min do cursor (INITIAL_CURSOR) pode trazer posts de testes
