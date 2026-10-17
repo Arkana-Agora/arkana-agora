@@ -231,7 +231,7 @@ User stories do projeto `arkana-agora` no formato padrao: "Como [persona], quero
 **Como** usuario, **quero** ver a interpretacao da IA sendo gerada em tempo real, **para** acompanhar o raciocinio e nao ficar esperando.
 
 **Criterios de Aceitacao:**
-- Dado que todas as cartas foram reveladas, quando o usuario clica "Solicitar Leitura", entao o texto comeca a aparecer palavra por palavra em ate 3 segundos
+- Dado que todas as cartas foram reveladas e a tiragem criada, a interpretacao IA comeca **automaticamente** (uma vez por tiragem **por aba de navegador** — `autoStart` em `src/components/ai/reading-ai-panel.tsx`, guard em `sessionStorage`) e o texto comeca a aparecer palavra por palavra em ate 3 segundos
 - Dado que o streaming esta em andamento, quando o usuario rola a pagina, entao o texto continua sendo gerado sem interrupcao
 
 **Prioridade:** Critico | **Versao:** MVP

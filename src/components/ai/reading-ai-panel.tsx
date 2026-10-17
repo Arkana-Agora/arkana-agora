@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import authApi from "@/lib/api"
+import authApi, { authStreamFetch } from "@/lib/api"
 import { InterpretationRequest } from "@/components/ai/interpretation-request"
 import { StreamingInterpretation } from "@/components/ai/streaming-interpretation"
 import { FollowUpChat } from "@/components/ai/follow-up-chat"
@@ -22,6 +22,8 @@ interface ChatMessage {
 
 interface ReadingAIPanelProps {
   readingId: string
+  autoStart?: boolean
+  question?: string
 }
 
 interface SseFinalEvent {
@@ -31,13 +33,42 @@ interface SseFinalEvent {
   interpretationId?: string | null | undefined
 }
 
-async function getAccessToken(): Promise<string | null> {
-  const { getSession } = await import("next-auth/react")
-  const session = await getSession()
-  return session?.accessToken ?? null
+function autostartKey(readingId: string): string {
+  return `arkana-ai-autostart:${readingId}`
 }
 
-export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
+// sessionStorage pode lançar (contexto sandboxado) — um throw aqui
+// derrubaria o ErrorBoundary e reintroduziria o bug do /tirar que
+// "some" (precedente: validate-callback-url-single-source.md).
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value)
+  } catch {
+    /* storage indisponível — guard fica só no ref da sessão de UI */
+  }
+}
+
+function safeSessionRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+export function ReadingAIPanel({
+  readingId,
+  autoStart = false,
+  question,
+}: ReadingAIPanelProps) {
   const [content, setContent] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
   const [isCached, setIsCached] = useState(false)
@@ -50,12 +81,15 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
   const reqSeqRef = useRef(0)
   const sessionSeqRef = useRef(0)
   const isStreamingRef = useRef(false)
+  const streamDeliveredRef = useRef(false)
   const lastParamsRef = useRef<{
     mode: InterpretationMode
     mood?: string
     question?: string
   } | null>(null)
   const queryClient = useQueryClient()
+  const sectionRef = useRef<HTMLElement | null>(null)
+  const hasScrolledRef = useRef(false)
 
   const { data: usage } = useQuery({
     queryKey: ["ai-usage"],
@@ -66,11 +100,25 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
   })
 
   useEffect(() => {
+    if (autoStart && isStreaming && !hasScrolledRef.current) {
+      hasScrolledRef.current = true
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [autoStart, isStreaming])
+
+  useEffect(() => {
     return () => {
       abortRef.current?.abort()
       followUpAbortRef.current?.abort()
+      // Simulado unmount do StrictMode: libera o guard para o remount
+      // re-disparar. Em unmount real sem entrega, a próxima visita ao
+      // mesmo reading re-tenta (quota devolvida no servidor).
+      isStreamingRef.current = false
+      if (autoStart && !streamDeliveredRef.current) {
+        safeSessionRemove(autostartKey(readingId))
+      }
     }
-  }, [])
+  }, [autoStart, readingId])
 
   const parseSSE = useCallback(
     async (
@@ -155,14 +203,9 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
       })
 
       try {
-        const token = await getAccessToken()
-        const res = await fetch("/api/v1/ai/interpret", {
+        const res = await authStreamFetch("/api/v1/ai/interpret", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ readingId, ...params }),
+          body: { readingId, ...params },
           signal: controller.signal,
         })
 
@@ -193,6 +236,9 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
             interpretationId?: string
           }
           setIfCurrent(() => {
+            // só a resposta da sequência atual pode marcar "entregue" —
+            // uma resposta stale não pode travar o guard do autoStart
+            streamDeliveredRef.current = true
             if (data.cached) setIsCached(true)
             if (data.content) setContent(data.content)
             setInterpretationId(data.interpretationId ?? null)
@@ -211,21 +257,37 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
         }
 
         const reader = res.body.getReader()
+        let receivedTokens = false
         const finalEvent = await parseSSE(reader, (tokenText) => {
-          setIfCurrent(() => setContent((prev) => prev + tokenText))
+          receivedTokens = true
+          setIfCurrent(() => {
+            streamDeliveredRef.current = true
+            setContent((prev) => prev + tokenText)
+          })
         })
 
         if (!isCurrent()) return
 
         if (finalEvent.type === "error") {
+          // Zero tokens entregues → o servidor devolveu a cota (refund);
+          // deixa explicito para o usuario nao culpar a propria quota.
+          const base =
+            finalEvent.message ??
+            "Não foi possível gerar a interpretação. Tente novamente."
           setIfCurrent(() => {
             setError(
-              finalEvent.message ??
-                "Não foi possível gerar a interpretação. Tente novamente.",
+              receivedTokens
+                ? base
+                : `${base} Sua cota de interpretação não foi consumida.`,
             )
           })
-        } else if (finalEvent.interpretationId) {
-          setIfCurrent(() => setInterpretationId(finalEvent.interpretationId!))
+        } else {
+          streamDeliveredRef.current = true
+          if (finalEvent.interpretationId) {
+            setIfCurrent(() =>
+              setInterpretationId(finalEvent.interpretationId!),
+            )
+          }
         }
         setIfCurrent(() => setIsStreaming(false))
         void queryClient.invalidateQueries({ queryKey: ["ai-usage"] })
@@ -277,18 +339,13 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
       setError(null)
 
       try {
-        const token = await getAccessToken()
-        const res = await fetch("/api/v1/ai/follow-up", {
+        const res = await authStreamFetch("/api/v1/ai/follow-up", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
+          body: {
             interpretationId,
             message,
             conversationHistory: messages,
-          }),
+          },
           signal: controller.signal,
         })
 
@@ -308,17 +365,28 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
 
         let reply = ""
         const reader = res.body.getReader()
-        await parseSSE(reader, (t) => {
+        const finalEvent = await parseSSE(reader, (t) => {
           reply += t
         })
 
         if (sessionId !== sessionSeqRef.current) return
+        if (finalEvent.type === "error") {
+          // Nada entregue (reply vazio) → o servidor deletou a mensagem
+          // persistida (compensação); espelha no client para o histórico
+          // não divergir do DB. Entrega parcial → a mensagem é history
+          // real e permanece.
+          setMessages(reply === "" ? messages : nextMessages)
+          setError(
+            finalEvent.message ??
+              "Não foi possível responder. Tente novamente.",
+          )
+          return
+        }
         setMessages([...nextMessages, { role: "assistant", content: reply }])
         void queryClient.invalidateQueries({ queryKey: ["ai-usage"] })
       } catch (err) {
         if ((err as Error).name === "AbortError") return
         if (sessionId !== sessionSeqRef.current) return
-        setMessages(nextMessages)
         setError("Erro de conexão na pergunta.")
       } finally {
         if (sessionId === sessionSeqRef.current) setFollowUpStreaming(false)
@@ -338,10 +406,25 @@ export function ReadingAIPanel({ readingId }: ReadingAIPanelProps) {
     setFollowUpStreaming(false)
   }, [])
 
+  useEffect(() => {
+    if (!autoStart || !readingId) return
+    const key = autostartKey(readingId)
+    if (safeSessionGet(key)) return
+    safeSessionSet(key, "1")
+    void handleInterpret({
+      mode: "general",
+      ...(question ? { question } : {}),
+    })
+  }, [autoStart, readingId, question, handleInterpret])
+
   const followUpCount = messages.filter((m) => m.role === "user").length
 
   return (
-    <section className="space-y-6" aria-label="Interpretação IA">
+    <section
+      ref={sectionRef}
+      className="space-y-6"
+      aria-label="Interpretação IA"
+    >
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Interpretação IA</h2>
         {usage && (

@@ -53,4 +53,34 @@ describe("withRetry", () => {
     await expect(withRetry(fn, 3, 10)).rejects.toThrow("bad input")
     expect(fn).toHaveBeenCalledTimes(1)
   })
+
+  it("does not retry on OpenAI billing exhausted error (credit_balance_exhausted)", async () => {
+    const error = Object.assign(
+      new Error("429 You have no credits remaining"),
+      { name: "RateLimitError", status: 429, code: "credit_balance_exhausted" },
+    )
+    const fn = vi.fn().mockRejectedValue(error)
+    await expect(withRetry(fn, 3, 10)).rejects.toThrow("no credits")
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not retry on OpenAI insufficient_quota error", async () => {
+    const error = Object.assign(new Error("429 insufficient_quota"), {
+      status: 429,
+      code: "insufficient_quota",
+    })
+    const fn = vi.fn().mockRejectedValue(error)
+    await expect(withRetry(fn, 3, 10)).rejects.toThrow("insufficient_quota")
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not retry when nested error.code is credit_balance_exhausted", async () => {
+    const error = Object.assign(new Error("429 rate limit"), {
+      status: 429,
+      error: { code: "credit_balance_exhausted" },
+    })
+    const fn = vi.fn().mockRejectedValue(error)
+    await expect(withRetry(fn, 3, 10)).rejects.toThrow("rate limit")
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
 })

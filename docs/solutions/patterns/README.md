@@ -132,7 +132,7 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 | Pattern Category | Files Created | Status |
 |------------------|--------------|--------|
 | Security | 6 | 5 Current, 1 Pending (account lifecycle) |
-| Backend | 6 | 5 Current, 1 Pending (admin health) |
+| Backend | 7 | 6 Current, 1 Pending (admin health) |
 | Frontend | 1 | 1 Current |
 | Observability | 2 | 2 Current |
 | CI/CD | 5 | 1 Current, 4 Resolved |
@@ -140,7 +140,7 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 | Auth | 2 | 2 Current |
 | **Calculation/Determinism** | **2** | **2 Current** |
 | Testing | 1 | 1 Current |
-| **Total** | **26** | **19 Current, 2 Pending, 5 Resolved** |
+| **Total** | **27** | **20 Current, 2 Pending, 5 Resolved** |
 
 ## Related Changes
 
@@ -205,6 +205,13 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - **Problem**: `feedPostSchema` has no per-viewer `liked` flag and the `["feed"]` cache is invalidated by other flows — `setQueryData` for viewer state gets clobbered
     - **Solution**: id-keyed Zustand overlay (`postLikes`/`postComments` in `src/stores/social-store.ts`, no `persist`) layered as `overlay ?? server` at render; four-move handler = snapshot → optimistic write → POST + zod parse → reconcile/rollback + toast; comment list merges store+query dedup by id (query wins)
     - **Implemented**: `post-card.tsx` `handleLike`, `comment-section.tsx`; tests `post-card.test.tsx`, `social-store.test.ts`, `comment-section.test.tsx`
+
+### New Patterns (2026-10-16)
+
+26. **`docs/solutions/patterns/backend/ai-quota-reserve-refund-only-undelivered.md`** (2026-10-16, Current)
+    - **Problem**: AI SSE endpoints reserve daily-plan quota BEFORE the stream (anti-concurrency-overshoot), but refunding on "any stream error" is exploitable — the client forces the error after reading tokens (`POST → ler tokens → abortar → quota devolvida → repetir`) = unlimited free generations bypassing the FREE daily limit with unbounded provider cost
+    - **Solution**: refund gated **only** on zero delivery (`fullText === ""` — no token ever enqueued); one-shot `createQuotaReservation()` (`markConsumed()`/`tryRefund()`, `consumed = false` before the `await`) shared by all three routes so stream-catch + outer-catch cannot double-decrement; `requireAIClient` 503 fail-fast **before** quota consumption (config failures burn nothing); follow-up compensates the persisted user turn (`followUpMessage.deleteMany` by captured id) under the same gate so retry doesn't duplicate history
+    - **Implemented**: `src/app/api/v1/ai/_helpers.ts`; consumers `interpret`, `arcana-interpret`, `follow-up` routes; tests `ai-interpret.test.ts`, `ai-followup.test.ts`, `arcana-interpret.test.ts` (3-case trio each: 503-no-consume, zero-token refund+compensation, **partial-delivery no-refund** via async generator yielding one chunk then throwing); contract in `docs/04-api/ai.md` §Reserva e devolução de quota
 
 ## Related Changes
 
