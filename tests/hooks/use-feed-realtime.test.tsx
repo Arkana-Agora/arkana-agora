@@ -18,6 +18,7 @@ vi.mock("@/hooks/use-socket", () => ({
 }))
 
 import { useFeed, useFeedRealtime } from "@/hooks/use-feed"
+import { POLLING_DEFAULT_SINCE_MS } from "@/lib/social/polling-window"
 
 function Probe() {
   useFeedRealtime()
@@ -221,5 +222,54 @@ describe("useFeedRealtime — batch de new-post → pill (T072/Q27, revisao Q: s
     const since2 = (pollingCalls()[1]?.[1] as { params: { since: string } })
       .params.since
     expect(since2).toBe(serverTime1)
+  })
+
+  // Reproduz o race da E2E "fallback polling" (flake): o teste cria o post
+  // logo após o shell server-rendered ficar visível, ANTES de o cliente
+  // hidratar e montar useFeedRealtime. Se o flush consulta o servidor com
+  // `since` = instante da montagem, o post (createdAt anterior) é filtrado
+  // pela janela, a resposta vem vazia, `wanted` fica vazio e a pill nunca
+  // nasce — sem retry (só .catch re-agenda). Janela inicial de 5min
+  // (paridade com o INITIAL_CURSOR do use-socket) cobre a hidratação.
+  it("post criado antes da montagem do hook (janela de hidratação) ainda vira pill — since inicial = 5min", async () => {
+    const oldPost = {
+      ...makePost("pold"),
+      createdAt: new Date(Date.now() - 2_000).toISOString(),
+    }
+    pollingPosts = [oldPost]
+    // servidor real: só devolve posts com createdAt >= ?since= (guardPolling)
+    getMock.mockImplementation(
+      (url: string, config?: { params?: { since?: string } }) => {
+        if (url.startsWith("/social/polling/posts")) {
+          const since = config?.params?.since ?? ""
+          const posts = pollingPosts.filter(
+            (post) => (post as { createdAt: string }).createdAt >= since,
+          )
+          return Promise.resolve({ data: { data: { posts } } })
+        }
+        return Promise.resolve({
+          data: { data: [], pagination: { nextCursor: null } },
+        })
+      },
+    )
+    renderProbe()
+    const t1 = Date.now()
+
+    act(() => {
+      socketHandlers["new-post"]?.(eventOf("pold"))
+    })
+
+    await waitFor(() => expect(pollingCalls()).toHaveLength(1), {
+      timeout: 3_000,
+    })
+    const since = (pollingCalls()[0]?.[1] as { params: { since: string } })
+      .params.since
+    expect(Date.parse(since)).toBeLessThanOrEqual(
+      t1 - POLLING_DEFAULT_SINCE_MS + 2_000,
+    )
+    await waitFor(
+      () => expect(screen.getByTestId("count")).toHaveTextContent("1"),
+      { timeout: 3_000 },
+    )
   })
 })

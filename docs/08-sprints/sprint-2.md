@@ -92,7 +92,7 @@ Adicionar features sociais (feed, follow, interações) e expandir o conteúdo e
 
 ### Real-time
 - [x] 37. WebSocket service para atualizações do feed em tempo real — **Sprint 2 Phase 2.5 (T066–T075, 2026-10-02)**: `socket-service/` na 3003 (`GET /health`, auth RS256/ADR-009, rooms `user:`/`feed:` auto-join, Event Bus `realtime:events`), emits `new-post`/`follow-update`/`notification` ligados nas rotas (T088 parcial), pill do feed (`useFeedRealtime`) + badge (`NotificationsProvider`); like/comment/gift ficam para a Phase 3
-- [x] 38. Reconnection logic e fallback para polling — `src/hooks/use-socket.ts` (backoff 1s→30s; polling de 30s em `GET /api/v1/social/polling/{posts,notifications}?since=` com janela inicial de 5min, suprimido enquanto conectado); E2E `tests/e2e/social-realtime.spec.ts` (T075: 3 cenários reais + 3 `fixme` de Phase 3)
+- [x] 38. Reconnection logic e fallback para polling — `src/hooks/use-socket.ts` (backoff 1s→30s; polling de 30s em `GET /api/v1/social/polling/{posts,notifications}?since=` com janela inicial de 5min, suprimido enquanto conectado); E2E `tests/e2e/social-realtime.spec.ts` (T075: 3 cenários reais + 3 `fixme` de Phase 3 — **`fixme`s de like/comment viraram teste real na Phase 3, 2026-10-05: hoje 5 reais + 1 `fixme` (gift T120)**)
 
 ---
 

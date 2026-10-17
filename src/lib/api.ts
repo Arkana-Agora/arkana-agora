@@ -180,6 +180,7 @@ export function resetAuthApiSessionCache() {
 interface AuthStreamOptions {
   method?: string
   body?: unknown
+  signal?: AbortSignal
   _retry?: boolean
 }
 // Fetch autenticado para respostas nao-JSON (SSE streaming). Reusa o mesmo
@@ -203,6 +204,7 @@ export async function authStreamFetch(
       headers,
     }
     if (options.body !== undefined) init.body = JSON.stringify(options.body)
+    if (options.signal) init.signal = options.signal
     return fetch(path, init)
   }
 

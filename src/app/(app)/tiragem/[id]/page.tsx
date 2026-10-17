@@ -1,7 +1,9 @@
 "use client"
 
 import { use } from "react"
+import { useRouter } from "next/navigation"
 import { useReading } from "@/hooks/use-readings"
+import { useReadingStore } from "@/stores/reading-store"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { BackLink } from "@/components/layout/back-link"
@@ -13,7 +15,14 @@ export default function TiragemPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  const router = useRouter()
   const { data, isLoading, error, refetch } = useReading(id)
+  const reset = useReadingStore((s) => s.reset)
+
+  const handleNewReading = () => {
+    reset()
+    router.push("/tirar")
+  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-4">
@@ -40,7 +49,12 @@ export default function TiragemPage({
               <h1 className="text-3xl font-bold">
                 {data.reading.title ?? `Tiragem ${data.reading.spreadId}`}
               </h1>
-              <BackLink href="/minhas-tiragens" />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleNewReading}>
+                  Nova tiragem
+                </Button>
+                <BackLink href="/minhas-tiragens" />
+              </div>
             </div>
             <div className="text-sm text-muted-foreground">
               <span>{data.reading.deckId}</span>

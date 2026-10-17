@@ -15,6 +15,10 @@ export const MAX_CONTENT_BY_TYPE = {
 
 export const MAX_POST_IMAGES = 4
 
+// Comentários (T077/RF-SOC-005): 1–300 caracteres, aninhamento de 1 nível
+// (o nível é validado na rota — precisa consultar o parent no banco).
+export const MAX_COMMENT_CONTENT = 300
+
 // Ext canônico por MIME (image/jpeg → jpg) — single source do presign de
 // imagens de post (T064): o cliente e as rotas usam este mapa.
 export const EXT_BY_TYPE: Record<string, string> = {
@@ -128,3 +132,56 @@ export const postImagesPresignSchema = z
   .strict()
 
 export type PostImagesPresignInput = z.infer<typeof postImagesPresignSchema>
+
+/**
+ * Criação de comentário (T077/RF-SOC-005): `content` 1–300 chars
+ * (`parentCommentId` opcional — existência/post/nível-1 são checados na
+ * rota com o mesmo 422 uniforme, anti-enumeration).
+ */
+export const createCommentSchema = z
+  .object({
+    content: z.string(),
+    parentCommentId: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.content.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["content"],
+        message: "Conteudo obrigatorio",
+      })
+    }
+    if (value.content.length > MAX_COMMENT_CONTENT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["content"],
+        message: `Maximo ${MAX_COMMENT_CONTENT} caracteres`,
+      })
+    }
+  })
+
+export type CreateCommentInput = z.infer<typeof createCommentSchema>
+
+/** Edição de comentário (T079): mesmo limite, janela de 15min na rota. */
+export const updateCommentSchema = z
+  .object({ content: z.string() })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.content.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["content"],
+        message: "Conteudo obrigatorio",
+      })
+    }
+    if (value.content.length > MAX_COMMENT_CONTENT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["content"],
+        message: `Maximo ${MAX_COMMENT_CONTENT} caracteres`,
+      })
+    }
+  })
+
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>

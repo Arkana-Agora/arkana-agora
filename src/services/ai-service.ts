@@ -141,6 +141,26 @@ export async function checkAndIncrementDailyUsage(
   }
 }
 
+// Devolução de quota quando a geração falha: o incremento acontece antes
+// do stream (para não estourar o limite sob concorrência), então uma
+// falha de provider/configuração precisa desfazer a contagem — senão o
+// usuário perde leitura sem receber nada. Guarda gt(0) evita negativo.
+export async function refundInterpretationQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date, interpretationCount: { gt: 0 } },
+    data: { interpretationCount: { decrement: 1 } },
+  })
+}
+
+export async function refundFollowUpQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date, followUpCount: { gt: 0 } },
+    data: { followUpCount: { decrement: 1 } },
+  })
+}
+
 export async function checkAndIncrementFollowUpUsage(
   userId: string,
   tier: string,

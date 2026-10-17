@@ -3,52 +3,9 @@ import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-// Contrato de deploy (T067): `socket-service/Dockerfile` roda
-// `npm ci` com `package.json` + `package-lock.json`. O npm rejeita
-// lock dessincronizado ("Missing: <pkg> from lock file") — só atualizar
-// `bun.lock` (CI usa bun) deixou a imagem do mini-service sem buildar.
-describe("lockfile sync (npm ci contract)", () => {
-  const pkg = JSON.parse(
-    readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
-  ) as {
-    dependencies?: Record<string, string>
-    devDependencies?: Record<string, string>
-  }
-  const lock = JSON.parse(
-    readFileSync(resolve(process.cwd(), "package-lock.json"), "utf8"),
-  ) as {
-    packages?: Record<
-      string,
-      {
-        dependencies?: Record<string, string>
-        devDependencies?: Record<string, string>
-      }
-    >
-  }
-
-  const allDeps = {
-    ...pkg.dependencies,
-    ...pkg.devDependencies,
-  }
-
-  it("toda dependência direta existe no package-lock.json", () => {
-    const lockPackages = lock.packages ?? {}
-    const missing = Object.keys(allDeps).filter(
-      (name) => lockPackages[`node_modules/${name}`] === undefined,
-    )
-    expect(missing).toEqual([])
-  })
-
-  it('packages[""] do lock espelha os ranges do package.json', () => {
-    const root = lock.packages?.[""] ?? {}
-    expect(root.dependencies ?? {}).toEqual(pkg.dependencies ?? {})
-    expect(root.devDependencies ?? {}).toEqual(pkg.devDependencies ?? {})
-  })
-})
-
-// Revisão I-b: o mini-service tem package.json/lock PRÓPRIOS (o npm ci da
-// imagem instala só a árvore do serviço, nunca o monólito) e os ranges
-// ficam sincronizados com o raiz para não divergirem.
+// O raiz foi migrado para bun.lock (CI usa bun); o único contrato npm ci é o
+// do socket-service/Dockerfile, que roda `npm ci` com package.json +
+// package-lock.json PRÓPRIOS do serviço (nunca a árvore do monólito).
 describe("socket-service packaging (revisão I-b)", () => {
   const svcPkg = JSON.parse(
     readFileSync(
@@ -95,6 +52,7 @@ describe("socket-service packaging (revisão I-b)", () => {
     expect(Object.keys(svcPkg.dependencies ?? {}).sort()).toEqual(
       [
         "@socket.io/redis-adapter",
+        "dotenv",
         "ioredis",
         "jose",
         "pino",

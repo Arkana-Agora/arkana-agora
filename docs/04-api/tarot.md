@@ -270,7 +270,7 @@ Content-Type: application/json
 | `spreadType` | string | Sim | ID de espalhamento válido |
 | `deckId` | string | Não | Baralho (padrão: Rider-Waite) |
 | `mood` | string | Não | `geral`, `amor`, `carreira`, `saude`, `espiritual` |
-| `question` | string | Não | Pergunta do usuário (máx 300 chars) |
+| `question` | string | Não | ⚠️ Design. No fluxo implementado a pergunta vive na sessão de leitura (textarea, máx 200 chars) e vai para a interpretação via `POST /api/v1/ai/interpret`; o `POST /api/v1/readings` de hoje **não persiste** este campo |
 | `isPublic` | boolean | Não | Compartilhar no feed (padrão: `false`) — ⚠️ ainda **sem efeito no feed** (só controla visibilidade/OG da tiragem; ver Comportamento item 5) |
 | `shuffleSeed` | number | Não | Semente para baralho determinístico |
 

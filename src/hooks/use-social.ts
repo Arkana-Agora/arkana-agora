@@ -18,51 +18,42 @@ const notificationSchema = z.object({
 
 export type SocialNotification = z.infer<typeof notificationSchema>
 
+// Contrato real e ÚNICO da rota T082 (src/app/api/v1/social/notifications/route.ts:72-76):
+// `{ data: { notifications, unreadCount }, pagination: { nextCursor } }` —
+// `unreadCount` e `pagination` SEMPRE presentes. União estreitada para o
+// envelope canônico por decisão S2-18 (review 2026-10-12): shape divergente
+// (flat ou data-array dos rascunhos antigos) é quebra de contrato e falha
+// ruidosa no parse — não silencia badge como antes.
 const notificationsEnvelopeSchema = z.object({
-  data: z.array(notificationSchema),
-  pagination: z
-    .object({
-      nextCursor: z.string().nullable().optional(),
-      hasMore: z.boolean().optional(),
-      unreadCount: z.number().int().min(0).optional(),
-    })
-    .passthrough(),
+  data: z.object({
+    notifications: z.array(notificationSchema),
+    unreadCount: z.number().int().min(0),
+  }),
+  pagination: z.object({
+    nextCursor: z.string().nullable(),
+  }),
 })
-
-const notificationsFlatSchema = z.object({
-  notifications: z.array(notificationSchema),
-  nextCursor: z.string().nullable().optional(),
-  unreadCount: z.number().int().min(0).optional(),
-})
-
-const notificationsPageSchema = z.union([
-  notificationsEnvelopeSchema,
-  notificationsFlatSchema,
-])
 
 export type NotificationsPage = {
   notifications: SocialNotification[]
-  nextCursor?: string | null | undefined
-  unreadCount?: number | undefined
+  nextCursor: string | null
+  unreadCount: number
 }
 
 function toNotificationsPage(payload: unknown): NotificationsPage {
-  const page = notificationsPageSchema.parse(payload)
-  if ("data" in page) {
-    return {
-      notifications: page.data,
-      nextCursor: page.pagination.nextCursor,
-      unreadCount: page.pagination.unreadCount,
-    }
+  const { data, pagination } = notificationsEnvelopeSchema.parse(payload)
+  return {
+    notifications: data.notifications,
+    nextCursor: pagination.nextCursor,
+    unreadCount: data.unreadCount,
   }
-  return page
 }
 
 /**
  * Notificações do usuário com paginação por cursor (T082/US-023).
- * Aceita os dois shapes documentados: envelope `{ data, pagination }`
- * (docs/04-api/social.md) e flat `{ notifications, unreadCount, nextCursor }`
- * (T082 do plano) — normaliza para `NotificationsPage`.
+ * Parser estrito do envelope canônico S2-18
+ * `{ data: { notifications, unreadCount }, pagination: { nextCursor } }`
+ * (route.ts:72-76) — normaliza para `NotificationsPage`.
  */
 export function useNotifications(cursor?: string | null) {
   return useInfiniteQuery({
@@ -90,7 +81,7 @@ export function useUnreadCount() {
       const res = await authApi.get("/social/notifications", {
         params: { limit: 1, unreadOnly: true },
       })
-      return toNotificationsPage(res.data).unreadCount ?? 0
+      return toNotificationsPage(res.data).unreadCount
     },
     refetchInterval: 60_000,
   })

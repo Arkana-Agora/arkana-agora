@@ -91,10 +91,11 @@ Content-Type: application/json
 
 1. `requireAuth` → 401 se sem Bearer
 2. Busca contexto da tiragem (`getInterpretationContext`) → 404 `USER_NOT_FOUND`/`READING_NOT_FOUND`/`INTERPRETATION_NOT_FOUND`
-3. Rate limit diário (`checkAndIncrementDailyUsage`) → 429 `AI_DAILY_LIMIT_REACHED`
-4. Monta prompt + `cacheHash` (`buildInterpretationPrompt`)
-5. **Cache HIT** → responde **JSON** (não SSE): `{ cached: true, content, interpretationId, tokensUsed: 0 }`
-6. **Cache MISS** → stream SSE; **persiste a interpretação antes** de emitir `done` (`persistInterpretation`)
+3. **Fail-fast de IA**: `requireAIClient` (`src/app/api/v1/ai/_helpers.ts`) → **503 `AI_SERVICE_UNAVAILABLE`** se o cliente não inicializa (ex.: `AI_API_KEY` ausente) — **antes** de consumir quota
+4. Rate limit diário (`checkAndIncrementDailyUsage`) → 429 `AI_DAILY_LIMIT_REACHED`
+5. Monta prompt + `cacheHash` (`buildInterpretationPrompt`)
+6. **Cache HIT** → responde **JSON** (não SSE): `{ cached: true, content, interpretationId, tokensUsed: 0 }`
+7. **Cache MISS** → stream SSE; **persiste a interpretação antes** de emitir `done` (`persistInterpretation`); em falha, a quota é devolvida **apenas se nenhum token foi entregue** (ver §Reserva e devolução de quota)
 
 ### Resposta — 200 OK (SSE)
 
@@ -682,6 +683,73 @@ while (true) {
 | Admin | Ilimitado | Ilimitado | GPT-4o |
 
 > **Reset**: Contador diário reseta à meia-noite (UTC-3). Contador mensal reseta no dia 1.
+
+### Reserva e devolução de quota
+
+A quota é **reservada antes** de abrir o stream (`checkAndIncrementDailyUsage` /
+`checkAndIncrementFollowUpUsage`), mas é **devolvida quando a geração falha
+sem entregar nada** — o usuário não é cobrado por uma interpretação que não
+recebeu:
+
+- **Fail-fast**: se o cliente de IA não está inicializado (ex.: `AI_API_KEY` ausente), a rota
+  responde **503 `AI_SERVICE_UNAVAILABLE`** *antes* de consumir quota (`requireAIClient`
+  em `src/app/api/v1/ai/_helpers.ts`, usado nas rotas `interpret`, `arcana-interpret` e `follow-up`).
+- **Devolução só sem entrega**: a rota chama `refundInterpretationQuota(userId)` /
+  `refundFollowUpQuota(userId)` (`src/services/ai-service.ts` — decremento com guarda
+  `gt: 0`) **apenas quando `fullText === ""`**, ou seja, nenhum token foi enfileirado
+  ao cliente (falha do provedor antes do primeiro token, erro pré-stream). O
+  cancelamento do cliente **depois** de tokens entregues (botão "Parar", fechar a aba,
+  queda de conexão) **não devolve** a quota — devolver nesse caso seria forçável
+  (POST → ler tokens → abortar → repetir) e contornaria o limite diário do plano FREE
+  (review de segurança, SPRINT2-F3).
+- **One-shot**: a devolução é mediada por `createQuotaReservation` (mesmo arquivo),
+  que só permite **uma** devolução por requisição (evita duplo decremento se stream
+  catch e outer catch dispararem juntos).
+- **Follow-up compensa a mensagem**: em falha sem entrega, a rota também **remove a
+  mensagem do usuário** persistida no início do stream (`followUpMessage.deleteMany`
+  pelo id capturado) — sem isso, o retry duplicaria o turno no histórico.
+- Rotas afetadas: `POST /ai/interpret`, `POST /ai/arcana-interpret`, `POST /ai/follow-up`.
+
+### Fail-fast de billing (códigos não-retryable)
+
+As três rotas de IA envolvem a chamada OpenAI através de `withRetry` (`src/lib/ai/retry.ts`,
+usado nas rotas `interpret/route.ts`, `follow-up/route.ts` e `arcana-interpret/route.ts`).
+Por padrão `withRetry` faz até **3 retries** com backoff exponencial (`baseDelayMs=1000` →
+esperas de 1s/2s/4s). Códigos de **falha de billing/quota** da OpenAI são tratados como
+**não-retryable** — retry apenas prolonga a falha:
+
+| Código | Comportamento |
+|--------|---------------|
+| `credit_balance_exhausted` | Fail-fast: lança imediatamente, **sem** backoff (o retry anterior levava ~21s em retries inúteis antes de falhar) |
+| `insufficient_quota` | Fail-fast: lança imediatamente, **sem** backoff |
+
+- `extractErrorCode` (`retry.ts`) lê o código do erro OpenAI tanto do campo de **top-level** (`error.code`) quanto de um **objeto aninhado** (`error.error.code`), cobrindo as duas formas em que o SDK OpenAI pode expor o código.
+- `isRetryable` também trata `TypeError` (ex.: falha de rede antes de qualquer resposta HTTP) como não-retryable e honra a flag explícita `retryable: false` quando presente no objeto de erro.
+- Quando um código não-retryable é lançado, o erro propaga **imediatamente** do `withRetry` para o catch da rota (sem esperar os backoffs de 1s/2s/4s). A rota então emite o evento SSE de erro padrão — `{"type":"error","code":"AI_SERVICE_UNAVAILABLE","message":"...","retryable":true}` (código genérico hardcoded nos catches de `interpret`, `follow-up` e `arcana-interpret`; o código de billing da OpenAI **não** é exposto ao cliente). Como nenhum token foi entregue (`fullText === ""`), a quota reservada é devolvida (ver §Reserva e devolução de quota).
+
+> Testes: `tests/unit/ai-retry.test.ts` cobre os cenários de fail-fast para `credit_balance_exhausted` e `insufficient_quota`.
+
+### Comportamento do cliente SSE (refresh-aware + cota não consumida)
+
+> **Implementado (2026-10-16)** — corrige "sessão parece quebrada / análise bloqueada" quando o
+> access token (TTL 15min) expira entre a chamada e a resposta.
+
+- **Fluxo via `authStreamFetch`** (`src/lib/api.ts`): o painel `ReadingAIPanel`
+  (`src/components/ai/reading-ai-panel.tsx`) usa `authStreamFetch` para `POST /ai/interpret`
+  e `POST /ai/follow-up` em vez de `fetch` cru com `getSession().accessToken`. Em **401**, o
+  `authStreamFetch` chama o mesmo single-flight `refreshAccessTokenOnce()`
+  (`src/lib/auth-refresh.ts`) do interceptor axios e **re-tenta uma vez** com o token novo —
+  o usuário não precisa de logout/login. Suporta `AbortSignal` (botão "Parar" e cleanup do
+  StrictMode continuam abortando a tentativa em voo).
+- **Mensagem de cota não consumida**: quando o stream termina com evento `error` e
+  **nenhum token** foi entregue (`receivedTokens === false` no painel), o client anexa
+  *"Sua cota de interpretação não foi consumida."* à mensagem do servidor — o servidor
+  devolveu a quota (ver §Reserva e devolução de quota), e sem o aviso o usuário tende a
+  culpar a própria cota diária (bug reportado: "0/10 interpretações, mesmo assim bloqueado").
+  Entrega parcial (tokens antes do erro) **não** recebe o aviso — a quota foi consumida.
+- Testes: `tests/components/reading-ai-panel.test.tsx` — "sobrevive a access token expirado
+  (401 → refresh → retry)", "falha do provedor sem tokens informa que a cota nao foi consumida",
+  "entrega parcial não afirma que a cota não foi consumida".
 
 ### Resposta ao exceder
 

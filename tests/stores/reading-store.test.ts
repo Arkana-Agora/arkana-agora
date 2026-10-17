@@ -21,6 +21,7 @@ describe("ReadingStore", () => {
     expect(result.current.cards).toEqual([])
     expect(result.current.step).toBe("deck")
     expect(result.current.selectedCardIndex).toBeNull()
+    expect(result.current.question).toBe("")
   })
 
   it("selects deck and advances step", async () => {
@@ -32,7 +33,7 @@ describe("ReadingStore", () => {
     expect(result.current.step).toBe("spread")
   })
 
-  it("selects spread and advances step", async () => {
+  it("selects spread and advances to question step", async () => {
     const store = await importStore()
     const { result } = renderHook(() => store())
 
@@ -41,7 +42,37 @@ describe("ReadingStore", () => {
       result.current.selectSpread("three-card")
     })
     expect(result.current.spreadId).toBe("three-card")
+    expect(result.current.step).toBe("question")
+  })
+
+  it("stores question/intention and starts draw on demand", async () => {
+    const store = await importStore()
+    const { result } = renderHook(() => store())
+
+    act(() => {
+      result.current.selectDeck("rws")
+      result.current.selectSpread("three-card")
+    })
+    expect(result.current.step).toBe("question")
+
+    act(() => result.current.setQuestion("Vou passar bem na viagem?"))
+    expect(result.current.question).toBe("Vou passar bem na viagem?")
+
+    act(() => result.current.startDraw())
     expect(result.current.step).toBe("draw")
+  })
+
+  it("skips question (empty) and still starts draw", async () => {
+    const store = await importStore()
+    const { result } = renderHook(() => store())
+
+    act(() => {
+      result.current.selectDeck("rws")
+      result.current.selectSpread("three-card")
+      result.current.startDraw()
+    })
+    expect(result.current.step).toBe("draw")
+    expect(result.current.question).toBe("")
   })
 
   it("sets cards and moves to reveal", async () => {
@@ -81,6 +112,8 @@ describe("ReadingStore", () => {
     act(() => {
       result.current.selectDeck("rws")
       result.current.selectSpread("three-card")
+      result.current.setQuestion("minha pergunta")
+      result.current.startDraw()
       result.current.setCards([
         { id: "c1", cardId: "fool", positionIndex: 0, isReversed: false },
       ])
@@ -91,6 +124,7 @@ describe("ReadingStore", () => {
     expect(result.current.spreadId).toBeNull()
     expect(result.current.cards).toEqual([])
     expect(result.current.step).toBe("deck")
+    expect(result.current.question).toBe("")
   })
 
   it("toggles flippedCards as an array (JSON-serializable)", async () => {
@@ -141,6 +175,27 @@ describe("ReadingStore", () => {
     }
     expect(parsed.state.flippedCards).toEqual([2])
     expect(parsed.state.createdReadingId).toBe("reading_abc")
+  })
+
+  it("persists o step transiente 'draw' como 'question' (reload nao re-dispara o sorteio)", async () => {
+    const store = await importStore()
+    const { result } = renderHook(() => store())
+
+    act(() => {
+      result.current.selectDeck("rws")
+      result.current.selectSpread("three-card")
+      result.current.setQuestion("Pergunta persistida?")
+      result.current.startDraw()
+    })
+    expect(result.current.step).toBe("draw")
+
+    const raw = sessionStorage.getItem("arkana-reading-session")
+    expect(raw).toBeTruthy()
+    const parsed = JSON.parse(raw!) as {
+      state: { step: string; question: string }
+    }
+    expect(parsed.state.step).toBe("question")
+    expect(parsed.state.question).toBe("Pergunta persistida?")
   })
 
   it("clears flippedCards and createdReadingId on reset", async () => {

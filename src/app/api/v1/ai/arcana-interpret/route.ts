@@ -2,7 +2,6 @@ import { z } from "zod"
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { getAIClient } from "@/lib/ai/client"
 import { getInterpretationModel } from "@/lib/ai/models"
 import { withRetry } from "@/lib/ai/retry"
 import { getSystemPrompt } from "@/lib/ai/prompts/system"
@@ -10,6 +9,11 @@ import { sanitizeInput } from "@/lib/ai/prompts/user"
 import { prisma } from "@/lib/prisma"
 import { getArcanaByNumber } from "@/data/arcana"
 import type { ArcanaData } from "@/data/arcana"
+import {
+  requireAIClient,
+  createQuotaReservation,
+  sseResponse,
+} from "@/app/api/v1/ai/_helpers"
 import { checkAndIncrementDailyUsage } from "@/services/ai-service"
 
 export const dynamic = "force-dynamic"
@@ -50,6 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError("INVALID_ARCANA", "Arcano invalido", reqId, 422)
   }
 
+  const quota = createQuotaReservation(reqId, auth.userId, "interpretation")
   try {
     const user = await prisma.user.findUnique({
       where: { id: auth.userId },
@@ -61,6 +66,13 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const tier = (user.plan ?? "FREE").toUpperCase() as "FREE" | "PLUS"
+
+    // Fail-fast: cliente IA inicia ANTES da quota — configuração quebrada
+    // (AI_API_KEY ausente) não pode queimar leitura diária.
+    const aiClientOrResponse = requireAIClient(reqId, "ai/arcana-interpret")
+    if (aiClientOrResponse instanceof Response) return aiClientOrResponse
+    const aiClient = aiClientOrResponse
+
     const limitResult = await checkAndIncrementDailyUsage(auth.userId, tier)
     if (!limitResult.allowed) {
       return apiError(
@@ -74,6 +86,7 @@ export async function POST(request: Request): Promise<Response> {
         },
       )
     }
+    quota.markConsumed()
 
     const systemPrompt = getSystemPrompt(mode)
     const userPrompt = buildArcanaPrompt(arcanaData, mode, user.name)
@@ -81,10 +94,10 @@ export async function POST(request: Request): Promise<Response> {
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       async start(controller) {
+        let fullText = ""
         try {
-          const client = getAIClient()
           const aiResponse = await withRetry(() =>
-            client.chat.completions.create({
+            aiClient.chat.completions.create({
               model: getInterpretationModel(),
               messages: [
                 { role: "system", content: systemPrompt },
@@ -99,6 +112,7 @@ export async function POST(request: Request): Promise<Response> {
           for await (const chunk of aiResponse) {
             const token = chunk.choices[0]?.delta?.content ?? ""
             if (token) {
+              fullText += token
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({ type: "token", token })}\n\n`,
@@ -115,9 +129,15 @@ export async function POST(request: Request): Promise<Response> {
           controller.close()
         } catch (error) {
           logger.error(
-            { reqId, error },
+            {
+              reqId,
+              err: error instanceof Error ? error : new Error(String(error)),
+            },
             "[ai/arcana-interpret] erro no streaming",
           )
+          if (fullText === "") {
+            await quota.tryRefund("ai/arcana-interpret")
+          }
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
@@ -128,17 +148,10 @@ export async function POST(request: Request): Promise<Response> {
       },
     })
 
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    })
+    return sseResponse(stream)
   } catch (err) {
     logger.error({ reqId, err }, "[ai/arcana-interpret] erro interno")
+    await quota.tryRefund("ai/arcana-interpret")
     return apiError("INTERNAL_ERROR", "Erro interno", reqId, 500)
   }
 }

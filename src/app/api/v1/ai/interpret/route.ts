@@ -2,9 +2,13 @@ import { z } from "zod"
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { getAIClient } from "@/lib/ai/client"
 import { getInterpretationModel } from "@/lib/ai/models"
 import { withRetry } from "@/lib/ai/retry"
+import {
+  requireAIClient,
+  createQuotaReservation,
+  sseResponse,
+} from "@/app/api/v1/ai/_helpers"
 import {
   getInterpretationContext,
   checkAndIncrementDailyUsage,
@@ -48,11 +52,18 @@ export async function POST(request: Request): Promise<Response> {
 
   const { readingId, mode, mood, question } = parsed.data
 
+  const quota = createQuotaReservation(reqId, auth.userId, "interpretation")
   try {
     const ctx = await getInterpretationContext(auth.userId, readingId)
     if ("error" in ctx) {
       return apiError(ctx.error, "Erro ao buscar dados", reqId, ctx.status)
     }
+
+    // Fail-fast: se o cliente IA não inicializa (ex.: AI_API_KEY ausente),
+    // responde 503 ANTES de consumir a quota diária.
+    const aiClientOrResponse = requireAIClient(reqId, "ai/interpret")
+    if (aiClientOrResponse instanceof Response) return aiClientOrResponse
+    const aiClient = aiClientOrResponse
 
     const limitResult = await checkAndIncrementDailyUsage(auth.userId, ctx.tier)
     if (!limitResult.allowed) {
@@ -67,6 +78,7 @@ export async function POST(request: Request): Promise<Response> {
         },
       )
     }
+    quota.markConsumed()
 
     const { systemPrompt, userPrompt, cacheHash } = buildInterpretationPrompt(
       ctx,
@@ -88,10 +100,10 @@ export async function POST(request: Request): Promise<Response> {
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       async start(controller) {
+        let fullText = ""
         try {
-          const client = getAIClient()
           const aiResponse = await withRetry(() =>
-            client.chat.completions.create({
+            aiClient.chat.completions.create({
               model: getInterpretationModel(),
               messages: [
                 { role: "system", content: systemPrompt },
@@ -103,7 +115,6 @@ export async function POST(request: Request): Promise<Response> {
             }),
           )
 
-          let fullText = ""
           for await (const chunk of aiResponse) {
             const token = chunk.choices[0]?.delta?.content ?? ""
             if (token) {
@@ -138,7 +149,16 @@ export async function POST(request: Request): Promise<Response> {
           )
           controller.close()
         } catch (error) {
-          logger.error({ reqId, error }, "[ai/interpret] erro no streaming")
+          logger.error(
+            {
+              reqId,
+              err: error instanceof Error ? error : new Error(String(error)),
+            },
+            "[ai/interpret] erro no streaming",
+          )
+          if (fullText === "") {
+            await quota.tryRefund("ai/interpret")
+          }
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
@@ -149,17 +169,10 @@ export async function POST(request: Request): Promise<Response> {
       },
     })
 
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    })
+    return sseResponse(stream)
   } catch (err) {
     logger.error({ reqId, err }, "[ai/interpret] erro interno")
+    await quota.tryRefund("ai/interpret")
     return apiError("INTERNAL_ERROR", "Erro interno", reqId, 500)
   }
 }

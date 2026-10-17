@@ -37,13 +37,12 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 11. O sistema revela a segunda carta com animacao (ex.: "A Estrela, invertida")
 12. O usuario toca na terceira carta
 13. O sistema revela a terceira carta com animacao (ex.: "O Sol, erecto")
-14. O sistema habilita o botao "Solicitar Leitura IA"
-15. O usuario toca em "Solicitar Leitura IA"
-16. O sistema envia as cartas + posicoes + pergunta para a IA via SSE
-17. O sistema exibe o texto da interpretacao em streaming
-18. O usuario le a interpretacao
-19. O sistema salva a tiragem no historico
-20. O usuario pode salvar como favorita ou compartilhar
+14. Apos a criacao da tiragem, o sistema inicia a interpretacao IA **automaticamente** (uma vez por tiragem **por aba de navegador** — guard em `sessionStorage` (`arkana-ai-autostart:<readingId>`), `ReadingAIPanel autoStart` em `src/components/tarot/reading-session.tsx`)
+15. O sistema envia as cartas + posicoes + pergunta para a IA via SSE
+16. O sistema exibe o texto da interpretacao em streaming
+17. O usuario le a interpretacao (regeneracoes sob demanda consomem cota adicional — US-020)
+18. O sistema salva a tiragem no historico
+19. O usuario pode salvar como favorita ou compartilhar
 
 ### Fluxos Alternativos
 
@@ -56,13 +55,14 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 - A tiragem e descartada sem consumir cota
 
 **FA-003: Erro na IA**
-- No passo 16, se a IA nao responde em 30 segundos, o sistema exibe mensagem de erro e oferece "Tentar novamente"
+- No passo 15, se a IA nao responde em 30 segundos, o sistema exibe mensagem de erro e oferece "Tentar novamente"
 - Se o erro persistir, o sistema oferece gerar leitura basica (sem IA, baseada em textos pre-definidos)
+- Em falha de geracao **sem entrega de tokens ao cliente**, a quota de IA reservada e devolvida; aborto apos tokens entregues nao devolve (anti-abuso) — `docs/04-api/ai.md` §Reserva e devolução de quota
 
 ### Pos-condicoes
 
 - A tiragem esta salva no historico do usuario
-- A cota diaria do usuario e decrementada em 1
+- A cota diaria de **tiragens** do usuario e decrementada em 1 (a quota de IA e cobrada por interpretacao bem-sucedida — devolvida em falha **sem entrega** de tokens; ver `docs/04-api/ai.md` §Reserva e devolução de quota)
 - Se o usuario compartilhou, o verso aparece no feed (V1)
 
 ---
@@ -87,7 +87,7 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 
 ### Fluxo Principal
 
-1. O usuario toca em "Solicitar Leitura IA"
+1. A interpretacao e disparada **automaticamente** apos a criacao da tiragem (UC-001, passo 14; regeneracoes manuais via painel — US-020)
 2. O sistema coleta os dados da tiragem: cartas, posicoes, espalhamento, pergunta
 3. O sistema recupera o perfil do usuario: Arcano Pessoal, signo, data de nascimento
 4. O sistema constroi o prompt com todos os contextos
@@ -111,6 +111,7 @@ Casos de uso detalhados do projeto `arkana-agora` com atores, pre-condicoes, flu
 
 **FA-003: Rate limit da API de IA**
 - Se a API retornar 429 (rate limit), o sistema enfileira a requisicao e tenta em ate 60 segundos
+- **Exceção billing**: códigos de falha de billing/quota do provedor (`credit_balance_exhausted`, `insufficient_quota`) **não são retryable** — o fail-fast propaga imediatamente sem backoff (`src/lib/ai/retry.ts` `NON_RETRYABLE_CODES`, usado por `withRetry` nas rotas `interpret`, `follow-up` e `arcana-interpret` — `docs/04-api/ai.md` §Fail-fast de billing)
 - O usuario ve indicador de "Gerando leitura, aguarde..."
 
 ### Pos-condicoes

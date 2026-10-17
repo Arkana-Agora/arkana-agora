@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import dotenv from "dotenv"
 import { z } from "zod"
 
 // Env validation do mini-service Socket.io (plano T069). Separado do
@@ -74,4 +77,23 @@ export function parseSocketEnv(
     )
   }
   return result.data
+}
+
+// O dev script (`bun run dev:ws` → tsx/Node) não auto-carrega arquivos de
+// env como o Bun/Next fazem — sem isso, parseSocketEnv falhava com
+// "AUTH_URL: Required" mesmo com o .env preenchido. Precedência:
+// ambiente já setado > .env.local > .env.
+export function loadSocketEnvFiles(
+  baseDir: string,
+  target: Record<string, string | undefined> = process.env,
+): void {
+  const merged: Record<string, string> = {}
+  for (const file of [".env", ".env.local"]) {
+    const path = join(baseDir, file)
+    if (!existsSync(path)) continue
+    Object.assign(merged, dotenv.parse(readFileSync(path)))
+  }
+  for (const [key, value] of Object.entries(merged)) {
+    if (target[key] === undefined) target[key] = value
+  }
 }

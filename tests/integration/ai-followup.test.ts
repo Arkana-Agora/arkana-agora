@@ -15,10 +15,12 @@ vi.mock("@/lib/prisma", () => ({
     aIDailyUsage: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      updateMany: vi.fn(),
     },
     followUpMessage: {
       findMany: vi.fn(),
       create: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
 }))
@@ -43,8 +45,10 @@ const mockReadingFindUnique = vi.mocked(prisma.reading.findUnique)
 const mockUserFindUnique = vi.mocked(prisma.user.findUnique)
 const mockUsageFindUnique = vi.mocked(prisma.aIDailyUsage.findUnique)
 const mockUsageUpsert = vi.mocked(prisma.aIDailyUsage.upsert)
+const mockUsageUpdateMany = vi.mocked(prisma.aIDailyUsage.updateMany)
 const mockFollowUpFindMany = vi.mocked(prisma.followUpMessage.findMany)
 const mockFollowUpCreate = vi.mocked(prisma.followUpMessage.create)
+const mockFollowUpDeleteMany = vi.mocked(prisma.followUpMessage.deleteMany)
 const mockGetAIClient = vi.mocked(getAIClient)
 
 function makeRequest(body: unknown) {
@@ -183,5 +187,79 @@ describe("POST /api/v1/ai/follow-up", () => {
     )
 
     expect(mockUsageUpsert).toHaveBeenCalled()
+  })
+})
+
+describe("quota devolvida quando a geracao falha (follow-up)", () => {
+  it("returns 503 AI_SERVICE_UNAVAILABLE and does NOT increment quota when AI client cannot initialize", async () => {
+    mockInterpretation()
+    mockGetAIClient.mockImplementation(() => {
+      throw new Error("AI_API_KEY environment variable is required")
+    })
+
+    const res = await POST(
+      makeRequest({ interpretationId: "interp-1", message: "Pergunta" }),
+    )
+
+    expect(res.status).toBe(503)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe("AI_SERVICE_UNAVAILABLE")
+    expect(mockUsageUpsert).not.toHaveBeenCalled()
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
+    expect(mockFollowUpCreate).not.toHaveBeenCalled()
+  })
+
+  it("refunds follow-up quota and deletes persisted user message when generation fails before any token", async () => {
+    mockInterpretation()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockRejectedValue(new Error("provider boom")),
+        },
+      },
+    } as never)
+
+    const res = await POST(
+      makeRequest({ interpretationId: "interp-1", message: "Pergunta" }),
+    )
+    expect(res.status).toBe(200)
+
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    // Compensação: a mensagem do usuário persistida no início do stream
+    // é removida junto com a devolução — senão o retry duplica o turno.
+    expect(mockFollowUpCreate).toHaveBeenCalledTimes(1)
+    expect(mockFollowUpDeleteMany).toHaveBeenCalledWith({
+      where: { id: "msg-1" },
+    })
+    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { followUpCount: { decrement: 1 } },
+      }),
+    )
+  })
+
+  it("keeps user message and does NOT refund when tokens were already delivered (abort forcável)", async () => {
+    mockInterpretation()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(async function* () {
+            yield { choices: [{ delta: { content: "parcial" } }] }
+            throw new Error("provider boom after delivery")
+          }),
+        },
+      },
+    } as never)
+
+    const res = await POST(
+      makeRequest({ interpretationId: "interp-1", message: "Pergunta" }),
+    )
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    expect(mockFollowUpDeleteMany).not.toHaveBeenCalled()
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 })

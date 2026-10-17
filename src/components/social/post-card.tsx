@@ -4,12 +4,23 @@ import { motion } from "framer-motion"
 import { Heart, Lock, MessageCircle, Share2, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import { toast } from "sonner"
+import { z } from "zod"
 
+import { CommentSection } from "@/components/social/comment-section"
 import { ShareModal } from "@/components/social/share-modal"
 import type { FeedPost } from "@/hooks/use-feed"
+import authApi from "@/lib/api"
 import { getR2PublicUrl } from "@/lib/r2-public-url"
 import { linkifyMentionsHashtags } from "@/lib/social/mentions"
+import { formatRelativeTime } from "@/lib/social/relative-time"
 import { getInitials } from "@/lib/utils"
+import { useSocialStore } from "@/stores/social-store"
+
+// Resposta do toggle T076 — `{ data: { liked, likeCount } }`.
+const likeResponseSchema = z.object({
+  data: z.object({ liked: z.boolean(), likeCount: z.number() }),
+})
 
 // `imageUrls` guarda CHAVES `posts/{userId}/…` (S2-12 — T051 valida o
 // prefixo); a URL pública é montada aqui a partir de
@@ -18,23 +29,6 @@ const R2_BASE = getR2PublicUrl()
 
 function resolveImageUrl(key: string): string {
   return /^https?:\/\//.test(key) ? key : `${R2_BASE}/${key}`
-}
-
-/** Timestamp relativo em pt-BR ("agora mesmo", "há 5 min", "há 2 h", "há 3 d"). */
-export function formatRelativeTime(iso: string, now = Date.now()): string {
-  const diff = now - Date.parse(iso)
-  const minutes = Math.floor(diff / 60_000)
-  if (minutes < 1) return "agora mesmo"
-  if (minutes < 60) return `há ${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `há ${hours} h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `há ${days} d`
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  })
 }
 
 interface PostCardProps {
@@ -47,15 +41,49 @@ interface PostCardProps {
  * escapado antes das âncoras, seguro para `dangerouslySetInnerHTML`), grid de
  * imagens (até 4), preview de tiragem e barra de ações.
  *
- * Ações: **compartilhar** abre o `ShareModal` (T063); **curtir/comentar**
- * renderizam as contagens com `aria-disabled` até os endpoints de like
- * (T076) e comentário (T077) existirem — sem comportamento falso.
+ * Ações (T085): **compartilhar** abre o `ShareModal` (T063); **curtir**
+ * alterna via `POST /social/posts/:id/like` (T076) com overlay otimista no
+ * SocialStore (`updatePostLike`, reconciliação com o servidor e rollback em
+ * erro); **comentar** alterna a `CommentSection` (T085) — posts com
+ * `commentsDisabled` mantêm o botão inerte (`aria-disabled`, sem
+ * comportamento falso).
  */
 export function PostCard({ post }: PostCardProps) {
   const [shareOpen, setShareOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [likePending, setLikePending] = useState(false)
+
+  const likeOverlay = useSocialStore((state) => state.postLikes[post.id])
+  const updatePostLike = useSocialStore((state) => state.updatePostLike)
+
+  const liked = likeOverlay?.liked ?? false
+  const likeCount = likeOverlay?.likeCount ?? post.likeCount
+  const commentsDisabled = post.commentsDisabled ?? false
 
   const name = post.author.displayName ?? post.author.name
   const images = post.imageUrls ?? []
+
+  async function handleLike() {
+    if (likePending) return
+    const previous = { liked, likeCount }
+    setLikePending(true)
+    updatePostLike(post.id, !liked, liked ? likeCount - 1 : likeCount + 1)
+    try {
+      const res = await authApi.post(`/social/posts/${post.id}/like`)
+      const data = likeResponseSchema.parse(res.data).data
+      updatePostLike(post.id, data.liked, data.likeCount)
+    } catch {
+      updatePostLike(post.id, previous.liked, previous.likeCount)
+      toast.error("Nao foi possivel curtir. Tente novamente.")
+    } finally {
+      setLikePending(false)
+    }
+  }
+
+  function toggleComments() {
+    if (commentsDisabled) return
+    setCommentsOpen((open) => !open)
+  }
 
   return (
     <motion.article
@@ -138,17 +166,26 @@ export function PostCard({ post }: PostCardProps) {
       <footer className="flex items-center gap-1 pt-1 border-t border-border">
         <button
           type="button"
-          aria-label={`Curtir, ${post.likeCount} curtidas`}
-          aria-disabled="true"
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={`Curtir, ${likeCount} curtidas`}
+          aria-pressed={liked}
+          onClick={() => void handleLike()}
+          className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-sm transition-colors ${
+            liked
+              ? "text-red-500"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
         >
-          <Heart className="h-4 w-4" aria-hidden="true" />
-          {post.likeCount}
+          <Heart
+            className={`h-4 w-4 ${liked ? "fill-current" : ""}`}
+            aria-hidden="true"
+          />
+          {likeCount}
         </button>
         <button
           type="button"
           aria-label={`Comentar, ${post.commentCount} comentarios`}
-          aria-disabled="true"
+          aria-disabled={commentsDisabled ? "true" : undefined}
+          onClick={toggleComments}
           className="inline-flex items-center gap-1.5 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <MessageCircle className="h-4 w-4" aria-hidden="true" />
@@ -164,6 +201,8 @@ export function PostCard({ post }: PostCardProps) {
           Compartilhar
         </button>
       </footer>
+
+      {commentsOpen && !commentsDisabled && <CommentSection postId={post.id} />}
 
       <ShareModal
         isOpen={shareOpen}

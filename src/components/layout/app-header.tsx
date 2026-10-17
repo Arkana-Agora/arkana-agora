@@ -1,11 +1,10 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { useNotifications } from "@/components/social/notifications-provider"
+import { NotificationsDropdown } from "@/components/social/notifications"
 import type { AppNavHref } from "@/lib/navigation"
 import { isAppNavActive } from "@/lib/navigation"
 import {
-  Bell,
   History,
   Home,
   Newspaper,
@@ -31,7 +30,6 @@ const NAV_ITEMS: ReadonlyArray<{
 
 export function AppHeader() {
   const pathname = usePathname()
-  const { unreadCount } = useNotifications()
 
   return (
     <header className="sticky top-0 z-40 hidden border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:block">
@@ -68,17 +66,7 @@ export function AppHeader() {
             )
           })}
         </div>
-        {unreadCount > 0 ? (
-          <span
-            aria-label={`${unreadCount} notificações não lidas`}
-            data-testid="unread-notifications-badge"
-            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground"
-          >
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        ) : (
-          <Bell className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        )}
+        <NotificationsDropdown />
       </nav>
     </header>
   )
