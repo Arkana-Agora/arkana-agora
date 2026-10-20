@@ -1,6 +1,7 @@
 import { apiError } from "@/lib/api-response"
 import { logger, newReqId } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
+import { REMOVED_COMMENT_CONTENT } from "@/lib/social/comments"
 import { POLLING_HEADERS, POLLING_TAKE, guardPolling } from "../polling-utils"
 
 export const dynamic = "force-dynamic"
@@ -23,6 +24,9 @@ export async function GET(request: Request): Promise<Response> {
           ...(guard.until === null ? {} : { lt: guard.until }),
         },
         post: { authorId: guard.userId, isHidden: false },
+        // Soft-delete (S2-19/T080): o fallback nunca devolve o marcador
+        // [removido] — senão o comentário removido reaparece no poll.
+        content: { not: REMOVED_COMMENT_CONTENT },
         // Revisão R: mesmos predicados do detalhe — autores de comentários
         // banidos/soft-deleted/inativos não voltam pelo fallback
         author: { isActive: true, isBanned: false, deletedAt: null },

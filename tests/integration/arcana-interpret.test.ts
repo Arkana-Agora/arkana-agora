@@ -12,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     aIDailyUsage: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }))
@@ -34,6 +35,7 @@ import { getAIClient } from "@/lib/ai/client"
 const mockUserFindUnique = vi.mocked(prisma.user.findUnique)
 const mockUsageFindUnique = vi.mocked(prisma.aIDailyUsage.findUnique)
 const mockUsageUpsert = vi.mocked(prisma.aIDailyUsage.upsert)
+const mockUsageUpdateMany = vi.mocked(prisma.aIDailyUsage.updateMany)
 const mockGetAIClient = vi.mocked(getAIClient)
 
 function makeInterpretRequest(body: unknown) {
@@ -66,10 +68,12 @@ function mockUser() {
   mockUsageUpsert.mockResolvedValue({} as never)
 }
 
-function mockAIClient() {
+function mockAIClient(
+  tokens: string[] = ["O", " ", "Hierofante", " ", "governa"],
+) {
   const asyncIterable = {
     async *[Symbol.asyncIterator]() {
-      for (const token of ["O", " ", "Hierofante", " ", "governa"]) {
+      for (const token of tokens) {
         yield { choices: [{ delta: { content: token } }] }
       }
     },
@@ -156,5 +160,89 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
       makeInterpretRequest({ arcanaNumber: 0, mode: "general" }),
     )
     expect(res.status).toBe(422)
+  })
+})
+
+describe("quota devolvida quando a geracao falha (arcana)", () => {
+  it("returns 503 AI_SERVICE_UNAVAILABLE and does NOT increment quota when AI client cannot initialize", async () => {
+    mockUser()
+    mockGetAIClient.mockImplementation(() => {
+      throw new Error("AI_API_KEY environment variable is required")
+    })
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
+    )
+
+    expect(res.status).toBe(503)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe("AI_SERVICE_UNAVAILABLE")
+    expect(mockUsageUpsert).not.toHaveBeenCalled()
+  })
+
+  it("refunds interpretation quota when generation fails mid-stream", async () => {
+    mockUser()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockRejectedValue(new Error("provider boom")),
+        },
+      },
+    } as never)
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
+    )
+    expect(res.status).toBe(200)
+
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { interpretationCount: { decrement: 1 } },
+      }),
+    )
+  })
+
+  it("refunds interpretation quota when provider completes with zero content (empty completion)", async () => {
+    mockUser()
+    mockAIClient([])
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
+    )
+    const text = await res.text()
+
+    expect(text).toContain('"type":"error"')
+    expect(text).toContain('"retryable":true')
+    expect(text).not.toContain('"type":"done"')
+    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { interpretationCount: { decrement: 1 } },
+      }),
+    )
+  })
+
+  it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {
+    mockUser()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(async function* () {
+            yield { choices: [{ delta: { content: "parcial" } }] }
+            throw new Error("provider boom after delivery")
+          }),
+        },
+      },
+    } as never)
+
+    const res = await interpretPOST(
+      makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
+    )
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 })

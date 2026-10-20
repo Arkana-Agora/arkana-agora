@@ -281,6 +281,38 @@ describe("useCreatePost (T062)", () => {
       params: {},
     })
   })
+
+  it("limpa os overlays de post ao invalidar o feed (servidor vence o overlay)", async () => {
+    const { useSocialStore } = await import("@/stores/social-store")
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: { data: [basePost("p1")], pagination: { nextCursor: null } },
+    } as never)
+    vi.mocked(authApi.post).mockResolvedValue({
+      data: { data: { post: basePost("p_new") } },
+    } as never)
+
+    const { useCreatePost } = await importModule()
+    const { result } = renderHook(() => useCreatePost(), {
+      wrapper: createWrapper(),
+    })
+
+    useSocialStore.setState({
+      postLikes: { p1: { liked: true, likeCount: 99 } },
+      postComments: { p1: [] },
+    })
+
+    act(() => {
+      result.current.mutate({
+        type: "text",
+        content: "novo",
+        audience: "public",
+      })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    await waitFor(() => expect(useSocialStore.getState().postLikes).toEqual({}))
+  })
 })
 
 describe("useTrending (T062)", () => {

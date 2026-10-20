@@ -39,7 +39,7 @@ prisma/
     └── migration_lock.toml  # provider = postgresql
 ```
 
-> **Chain atual: 12 migrations** (`prisma migrate status` → up-to-date em dev, 2026-09-29). As três últimas (#10–#12) nasceram da review do Phase 1 (follow); detalhes na §5.
+> **Chain atual: 16 migrations** (`prisma migrate status` → up-to-date em dev, 2026-10-05). As três últimas (#10–#12) nasceram da review do Phase 1 (follow); as 4 posteriores (#13–#16) entraram no branch `sprint2-f3` (indexes de polling, reward markers); detalhes na §5.
 
 ---
 
@@ -63,6 +63,12 @@ YYYYMMDDHHMMSS_descriptive_name
 | `20260928205906` | `follow_reward_marker` | Tabela `follow_rewards` (`FollowReward`): `@@unique([followerId, followingId])` — marker que faz os +5 Versos do follow serem pagos **uma única vez por par** — **aplicada (Sprint 2 / Phase 1 review, #10)** |
 | `20260928210717` | `follow_keyset_indexes` | **Dropa** `follows(followerId)`/`follows(followingId)` e cria `follows(followerId, createdAt, id)` + `follows(followingId, createdAt, id)` (keyset das listas T044/T045) — **aplicada (Sprint 2 / Phase 1 review, #11)** |
 | `20260929142921` | `secondary_indexes_review` | Índices secundários `comments(authorId)`, `post_likes(userId)`, `content_reports(reporterId)`, `horoscope_contents(type, period, date)` — **aplicada (Sprint 2 / Phase 1 review, #12)** |
+| `20260929225218` | `add_comment_parent_posthashtag_postid_indexes` | `comments(parentCommentId)` + `post_hashtags(postId)` — índices de navegação de respostas e do reverse-lookup de hashtags (**Sprint 2 Phase 2; conferir `prisma migrate status` por ambiente**) |
+| `20261003015407` | `polling_reverse_lookup_indexes_review_r` | `CREATE INDEX CONCURRENTLY` p/ reverse-lookup das 4 rotas de polling: `comments(createdAt)`, `follows(followingId, followerId)`, `notifications(userId, createdAt)`, `post_likes(createdAt)` — **fora do plano**, derivada de T071 (revisão R; sem `BEGIN/`COMMIT` de propósito — ver cabeçalho do arquivo) |
+| `20261005221650` | `add_like_reward_markers` | Tabelas `post_like_rewards` (`PostLikeReward`) + `comment_like_rewards` (**`CommentLikeReward` — RESERVADO**, nunca populada: T081 não paga Versos por like de comentário) com unique por par e FKs `ON DELETE CASCADE` (**sprint2-f3, 2026-10-05**) |
+| `20261005222639` | `add_comment_reward_marker` | Tabela `comment_rewards` (`CommentReward`): `@@unique([postId, userId])` — marker que faz os +2 Versos do comentário serem pagos **uma única vez por post/autor** (**sprint2-f3, 2026-10-05**) |
+
+> **Chain hoje: 16 migrations** no diretório `prisma/migrations/` (a tabela deste doc listava 12; as 4 acima entraram depois). Sempre validar o estado real com `.\node_modules\.bin\prisma migrate status` antes de assumir que um ambiente está atualizado — e **nunca editar** uma migration já aplicada (a dos reward markers é a prova: corrigir comportamento é criar migration nova).
 | `20250711010000` | `add_reading_tables` | Tabelas de leitura, cartas e baralhos |
 | `20250712000000` | `add_social_tables` | Tabelas de feed, follows, comentários |
 | `20250712010000` | `add_marketplace_tables` | Tabelas de produtos, pedidos e pagamentos |
@@ -243,7 +249,7 @@ Gerada com `npx prisma migrate dev --name sprint2_social_horoscopes` (T015; sem 
 
 ### Sprint 2 — Follow (review Phase 1) — ✅ APLICADAS (2026-09-28/29, #10–#12)
 
-**Migrations**: `20260928205906_follow_reward_marker`, `20260928210717_follow_keyset_indexes`, `20260929142921_secondary_indexes_review` — as três da revisão do Phase 1 (rota `POST /api/v1/social/follow/:userId`). `prisma migrate status` (2026-09-29) → **12 migrations, up-to-date**.
+**Migrations**: `20260928205906_follow_reward_marker`, `20260928210717_follow_keyset_indexes`, `20260929142921_secondary_indexes_review` — as três da revisão do Phase 1 (rota `POST /api/v1/social/follow/:userId`). `prisma migrate status` (2026-09-29) → **12 migrations, up-to-date** (estado histórico); **chain atual: 16 migrations** (2026-10-05, +4 no branch `sprint2-f3`: indexes de polling + reward markers).
 
 - **#10 `follow_reward_marker`**: cria `follow_rewards` com `@@unique([followerId, followingId])`. É o **marker de recompensa** lido dentro do tx da rota de follow — na primeira vez que A segue B cria a linha e paga +5 Versos; unfollow **não** apaga (re-follow não recompensa). Sem FK para `User` (ver `relationships.md` §4.1).
 - **#11 `follow_keyset_indexes`**: `DROP INDEX follows_followerId_idx`/`follows_followingId_idx` + `CREATE` dos compostos `(followerId, createdAt, id)` e `(followingId, createdAt, id)` — cobrem o keyset `{createdAt, id}` das listas T044/T045 com desempate por `id`. **Atenção**: qualquer doc/diagrama que ainda cite `@@index([followerId])`/`@@index([followingId])` de coluna única está desatualizado (§4.5 e §7 de `indexing.md` marcam isso).

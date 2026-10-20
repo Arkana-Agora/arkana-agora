@@ -23,8 +23,8 @@ Regras de negocio unificadas do projeto `arkana-agora`. Cada regra e unica e nao
 
 - As cartas devem ser reveladas **uma a uma**, na ordem definida pelo espalhamento.
 - A animacao de revelacao tem duracao de **1,5 segundo** por carta.
-- O usuario **nao pode pular** a animacao de revelacao.
-- Apos revelar todas as cartas, o botao de "Solicitar Leitura IA" e habilitado.
+- O usuario **pode adiantar** a revelacao clicando numa carta durante a animacao; a sequencia automatica continua para as demais cartas (nao ha bloqueio).
+- Apos a revelacao e a criacao da tiragem, a interpretacao IA e iniciada **automaticamente** (uma vez por tiragem **por aba de navegador** — `ReadingAIPanel` com `autoStart` em `src/components/tarot/reading-session.tsx`, guard em `sessionStorage`); nao existe botao "Solicitar Leitura IA" como unico gatilho. Regeneracoes manuais ("Gerar nova leitura", US-020) continuam disponiveis e consomem cota adicional.
 
 ### BR-TIR-004: Sem Reposicao
 

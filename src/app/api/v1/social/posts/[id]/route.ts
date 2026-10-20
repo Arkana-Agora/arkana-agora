@@ -1,5 +1,3 @@
-import type { Prisma } from "@prisma/client"
-
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
 import { logger, newReqId } from "@/lib/logger"
@@ -9,6 +7,10 @@ import {
   POST_DETAIL_AUTHOR_SELECT,
   toPublicPost,
 } from "@/lib/social/post-visibility"
+import {
+  COMMENT_AUTHOR_SELECT,
+  REMOVED_COMMENT_CONTENT,
+} from "@/lib/social/comments"
 
 export const dynamic = "force-dynamic"
 
@@ -18,13 +20,6 @@ const DETAIL_HEADERS = {
   "Cache-Control": "private, no-store",
   Vary: "Authorization",
 } satisfies Record<string, string>
-
-const COMMENT_AUTHOR_SELECT = {
-  id: true,
-  name: true,
-  displayName: true,
-  avatar: true,
-} satisfies Prisma.UserSelect
 
 // Preview embutido do detalhe: lote 10 (mesmo default do endpoint
 // dedicado de comentários, T078/RF-SOC-005), mais recentes primeiro,
@@ -66,6 +61,10 @@ export async function GET(
         comments: {
           where: {
             parentCommentId: null,
+            // Soft-delete (S2-19/T080): a preview do detalhe esconde o
+            // marcador [removido] — senão o comentário removido reaparece
+            // aqui enquanto a lista paginada o oculta (duas verdades).
+            content: { not: REMOVED_COMMENT_CONTENT },
             // Revisão R: mesma regra LGPD do predicado do post — autores
             // inativos (deactivated) também não aparecem
             author: { isActive: true, isBanned: false, deletedAt: null },
@@ -76,6 +75,7 @@ export async function GET(
             author: { select: COMMENT_AUTHOR_SELECT },
             replies: {
               where: {
+                content: { not: REMOVED_COMMENT_CONTENT },
                 author: { isActive: true, isBanned: false, deletedAt: null },
               },
               orderBy: { createdAt: "desc" },

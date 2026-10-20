@@ -54,4 +54,18 @@ describe("runCounterReconcileJob (T147)", () => {
     )
     expect(sqls[1]).toContain('WHERE c."likeCount" <>')
   })
+
+  it("o commentCount exclui o marcador [removido] via placeholder (fonte unica da constante)", async () => {
+    await runCounterReconcileJob()
+
+    // Tagged template: a constante vira placeholder `?` (parameterizado),
+    // então o SQL não carrega o literal — mas o filtro está presente.
+    const sqls = prismaMock.$executeRaw.mock.calls.map((call) =>
+      (call[0] as readonly string[]).join("?"),
+    )
+    expect(sqls[0]).toContain("c.content <> ?")
+    // O valor da constante é passado como parâmetro (último arg do template).
+    const firstCallArgs = prismaMock.$executeRaw.mock.calls[0]!.slice(1)
+    expect(firstCallArgs).toContain("[removido]")
+  })
 })

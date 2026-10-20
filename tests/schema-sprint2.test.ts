@@ -10,6 +10,11 @@ const schema = readFileSync(resolve("prisma/schema.prisma"), "utf8")
 const hasModel = (name: string) =>
   new RegExp(`^model ${name} \\{`, "m").test(schema)
 
+// `prisma format` realinha colunas conforme a largura do campo mais longo do
+// modelo — o contrato é "campo declarado com tipo/atributos", não o padding.
+// Normaliza espaços antes de comparar para o teste não quebrar a cada formatação.
+const normalize = (text: string) => text.replace(/\s+/g, " ").trim()
+
 describe("schema Sprint 2 — models (T001–T013)", () => {
   it.each([
     "Follow",
@@ -77,7 +82,7 @@ describe("schema Sprint 2 — campos críticos", () => {
       new RegExp(`^model ${model} \\{[\\s\\S]*?^\\}`, "m"),
     )
     expect(block, `model ${model} não encontrado`).toBeTruthy()
-    expect(block![0]).toContain(field)
+    expect(normalize(block![0])).toContain(normalize(field))
   })
 
   it.each([
@@ -85,7 +90,7 @@ describe("schema Sprint 2 — campos críticos", () => {
     "isBanned         Boolean      @default(false)",
     "maxFollowing     Int          @default(5000)",
   ])("User declara %s (T014)", (field) => {
-    expect(schema).toContain(field)
+    expect(normalize(schema)).toContain(normalize(field))
   })
 
   it.each([
@@ -93,7 +98,7 @@ describe("schema Sprint 2 — campos críticos", () => {
     "versosStreak    Int      @default(0)",
     "lastClaimAt     DateTime?",
   ])("UserProfile declara %s (T014/S2-17)", (field) => {
-    expect(schema).toContain(field)
+    expect(normalize(schema)).toContain(normalize(field))
   })
 })
 

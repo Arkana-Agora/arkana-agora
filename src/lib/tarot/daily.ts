@@ -1,6 +1,10 @@
 import { getDeckCards } from "./decks"
 import type { TarotCard } from "@/types/tarot"
 
+// Baralho canonico do tarot do dia (RWS) — fonte unica para o seed e para o
+// verso exibido em DailyTarot.
+export const DEFAULT_DECK_ID = "rws"
+
 export interface DailyTarotCard {
   id: string
   name: string
@@ -18,7 +22,7 @@ function getDayOfYear(date: Date): number {
 }
 
 export function getDailyTarotCard(date: Date = new Date()): DailyTarotCard {
-  const cards = getDeckCards("rws") as TarotCard[]
+  const cards = getDeckCards(DEFAULT_DECK_ID) as TarotCard[]
   const dayOfYear = getDayOfYear(date)
   const cardIndex = dayOfYear % cards.length
   const card = cards[cardIndex]

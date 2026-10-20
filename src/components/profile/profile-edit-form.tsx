@@ -22,6 +22,14 @@ const editProfileSchema = z.object({
 
 type EditProfileFormData = z.infer<typeof editProfileSchema>
 
+// GET /users/me/profile devolve birthDate em ISO-8601, mas <input type="date">
+// e o schema aceitam apenas AAAA-MM-DD — sem normalizar, a validação falha e o
+// salvamento não acontece.
+function toDateInputValue(value: string | null | undefined): string {
+  if (!value) return ""
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : ""
+}
+
 export function ProfileEditForm() {
   const { data: profile, isLoading } = useMyProfile()
   const updateProfile = useUpdateProfile()
@@ -51,7 +59,7 @@ export function ProfileEditForm() {
       reset({
         displayName: profile.displayName ?? "",
         bio: profile.bio ?? "",
-        birthDate: profile.birthDate ?? "",
+        birthDate: toDateInputValue(profile.birthDate),
         birthPlace: profile.birthPlace ?? "",
         location: profile.location ?? "",
         website: profile.website ?? "",

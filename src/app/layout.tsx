@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from "next"
 import type { ReactNode } from "react"
-import { Geist } from "next/font/google"
+import { Geist, Playfair_Display } from "next/font/google"
 
 import { Providers } from "@/components/providers"
 import "./globals.css"
 
 const font = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
+const headingFont = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
+})
 
 const APP_URL_FALLBACK = "https://arkanaagora.com"
 
@@ -95,7 +100,11 @@ export default function RootLayout({
   children: ReactNode
 }>) {
   return (
-    <html lang="pt-BR" className={font.variable} suppressHydrationWarning>
+    <html
+      lang="pt-BR"
+      className={`${font.variable} ${headingFont.variable}`}
+      suppressHydrationWarning
+    >
       <body className={font.className}>
         <script
           type="application/ld+json"

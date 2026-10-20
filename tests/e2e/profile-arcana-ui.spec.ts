@@ -29,13 +29,13 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
 
     const emailField = page.getByLabel(/e-?mail/i)
-    const passwordField = page.getByLabel(/senha/i)
+    const passwordField = page.getByTestId("password")
     await expect(emailField).toBeVisible()
     await expect(passwordField).toBeVisible()
 
     await emailField.fill(TEST_EMAIL)
     await passwordField.fill("Test@12345678")
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
 
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
     await expect(page).toHaveURL(/\/dashboard/)
@@ -46,8 +46,8 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
   }) => {
     await page.goto("/login")
     await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
-    await page.getByLabel(/senha/i).fill("WrongPassword1!")
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByTestId("password").fill("WrongPassword1!")
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
 
     await expect(
       page.getByText(/inválid|credencial|senha|erro/i).first(),
@@ -60,8 +60,8 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
   }) => {
     await page.goto("/login")
     await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
-    await page.getByLabel(/senha/i).fill("Test@12345678")
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByTestId("password").fill("Test@12345678")
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
 
     await page.goto("/perfil/editar")
@@ -82,8 +82,8 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
   test("T117-PROFILE: privacy page renders selects", async ({ page }) => {
     await page.goto("/login")
     await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
-    await page.getByLabel(/senha/i).fill("Test@12345678")
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByTestId("password").fill("Test@12345678")
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
 
     await page.goto("/perfil/privacidade")
@@ -112,7 +112,12 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
   }) => {
     const user = await getUserByEmail(TEST_EMAIL)
     expect(user).toBeTruthy()
-    await ensureProfile(user!.id, { username: "e2e_profile_user" })
+    // O teste de privacidade acima deixa o perfil "private" (404 no endpoint
+    // público por anti-timing) — reafirma a precondição de perfil público.
+    await ensureProfile(user!.id, {
+      username: "e2e_profile_user",
+      privacy: { profileVisibility: "public" },
+    })
 
     const res = await request.get(
       `${BASE_URL}/api/v1/users/e2e_profile_user/profile`,
@@ -120,6 +125,14 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
     expect(res.status()).toBe(200)
     const body = (await res.json()) as { username: string }
     expect(body.username).toBe("e2e_profile_user")
+
+    // /perfil/:username fica em (app) — guard de auth no layout redireciona
+    // visitante deslogado para /login?callbackUrl= (architecture.md §rotas).
+    await page.goto("/login")
+    await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
+    await page.getByTestId("password").fill("Test@12345678")
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
+    await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
 
     await page.goto("/perfil/e2e_profile_user")
     await expect(page).toHaveURL(/\/perfil\/e2e_profile_user/)
@@ -130,8 +143,8 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
   }) => {
     await page.goto("/login")
     await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
-    await page.getByLabel(/senha/i).fill("Test@12345678")
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByTestId("password").fill("Test@12345678")
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
 
     await page.goto("/meu-arcano")
@@ -150,7 +163,8 @@ test.describe("T117: auth UI, profile, arcana UI (browser)", () => {
     await expect(
       page
         .getByRole("button", { name: /interpretar com ia/i })
-        .or(page.getByText(/significado|elemento|planeta/i).first()),
+        .or(page.getByText(/significado|elemento|planeta/i))
+        .first(),
     ).toBeVisible({ timeout: 15_000 })
   })
 

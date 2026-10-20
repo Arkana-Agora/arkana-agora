@@ -53,10 +53,15 @@ test.describe("AI Readings flow: tiragem → interpretação → follow-up", () 
 
     expect(response.status()).toBe(200)
     const body = await response.json()
-    expect(body).toHaveProperty("interpretationCount")
-    expect(body).toHaveProperty("interpretationLimit")
-    expect(body).toHaveProperty("followUpCount")
+    // Shape da API (docs/04-api/ai.md §GET /ai/usage): os nomes do response
+    // são plural (interpretations/followUps) e o limite diário chama-se
+    // dailyLimit — interpretationCount/followUpCount são campos do MODEL
+    // Prisma (AIDailyUsage), não da resposta.
+    expect(body).toHaveProperty("interpretations")
+    expect(body).toHaveProperty("dailyLimit")
+    expect(body).toHaveProperty("followUps")
     expect(body).toHaveProperty("followUpLimit")
+    expect(typeof body.interpretations).toBe("number")
   })
 
   test("CA-AI-003: POST /api/v1/ai/interpret validates request body", async ({
@@ -154,6 +159,6 @@ test.describe("AI Readings flow: tiragem → interpretação → follow-up", () 
     })
     expect(usageRes.status()).toBe(200)
     const usage = await usageRes.json()
-    expect(typeof usage.interpretationCount).toBe("number")
+    expect(typeof usage.interpretations).toBe("number")
   })
 })

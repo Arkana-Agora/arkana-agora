@@ -19,8 +19,12 @@ function listSocketFiles(): string[] {
   const walk = (dir: string, prefix: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name
-      if (entry.isDirectory()) walk(join(dir, entry.name), rel)
-      else if (entry.name.endsWith(".ts")) files.push(rel)
+      if (entry.isDirectory()) {
+        // varredura é do FONTE do serviço; instalações locais (npm/bun) em
+        // socket-service/node_modules não fazem parte da fronteira I-c
+        if (entry.name === "node_modules") continue
+        walk(join(dir, entry.name), rel)
+      } else if (entry.name.endsWith(".ts")) files.push(rel)
     }
   }
   walk(join(root, "socket-service"), "")

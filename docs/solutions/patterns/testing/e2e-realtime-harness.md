@@ -19,9 +19,11 @@ tags:
   - selectors
   - rate-limit
   - prisma
-module: realtime / social feed (T075)
-date: 2026-10-02
-established_in: "Playwright harness for T075 realtime social (2-browser WS test, fallback polling + reconnect) built during Phase 2.5 WebSocket Foundation — green run `npx playwright test tests/e2e/social-realtime.spec.ts` 3 passed / 3 fixme, 2026-10-02"
+  - vitest-harness
+  - socket-mocking
+module: realtime / social feed (T072, T075, T077, T085)
+date: 2026-10-19
+established_in: "Playwright harness for T075 realtime social (2-browser WS test, fallback polling + reconnect) built during Phase 2.5 WebSocket Foundation — green run `npx playwright test tests/e2e/social-realtime.spec.ts` 3 passed / 3 fixme, 2026-10-02; updated after Sprint 2 Phase 3 (2026-10-05): **5 passed / 1 fixme** (like T076 and comment T077 promoted from fixme; only gift T120 remains). Extended in Sprint 2 multi-agent review (branch sprint2-f3, 2026-10-19): Vitest unit harness for `useFeedRealtime` with hoisted `socketHandlers`, per-test `beforeEach` reset, batching + polling flush (300ms batch, single GET, re-enqueue on failure); `comment-section.test.tsx` hoisted `socketHandlers` with `comment-added` refetch + non-refetch tests."
 ---
 
 # Pattern: E2E Realtime Harness (Playwright × Next dev × socket-service)
@@ -32,6 +34,8 @@ Use this pattern whenever you add or repair a Playwright E2E spec in `tests/e2e/
 
 > **Scope note:** this covers *browser-driven* realtime E2E. Pure reconnect/room re-join logic (drop → re-join rooms) is covered by `tests/integration/websocket.test.ts` (T074); protocol-level contracts belong in unit/integration tests, not here.
 
+**Vitest unit harness extension (Sprint 2 multi-agent review):** For unit testing realtime hooks (`useFeedRealtime`, `CommentSection` socket handlers), use a **hoisted `socketHandlers` mock** via `vi.mock("@/hooks/use-socket")` with per-test `beforeEach` reset. This enables deterministic testing of WebSocket event handlers (e.g., `new-post` batching, `comment-added` refetch) without a real socket server.
+
 ## Source of Truth Files
 
 - `tests/e2e/helpers.ts` — env override, Prisma client, `registerUser`/`cleanupUser`, `csrfHeaders`, `login`/`attachSession`, `ensureProfile`
@@ -41,8 +45,13 @@ Use this pattern whenever you add or repair a Playwright E2E spec in `tests/e2e/
 - `src/lib/social/polling-window.ts` — `POLLING_DEFAULT_SINCE_MS = 5 * 60_000` (re-exported by `polling-utils.ts`, which also clamps `since` to `POLLING_MAX_SINCE_MS` = 24h in `resolveSince`)
 - `src/lib/rate-limit.ts` — in-memory register limiter (`REGISTER_IP_WINDOW_MS = 60 * 60 * 1000`, `MAX_REGISTER_IP_ATTEMPTS = 3`)
 - `docs/plans/20260926120000-sprint2-execution-plan.md` — Execution Log 2026-10-02 "Phase 2.5 executada" (infra E2E + fixes (c)/(d))
+- **Vitest unit harness files (new):**
+  - `tests/hooks/use-feed-realtime.test.tsx` — `vi.mock("@/hooks/use-socket")` hoisted `socketHandlers`; batching + polling flush tests (300ms batch, single GET, re-enqueue on failure, cursor advances by `serverTime`)
+  - `tests/components/comment-section.test.tsx` — hoisted `socketHandlers`; `comment-added` refetch + non-refetch tests (R3c)
 
 ## Current Implementation Snapshot
+
+### Playwright E2E Harness
 
 - `playwright.config.ts` declares **two** `webServer` entries: `npm run dev` (url `BASE_URL`, 120s timeout) and `npm run dev:ws` (url `http://localhost:3003/health`, 60s timeout), both `reuseExistingServer: true` and both passing `REDIS_URL` + `JWT_PUBLIC_KEY` (the WS one also `AUTH_URL` and `SOCKET_PORT=3003`); `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` have hardcoded dev fallbacks in the config so a fresh clone runs without an env file.
 - `tests/e2e/helpers.ts` force-reads `.env.local` with `dotenv`'s `parse` and overwrites `process.env.DATABASE_URL` **at module load, before the Prisma client is constructed**; the client is a `PrismaClient({ adapter: new PrismaPg({ connectionString }) })` singleton cached on `globalThis.__e2ePrisma`.
@@ -51,9 +60,25 @@ Use this pattern whenever you add or repair a Playwright E2E spec in `tests/e2e/
 - The fallback test wraps the page in `page.routeWebSocket(/localhost:3003/, ws => wsAllowed ? ws.connectToServer() : ws.close())`, registers `page.on("websocket")` **before** navigation, and resolves a `reconnected` promise from the first `framereceived` after `wsAllowed = true`.
 - Spec runs `test.describe.configure({ mode: "serial" })`, seeds the follow edge directly via `prisma.follow.create` (no HTTP emit → no notification consumed, no rate-limit quota), and deletes posts/follows/followRewards/notifications + users in `afterAll`.
 
+### Vitest Unit Harness for Realtime Hooks (New)
+
+- `vi.mock("@/hooks/use-socket")` hoists `socketHandlers: Record<string, (payload: unknown) => void>` at module scope — the mock implementation assigns the passed handlers to this shared ref, allowing tests to invoke `socketHandlers["new-post"](event)` or `socketHandlers["comment-added"](event)` directly.
+- Per-test `beforeEach` resets `socketHandlers = {}` and clears all mocks — ensures no cross-test handler leakage.
+- `useFeedRealtime` tests (`tests/hooks/use-feed-realtime.test.tsx`):
+  - **Batching**: multiple `new-post` events within 300ms → single `GET /social/polling/posts?since=` call; dedup by `postId`.
+  - **Polling flush**: on success, filters response for `wanted` ids (those that arrived via event), emits via `emitPendingPost` (newest last → top of pill).
+  - **Failure retry (R1)**: catch block re-enqueues the batch (`idsRef.current = new Set([...idsRef.current, ...batch])`) and re-schedules flush after `FEED_REALTIME_RETRY_MS = 3000` (not the 300ms batch window) to avoid hammering the rate-limited polling bucket (60/min).
+  - **Cursor advance (R1)**: `sinceRef` advances to `serverTime` from response (min of client requestedAt and serverTime) only when no new events arrived during flight (`idsRef.current.size === 0`) — prevents clock skew skipping posts.
+  - **Hydration window**: initial `since` defaults to `Date.now() - POLLING_DEFAULT_SINCE_MS` (5 min) computed at **first flush**, not at mount — covers posts created before client hydration.
+- `CommentSection` tests (`tests/components/comment-section.test.tsx`):
+  - `socketHandlers["comment-added"]` with matching `postId` → `invalidateQueries(["comments", postId])` (R3c).
+  - `socketHandlers["comment-added"]` with different `postId` → no refetch (scoped to this post).
+
 ## Pattern Overview
 
 Treat the harness as a **four-process contract**: pin the test process to the *same* database and env as `next dev`, give both dev servers the *same* Redis so the event bus crosses processes, neutralize UI overlays and quota consumers up front, and make every realtime assertion either *relative to an observed value* or *anchored to a positively-observed socket handshake* — never to an absolute count or to a blocked-socket event.
+
+For **unit tests of realtime hooks**, use a **hoisted `socketHandlers` mock** with per-test reset. This gives deterministic control over WebSocket event delivery without a real socket server, enabling tests for batching, retry, cursor logic, and scoped refetch behavior.
 
 ## Implementation Steps / Gotchas
 
@@ -221,9 +246,62 @@ Key points:
 - Timeouts: the fallback interval is 30s → allow `60_000` on polling-driven assertions; only the WS path is asserted with `15_000` (delivery must be `< 30s` to prove it came from the socket, not the poller).
 - Seed state directly in the DB (`prisma.follow.create`) when you need rooms populated *without* consuming HTTP quota or emitting an unwanted notification.
 
+### Step 9: Vitest Unit Harness — Hoisted `socketHandlers` with Per-Test Reset
+
+[File: `tests/hooks/use-feed-realtime.test.tsx` and `tests/components/comment-section.test.tsx`]
+
+```typescript
+// At module scope (hoisted):
+const getMock = vi.hoisted(() => vi.fn())
+let socketHandlers: Record<string, (payload: unknown) => void> = vi.hoisted(
+  () => ({}),
+)
+
+vi.mock("@/hooks/use-socket", () => ({
+  useSocket: (handlers: Record<string, (payload: unknown) => void>) => {
+    socketHandlers = handlers
+    return undefined
+  },
+}))
+
+// In beforeEach:
+beforeEach(() => {
+  vi.clearAllMocks()
+  socketHandlers = {}  // Critical: reset the shared ref for each test
+  // ... other setup
+})
+
+// In tests, invoke handlers directly:
+act(() => {
+  socketHandlers["new-post"]?.(eventOf("p1"))
+  socketHandlers["new-post"]?.(eventOf("p2"))
+  socketHandlers["new-post"]?.(eventOf("p3"))
+})
+
+// For comment-section:
+act(() => {
+  socketHandlers["comment-added"]?.({
+    postId: "post_1",
+    commentId: "cmt_5",
+    authorName: "Alguem",
+    text: "comentario de fora",
+  })
+})
+```
+
+Key points:
+- **Hoisted mock** captures the handlers passed by the component at render time — the test can then fire events synchronously via `act(() => socketHandlers["event"](payload))`.
+- **Per-test `socketHandlers = {}` reset** is critical — without it, handlers from a previous test leak into the next, causing flaky "event fired but nothing happened" or double-invalidation.
+- **No real socket needed** — the mock replaces `useSocket` entirely; the component's handler registration runs against the mock, giving deterministic control.
+- **Test the batching window**: fire multiple events in one `act()`, assert single polling call (`pollingCalls().toHaveLength(1)`).
+- **Test the retry**: mock polling to fail once, then succeed; assert two polling calls and that the pill appears after the retry (no new event needed).
+- **Test cursor advance**: mock `serverTime` in polling response; assert next `since` param equals that `serverTime`.
+- **Test hydration window**: mock polling to filter by `since`; assert first `since` is ~5 min ago (covers pre-hydration posts).
+- **Test scoped refetch**: `comment-added` with matching `postId` triggers `getMock` for that post's comments; different `postId` does not.
+
 ## Complete Example
 
-A minimal new realtime spec following the pattern:
+### Playwright E2E Spec (Minimal)
 
 ```typescript
 import { expect, test } from "@playwright/test"
@@ -274,6 +352,84 @@ test.describe("T0XX: <feature> realtime", () => {
 
 Run with: `npx playwright test tests/e2e/<file>.spec.ts` (never bare `npx playwright` from another cwd — `testDir` is `./tests/e2e`).
 
+### Vitest Unit Spec for Realtime Hook (Minimal)
+
+```typescript
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { act, render, screen, waitFor } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+
+const getMock = vi.hoisted(() => vi.fn())
+let socketHandlers: Record<string, (payload: unknown) => void> = vi.hoisted(
+  () => ({}),
+)
+
+vi.mock("@/lib/api", () => ({ default: { get: getMock } }))
+vi.mock("@/hooks/use-socket", () => ({
+  useSocket: (handlers: Record<string, (payload: unknown) => void>) => {
+    socketHandlers = handlers
+    return undefined
+  },
+}))
+
+import { useMyRealtimeHook } from "@/hooks/use-my-realtime-hook"
+
+function Probe() {
+  useMyRealtimeHook()
+  return <div data-testid="count">{/* derived state */}</div>
+}
+
+function renderProbe() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <Probe />
+    </QueryClientProvider>,
+  )
+}
+
+describe("useMyRealtimeHook — batching + retry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    socketHandlers = {}
+    getMock.mockResolvedValue({ data: { data: { posts: [] } } })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("batches 3 events into 1 polling call", async () => {
+    renderProbe()
+    act(() => {
+      socketHandlers["new-post"]?.({ postId: "p1" })
+      socketHandlers["new-post"]?.({ postId: "p2" })
+      socketHandlers["new-post"]?.({ postId: "p3" })
+    })
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1))
+    expect(getMock).toHaveBeenCalledWith("/social/polling/posts", { params: { since: expect.any(String) } })
+  })
+
+  it("retries failed batch after 3s without new event", async () => {
+    let calls = 0
+    getMock.mockImplementation((url) => {
+      if (url.startsWith("/social/polling/posts")) {
+        calls++
+        if (calls === 1) return Promise.reject(new Error("500"))
+        return Promise.resolve({ data: { data: { posts: [{ id: "p1" }] } } })
+      }
+      return Promise.resolve({ data: { data: [] } })
+    })
+    renderProbe()
+    act(() => socketHandlers["new-post"]?.({ postId: "p1" }))
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1))
+    // retry re-scheduled by catch block
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2), { timeout: 6000 })
+  })
+})
+```
+
 ## Project-Specific Constraints
 
 - [ ] Test process `DATABASE_URL` **must** come from `.env.local`, enforced in `tests/e2e/helpers.ts` at import time, before `new PrismaClient()`.
@@ -283,9 +439,11 @@ Run with: `npx playwright test tests/e2e/<file>.spec.ts` (never bare `npx playwr
 - [ ] Ports 3000 and 3003 must be free (no orphaned `next dev`/`dev:ws`) before a run — the register IP limiter is in-memory, 3 attempts / 60min per process.
 - [ ] Registration fixtures go through `registerUser()` only (reuse existing + repair `emailVerified`); never raw `POST /api/v1/auth/register` in a spec body.
 - [ ] Every fresh context gets `addInitScript(analytics-consent=false)` **before its first `goto`**.
-- [ ] Realtime assertions are **relative** (`before + 1`) or regex-observed (`/^\d+ novos? posts?$/`) — never absolute counts in a serial file.
+- [ ] Realtime assertions are **relative** (`before + N`) or regex-observed (`/^\d+ novos? posts?$/`) — never absolute counts in a serial file.
 - [ ] A reconnect claim requires a positively observed `framereceived` on `localhost:3003` **after** flipping `wsAllowed`, and the event that proves delivery is created **after** that handshake.
 - [ ] Serial mode + `workers: 1` + `fullyParallel: false` are load-bearing; domain rows and users are cleaned in `afterAll`.
+- [ ] **Vitest unit harness**: `vi.mock("@/hooks/use-socket")` with hoisted `socketHandlers` + per-test `beforeEach` reset (`socketHandlers = {}`). Never share handlers across tests.
+- [ ] **Vitest unit harness**: test batching (multiple events → 1 polling call), retry (failure → re-enqueue + re-schedule), cursor advance (serverTime), hydration window (initial since = 5 min), scoped refetch (matching postId only).
 
 ## Anti-Patterns (What NOT to Do)
 
@@ -298,6 +456,9 @@ Run with: `npx playwright test tests/e2e/<file>.spec.ts` (never bare `npx playwr
 - ❌ Registering test users with raw HTTP calls on every run — burns the 3/60min in-memory IP quota, especially against a warm `next dev`.
 - ❌ Leaving a dev server running between runs (`reuseExistingServer: true` will happily reuse a stale one holding the rate-limit counter and possibly a different DB).
 - ❌ Removing `workers: 1` / `fullyParallel: false` for "speed" — the specs share a single DB user graph and a single rate-limited IP.
+- ❌ **Vitest**: Forgetting `socketHandlers = {}` in `beforeEach` — handlers leak across tests, causing flaky double-invalidation or missed events.
+- ❌ **Vitest**: Not using `act()` when firing socket handlers — state updates from handlers are batched in React 18; without `act()`, assertions run before the component re-renders.
+- ❌ **Vitest**: Mocking `useSocket` without capturing the handlers — the component's `useSocket({ "new-post": handler })` call must be intercepted to get a reference to `handler`.
 
 ## Related Patterns / Docs
 
@@ -306,6 +467,8 @@ Run with: `npx playwright test tests/e2e/<file>.spec.ts` (never bare `npx playwr
 - `docs/plans/20260926120000-sprint2-execution-plan.md` — Execution Log 2026-10-02 (Phase 2.5): infra E2E decisions, fixes (c) Prisma adapter/DATABASE_URL and (d) `AUTH_URL` in `.env.local`
 - `tests/integration/websocket.test.ts` (T074) — reconnect/room re-join at protocol level (complements, does not overlap, this pattern)
 - ADR-007 (separate socket-service) and ADR-009 (RS256 JWT) — the architectural reasons the harness needs two servers, one Redis, one key pair
+- `tests/hooks/use-feed-realtime.test.tsx` — Vitest unit harness for feed realtime batching/retry/cursor
+- `tests/components/comment-section.test.tsx` — Vitest unit harness for comment-added scoped refetch
 
 ## Safe Change Checklist for Future AI Work
 
@@ -313,4 +476,5 @@ Run with: `npx playwright test tests/e2e/<file>.spec.ts` (never bare `npx playwr
 2. **New server process (new port):** add a third `webServer` entry in `playwright.config.ts` with `REDIS_URL` + `JWT_PUBLIC_KEY` + `AUTH_URL`, a real health URL, and `reuseExistingServer: true`; extend any `routeWebSocket` regex to cover it.
 3. **Env changes:** if `.env.local` gains/renames a var the app needs locally (`AUTH_URL`, `DATABASE_URL`, `REDIS_URL`), update Step 2 and confirm the test-process override still reads it.
 4. **Assertion changes:** keep all count-based UI assertions relative (`before + N`) and all WS claims anchored on a positively observed `framereceived`.
-5. **Verification:** free ports 3000/3003 → `npx playwright test tests/e2e/<file>.spec.ts` must be green twice in a row (the second consecutive run is what catches rate-limit and absolute-assertion regressions), then `npx tsc --noEmit` and `npx eslint tests/e2e`.
+5. **New realtime hook unit test:** copy the hoisted `socketHandlers` + `vi.mock("@/hooks/use-socket")` + `beforeEach` reset pattern from `tests/hooks/use-feed-realtime.test.tsx`; test batching, retry, cursor, hydration window, and scoped refetch as applicable.
+6. **Verification:** free ports 3000/3003 → `npx playwright test tests/e2e/<file>.spec.ts` must be green twice in a row (the second consecutive run is what catches rate-limit and absolute-assertion regressions), then `npx tsc --noEmit` and `npx eslint tests/e2e`. For unit: `bun run test tests/hooks/use-feed-realtime.test.tsx tests/components/comment-section.test.tsx` then `bun run type-check` and `bun run lint`.

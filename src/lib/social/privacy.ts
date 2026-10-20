@@ -49,3 +49,49 @@ export async function canFollow(
   if (mutual) return { allowed: true }
   return { allowed: false, reason: "privacy_following" }
 }
+
+/**
+ * Regras de quem pode comentar num post (T077): fonte unica e
+ * `UserProfile.privacy.whoCanComment` — mesmos valores e semantica do
+ * `whoCanFollow` (UI `privacy-settings.tsx`: "all"=Todos,
+ * "following"="Quem eu sigo", "nobody"=Ninguem).
+ *
+ * Fail-closed: JSON de privacy invalido → nega com `privacy_invalid`
+ * (403 `WHO_CAN_COMMENT` na rota).
+ */
+export type CommentDenyReason =
+  "privacy_nobody" | "privacy_following" | "privacy_invalid"
+
+export type CommentDecision =
+  { allowed: true } | { allowed: false; reason: CommentDenyReason }
+
+export async function canComment(
+  viewer: { id: string },
+  author: { id: string },
+  preloadedProfile?: { privacy: unknown } | null,
+): Promise<CommentDecision> {
+  const profile =
+    preloadedProfile !== undefined
+      ? preloadedProfile
+      : await prisma.userProfile.findUnique({
+          where: { userId: author.id },
+          select: { privacy: true },
+        })
+
+  const privacy = parsePrivacy(profile?.privacy)
+  if (!privacy) {
+    return { allowed: false, reason: "privacy_invalid" }
+  }
+  const rule = privacy.whoCanComment ?? "all"
+
+  if (rule === "all") return { allowed: true }
+  if (rule === "nobody") return { allowed: false, reason: "privacy_nobody" }
+
+  // "Quem eu sigo": o AUTOR precisa seguir o viewer
+  const link = await prisma.follow.findFirst({
+    where: { followerId: author.id, followingId: viewer.id },
+    select: { id: true },
+  })
+  if (link) return { allowed: true }
+  return { allowed: false, reason: "privacy_following" }
+}
