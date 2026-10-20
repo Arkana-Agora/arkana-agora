@@ -10,6 +10,7 @@ import {
   getFeed,
 } from "@/lib/social/feed-algorithm"
 import { toPublicPost } from "@/lib/social/post-visibility"
+import { viewerLikedPostIds } from "@/lib/social/viewer-likes"
 
 export const dynamic = "force-dynamic"
 
@@ -23,6 +24,32 @@ const feedQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(FEED_MAX_LIMIT).optional(),
 })
+
+/**
+ * Revsao R6: projeta o post PUBLICO + `viewerHasLiked` do lote. O enrique-
+ * cimento roda FORA do cache (o like muda a cada request; embutir no cache
+ * materializado o deixaria stale) — uma query `postId IN (...)` por pagina.
+ */
+async function toFeedItems<
+  T extends {
+    id: string
+    author: {
+      isBanned?: unknown
+      deletedAt?: unknown
+      isActive?: unknown
+      profile?: unknown
+    }
+  },
+>(viewerId: string, posts: readonly T[]) {
+  const liked = await viewerLikedPostIds(
+    viewerId,
+    posts.map((post) => post.id),
+  )
+  return posts.map((post) => ({
+    ...toPublicPost(post),
+    viewerHasLiked: liked.has(post.id),
+  }))
+}
 
 /**
  * GET /api/v1/social/feed (T052/AC-3): feed personalizado do viewer.
@@ -78,7 +105,7 @@ export async function GET(request: Request): Promise<Response> {
       // paginação ao vivo.
       return Response.json(
         {
-          data: cached.posts.map(toPublicPost),
+          data: await toFeedItems(auth.userId, cached.posts),
           pagination: { nextCursor: cached.nextCursor },
         },
         { headers: PRIVATE_HEADERS },
@@ -88,7 +115,7 @@ export async function GET(request: Request): Promise<Response> {
     const page = await getFeed(auth.userId, cursor, limit)
     return Response.json(
       {
-        data: page.posts.map(toPublicPost),
+        data: await toFeedItems(auth.userId, page.posts),
         pagination: { nextCursor: page.nextCursor },
       },
       { headers: PRIVATE_HEADERS },

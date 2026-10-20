@@ -7,6 +7,7 @@ const prismaMock = vi.hoisted(() => ({
   follow: { findUnique: vi.fn() },
   post: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
   postHashtag: { createMany: vi.fn(), findMany: vi.fn() },
+  postLike: { findMany: vi.fn() },
   comment: { findMany: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
@@ -157,6 +158,7 @@ beforeEach(() => {
   feedCacheMock.getCachedFeed.mockResolvedValue(null)
   prismaMock.post.findUnique.mockResolvedValue(null)
   prismaMock.follow.findUnique.mockResolvedValue(null)
+  prismaMock.postLike.findMany.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -590,6 +592,44 @@ describe("GET /api/v1/social/feed — feed (T052/AC-3)", () => {
     expect(body.pagination.nextCursor).toBeNull()
   })
 
+  it("expõe viewerHasLiked por post (cache miss) — o like deixa de ser só client (R6)", async () => {
+    feedCacheMock.getCachedFeed.mockResolvedValue(null)
+    feedMock.getFeed.mockResolvedValue({
+      posts: [feedPost("p1"), feedPost("p2")],
+      nextCursor: null,
+    })
+    prismaMock.postLike.findMany.mockResolvedValue([{ postId: "p1" }])
+
+    const res = await callGetFeed()
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(
+      body.data.map((p: { viewerHasLiked: boolean }) => p.viewerHasLiked),
+    ).toEqual([true, false])
+    expect(prismaMock.postLike.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "usr_1" }),
+      }),
+    )
+  })
+
+  it("expõe viewerHasLiked também no caminho de cache hit", async () => {
+    feedCacheMock.getCachedFeed.mockResolvedValue({
+      posts: [feedPost("c1"), feedPost("c2")],
+      nextCursor: "mat_abc",
+    })
+    prismaMock.postLike.findMany.mockResolvedValue([{ postId: "c2" }])
+
+    const res = await callGetFeed()
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(
+      body.data.map((p: { viewerHasLiked: boolean }) => p.viewerHasLiked),
+    ).toEqual([false, true])
+  })
+
   it("erro no algoritmo → 500 INTERNAL_ERROR JSON", async () => {
     feedMock.getFeed.mockRejectedValue(new Error("db down"))
 
@@ -842,6 +882,19 @@ describe("GET /api/v1/social/posts/:id — detalhe (T057)", () => {
       authorFilter,
     )
   })
+
+  it("comentarios [removido] sao filtrados na preview (soft-delete)", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(detailPost({ comments: [] }))
+
+    await callDetail("post_1")
+
+    const args = prismaMock.post.findUnique.mock.calls[0]![0]!
+    expect(args.include.comments.where.content).toEqual({ not: "[removido]" })
+    expect(args.include.comments.include.replies.where.content).toEqual({
+      not: "[removido]",
+    })
+  })
+
   it("erro de DB → 500 INTERNAL_ERROR JSON", async () => {
     prismaMock.post.findUnique.mockRejectedValue(new Error("db down"))
 

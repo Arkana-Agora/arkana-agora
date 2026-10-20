@@ -287,8 +287,9 @@ export async function POST(request: Request) {
 
 > **Implementado:** o estado de streaming vive no componente `src/components/ai/reading-ai-panel.tsx`
 > (token buffer, `interpretationId` do `done`, abort/unmount guards). O Zustand
-> `src/stores/reading-store.ts` é a **sessão de tiragem** (deck/spread/cartas) — **não** contém
-> `status: streaming` nem `sections` de IA. O snippet abaixo é **ilustrativo do design legado**.
+> `src/stores/reading-store.ts` é a **sessão de tiragem** (deck/spread/cartas/pergunta —
+> `SessionStep` inclui `"question"`, `setQuestion` persistido; rehydrate mapeia `draw`→`question`)
+> — **não** contém `status: streaming` nem `sections` de IA. O snippet abaixo é **ilustrativo do design legado**.
 
 ```typescript
 // Design legado (NAO e o reading-store real)

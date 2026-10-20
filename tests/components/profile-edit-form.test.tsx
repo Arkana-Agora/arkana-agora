@@ -120,6 +120,34 @@ describe("ProfileEditForm", () => {
     )
   })
 
+  it("normaliza birthDate ISO para AAAA-MM-DD e salva mesmo com data salva", async () => {
+    myProfileMock.data = {
+      ...loadedProfile(),
+      birthDate: "1990-01-01T00:00:00.000Z",
+    }
+    render(<ProfileEditForm />)
+
+    await waitFor(() => {
+      const birthDate = screen.getByLabelText(
+        "Data de nascimento",
+      ) as HTMLInputElement
+      expect(birthDate.value).toBe("1990-01-01")
+    })
+
+    fireEvent.change(screen.getByLabelText("Nome de exibição"), {
+      target: { value: "Maria Souza" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }))
+
+    await waitFor(() => {
+      expect(updateProfileMock.mutateAsync).toHaveBeenCalledOnce()
+    })
+    expect(updateProfileMock.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ birthDate: "1990-01-01" }),
+    )
+    expect(screen.queryByText("Formato AAAA-MM-DD")).not.toBeInTheDocument()
+  })
+
   it("shows validation error for invalid website and does not submit", async () => {
     myProfileMock.data = loadedProfile()
     render(<ProfileEditForm />)

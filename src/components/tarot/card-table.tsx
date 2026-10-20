@@ -2,7 +2,15 @@
 
 import { cn } from "@/lib/utils"
 import type { Spread } from "@/types/tarot"
-import { TarotCard } from "./tarot-card"
+import { TarotCard, type TarotCardSize } from "./tarot-card"
+
+// spec 003 §1.4: escolhe a variante de tamanho conforme o numero de cartas do
+// espalhamento, para a mesa caber na tela sem as cartas colapsarem.
+function sizeForCardCount(cardCount: number): TarotCardSize {
+  if (cardCount <= 1) return "large"
+  if (cardCount <= 3) return "medium"
+  return "small"
+}
 
 interface CardTableProps {
   spread: Spread
@@ -20,6 +28,7 @@ interface CardTableProps {
   }>
   onCardFlip?: (positionIndex: number) => void
   flippedCards?: Set<number>
+  backImageUrl?: string | undefined
   className?: string
 }
 
@@ -100,11 +109,13 @@ export function CardTable({
   cards,
   onCardFlip,
   flippedCards = new Set(),
+  backImageUrl,
   className,
 }: CardTableProps) {
   const layout =
     SPREAD_LAYOUTS[spread.id]?.positions ||
     SPREAD_LAYOUTS["three-card"]?.positions
+  const cardSize = sizeForCardCount(spread.cardCount || cards.length || 3)
 
   return (
     <div
@@ -132,9 +143,11 @@ export function CardTable({
             <TarotCard
               name={drawn.card.name}
               imageUrl={drawn.card.imageUrl}
+              backImageUrl={backImageUrl}
               isReversed={drawn.isReversed}
               isFlipped={isFlipped}
               onFlip={() => onCardFlip?.(drawn.positionIndex)}
+              size={cardSize}
             />
           </div>
         )

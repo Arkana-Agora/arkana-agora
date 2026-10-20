@@ -21,6 +21,7 @@ O módulo inclui rastreamento de sequência (streak) para incentivar o hábito d
 - **Histórico completo** de cartas diárias com interpretações
 - **Notificação push opcional** no horário configurado pelo usuário
 - **Indicador visual de streak** (fogo/consecutivos) na tela inicial
+- **Revelação sequencial** (BR-TIR-003): a carta do dia é exibida com o **verso** do baralho e revelada automaticamente após **1,5 s** (mesmo intervalo das tiragens)
 
 ---
 
@@ -43,10 +44,16 @@ A mesma combinação de `userId + data` sempre produzirá a mesma carta, garanti
 2. O sistema verifica se já existe uma leitura diária em cache para o usuário na data atual
 3. Se não existir, calcula a carta via algoritmo determinístico (hash da data + userId)
 4. O sistema solicita a interpretação por IA (ou recupera do cache se já foi gerada)
-5. A carta e sua interpretação são exibidas ao usuário
+5. A carta e sua interpretação são exibidas ao usuário — a carta aparece com o verso e é revelada após 1,5 s (BR-TIR-003, ver abaixo)
 6. O sistema registra a consulta e atualiza a sequência (streak) do usuário
 7. À meia-noite (fuso do usuário), o cache é invalidado e uma nova carta fica disponível
 8. O usuário pode navegar pelo histórico de cartas diárias anteriores
+
+---
+
+## Revelação da carta do dia (BR-TIR-003)
+
+Em `src/components/tarot/daily-tarot.tsx`, a carta do dia usa o hook `useSequentialReveal` (`src/hooks/use-sequential-reveal.ts`) com `intervalMs = 1500`: o **verso** do baralho (`getDeckById("rws")?.cardBackImageUrl`) é mostrado primeiro e a **frente** (imagem + nome + significado/invertida) surge após 1,5 s, sem opção de pular. A revelação é chaveada pelo id da carta — a virada de dia (ou o refresh manual) reabre a carta.
 
 ---
 

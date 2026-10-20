@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma"
-import { computeCacheHash } from "@/lib/ai/cache"
+import { computeCacheHash, type InterpretationMode } from "@/lib/ai/cache"
 import {
   findCachedInterpretation,
   saveInterpretation,
 } from "@/lib/ai/cache-service"
 import { getSystemPrompt } from "@/lib/ai/prompts/system"
 import { buildUserPrompt } from "@/lib/ai/prompts/user"
+import { resolveReadingPromptContext } from "@/lib/ai/prompts/reading-context"
 
 export const MODEL_VERSION = "gpt-4o-2024-08-06"
 
@@ -141,6 +142,26 @@ export async function checkAndIncrementDailyUsage(
   }
 }
 
+// Devolução de quota quando a geração falha: o incremento acontece antes
+// do stream (para não estourar o limite sob concorrência), então uma
+// falha de provider/configuração precisa desfazer a contagem — senão o
+// usuário perde leitura sem receber nada. Guarda gt(0) evita negativo.
+export async function refundInterpretationQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date, interpretationCount: { gt: 0 } },
+    data: { interpretationCount: { decrement: 1 } },
+  })
+}
+
+export async function refundFollowUpQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date, followUpCount: { gt: 0 } },
+    data: { followUpCount: { decrement: 1 } },
+  })
+}
+
 export async function checkAndIncrementFollowUpUsage(
   userId: string,
   tier: string,
@@ -247,20 +268,25 @@ export function buildInterpretationPrompt(
   if (question) hashParams.question = question
   const cacheHash = computeCacheHash(hashParams)
 
+  const resolved = resolveReadingPromptContext(
+    {
+      deckId: ctx.reading.deckId,
+      spreadId: ctx.reading.spreadId,
+      cards: ctx.reading.cards,
+    },
+    mode as InterpretationMode,
+  )
+
   const systemPrompt = getSystemPrompt(
     mode as "general" | "love" | "career" | "yesno",
   )
   const promptParams: Parameters<typeof buildUserPrompt>[0] = {
     userName: ctx.user.name,
-    deckName: ctx.reading.deckId.toUpperCase(),
-    spreadName: ctx.reading.spreadId,
-    cards: ctx.reading.cards.map((c) => ({
-      position: `Posicao ${c.positionIndex + 1}`,
-      cardName: c.cardId,
-      cardNumber: c.positionIndex,
-      isReversed: c.isReversed,
-      meaning: "",
-    })),
+    deckName: resolved.deckName,
+    deckDescription: resolved.deckDescription,
+    spreadName: resolved.spreadName,
+    spreadDescription: resolved.spreadDescription,
+    cards: resolved.cards,
     mode: mode as Parameters<typeof buildUserPrompt>[0]["mode"],
   }
   if (mood) promptParams.mood = mood

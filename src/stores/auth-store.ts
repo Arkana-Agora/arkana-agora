@@ -7,6 +7,7 @@ import { persist, createJSONStorage } from "zustand/middleware"
 import { resetUser } from "@/lib/analytics"
 import { resetAuthApiSessionCache } from "@/lib/api"
 import { resetRealtimeClient } from "@/hooks/use-socket"
+import { useSocialStore } from "@/stores/social-store"
 import { refreshAccessTokenOnce, resolveAccessToken } from "@/lib/auth-refresh"
 import { ensureCsrfCookie } from "@/lib/csrf-client"
 import type { RegisterInput, ResetPasswordInput } from "@/lib/validators/auth"
@@ -821,6 +822,7 @@ export const useAuthStore = create<AuthState>()(
             set({ user: null, isAuthenticated: false, isLoading: false })
             resetAuthApiSessionCache()
             resetRealtimeClient()
+            useSocialStore.getState().resetSocialOverlays()
             resetUser()
             try {
               if (typeof caches !== "undefined") {
@@ -868,6 +870,7 @@ export const useAuthStore = create<AuthState>()(
             set({ user: null, isAuthenticated: false, isLoading: false })
             resetAuthApiSessionCache()
             resetRealtimeClient()
+            useSocialStore.getState().resetSocialOverlays()
             resetUser()
           } catch {
             set({ error: "Erro ao excluir conta", isLoading: false })

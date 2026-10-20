@@ -28,33 +28,39 @@ beforeEach(() => {
 })
 
 describe("useNotifications (T038/T082)", () => {
-  it("pagina pelo nextCursor aceitando envelope e shape flat", async () => {
+  it("pagina pelo nextCursor no envelope canônico (S2-18)", async () => {
     const { default: authApi } = await import("@/lib/api")
     vi.mocked(authApi.get)
       .mockResolvedValueOnce({
         data: {
-          data: [
-            {
-              id: "n1",
-              type: "like",
-              isRead: false,
-              createdAt: "2026-09-26T10:00:00Z",
-            },
-          ],
-          pagination: { nextCursor: "c2", hasMore: true, unreadCount: 5 },
+          data: {
+            notifications: [
+              {
+                id: "n1",
+                type: "like",
+                isRead: false,
+                createdAt: "2026-09-26T10:00:00Z",
+              },
+            ],
+            unreadCount: 5,
+          },
+          pagination: { nextCursor: "c2" },
         },
       } as never)
       .mockResolvedValueOnce({
         data: {
-          notifications: [
-            {
-              id: "n2",
-              type: "comment",
-              isRead: true,
-              createdAt: "2026-09-25T10:00:00Z",
-            },
-          ],
-          nextCursor: null,
+          data: {
+            notifications: [
+              {
+                id: "n2",
+                type: "comment",
+                isRead: true,
+                createdAt: "2026-09-25T10:00:00Z",
+              },
+            ],
+            unreadCount: 4,
+          },
+          pagination: { nextCursor: null },
         },
       } as never)
 
@@ -88,10 +94,44 @@ describe("useNotifications (T038/T082)", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
   })
 
+  it("rejeita o shape flat histórico (S2-18 — só envelope canônico)", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: { notifications: [], nextCursor: null, unreadCount: 0 },
+    } as never)
+
+    const { useNotifications } = await importModule()
+    const { result } = renderHook(() => useNotifications(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it("rejeita data-array histórico (S2-18 — data é objeto)", async () => {
+    const { default: authApi } = await import("@/lib/api")
+    vi.mocked(authApi.get).mockResolvedValue({
+      data: {
+        data: [],
+        pagination: { nextCursor: null, unreadCount: 0 },
+      },
+    } as never)
+
+    const { useNotifications } = await importModule()
+    const { result } = renderHook(() => useNotifications(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
   it("cursor inicial compõe a queryKey (sem colisão de cache)", async () => {
     const { default: authApi } = await import("@/lib/api")
     vi.mocked(authApi.get).mockResolvedValue({
-      data: { notifications: [], nextCursor: null },
+      data: {
+        data: { notifications: [], unreadCount: 0 },
+        pagination: { nextCursor: null },
+      },
     } as never)
 
     const { useNotifications } = await importModule()
@@ -107,19 +147,22 @@ describe("useNotifications (T038/T082)", () => {
 })
 
 describe("useUnreadCount (T038)", () => {
-  it("lê unreadCount da página documentada (limit=1, unreadOnly)", async () => {
+  it("lê unreadCount do envelope canônico (limit=1, unreadOnly)", async () => {
     const { default: authApi } = await import("@/lib/api")
     vi.mocked(authApi.get).mockResolvedValue({
       data: {
-        data: [
-          {
-            id: "n1",
-            type: "follow",
-            isRead: false,
-            createdAt: "2026-09-26T10:00:00Z",
-          },
-        ],
-        pagination: { nextCursor: null, unreadCount: 3 },
+        data: {
+          notifications: [
+            {
+              id: "n1",
+              type: "follow",
+              isRead: false,
+              createdAt: "2026-09-26T10:00:00Z",
+            },
+          ],
+          unreadCount: 3,
+        },
+        pagination: { nextCursor: null },
       },
     } as never)
 
@@ -135,10 +178,13 @@ describe("useUnreadCount (T038)", () => {
     })
   })
 
-  it("unreadCount ausente vira 0", async () => {
+  it("rejeita envelope sem unreadCount (quebra de contrato S2-18)", async () => {
     const { default: authApi } = await import("@/lib/api")
     vi.mocked(authApi.get).mockResolvedValue({
-      data: { notifications: [] },
+      data: {
+        data: { notifications: [] },
+        pagination: { nextCursor: null },
+      },
     } as never)
 
     const { useUnreadCount } = await importModule()
@@ -146,7 +192,6 @@ describe("useUnreadCount (T038)", () => {
       wrapper: createWrapper(),
     })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toBe(0)
+    await waitFor(() => expect(result.current.isError).toBe(true))
   })
 })

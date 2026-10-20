@@ -1,10 +1,15 @@
-import { parseSocketEnv } from "./src/lib/env"
+import { loadSocketEnvFiles, parseSocketEnv } from "./src/lib/env"
 import { createSocketServer } from "./src/server"
 
 // Entry point do mini-service Socket.io (plano T066, ADR-007).
 // Dev: `bun run dev:ws` (tsx socket-service/index.ts).
 
 async function main(): Promise<void> {
+  // Em produção as env vars vêm do orquestrador; carregar arquivos .env do
+  // cwd seria um vetor de injeção de config (ex.: JWT_PUBLIC_KEY forjado).
+  if (process.env.NODE_ENV !== "production") {
+    loadSocketEnvFiles(process.cwd())
+  }
   const env = parseSocketEnv(process.env)
   const handle = await createSocketServer({ env })
   const address = handle.httpServer.address()

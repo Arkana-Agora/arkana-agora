@@ -11,7 +11,7 @@ interface DrawnCardState {
   isReversed: boolean
 }
 
-export type SessionStep = "deck" | "spread" | "draw" | "reveal"
+export type SessionStep = "deck" | "spread" | "question" | "draw" | "reveal"
 
 interface ReadingState {
   deckId: DeckId | null
@@ -21,11 +21,14 @@ interface ReadingState {
   selectedCardIndex: number | null
   flippedCards: number[]
   createdReadingId: string | null
+  question: string
 }
 
 interface ReadingActions {
   selectDeck: (deckId: DeckId) => void
   selectSpread: (spreadId: string) => void
+  setQuestion: (question: string) => void
+  startDraw: () => void
   setCards: (cards: DrawnCardState[]) => void
   setCreatedReadingId: (id: string | null) => void
   selectCard: (index: number | null) => void
@@ -41,6 +44,7 @@ const initialState: ReadingState = {
   selectedCardIndex: null,
   flippedCards: [],
   createdReadingId: null,
+  question: "",
 }
 
 export const useReadingStore = create<ReadingState & ReadingActions>()(
@@ -50,7 +54,11 @@ export const useReadingStore = create<ReadingState & ReadingActions>()(
 
       selectDeck: (deckId) => set({ deckId, step: "spread" }),
 
-      selectSpread: (spreadId) => set({ spreadId, step: "draw" }),
+      selectSpread: (spreadId) => set({ spreadId, step: "question" }),
+
+      setQuestion: (question) => set({ question }),
+
+      startDraw: () => set({ step: "draw" }),
 
       setCards: (cards) => set({ cards, step: "reveal" }),
 
@@ -77,10 +85,13 @@ export const useReadingStore = create<ReadingState & ReadingActions>()(
         deckId: state.deckId,
         spreadId: state.spreadId,
         cards: state.cards,
-        step: state.step === "draw" ? "spread" : state.step,
+        // "draw" é transiente (auto-run) → persiste como "question" para o
+        // reload não re-disparar o sorteio sem o usuário confirmar.
+        step: state.step === "draw" ? "question" : state.step,
         selectedCardIndex: state.selectedCardIndex,
         flippedCards: state.flippedCards,
         createdReadingId: state.createdReadingId,
+        question: state.question,
       }),
     },
   ),

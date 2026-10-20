@@ -324,6 +324,14 @@ describe("polling/comments - filtro de autor (revisao R)", () => {
       deletedAt: null,
     })
   })
+
+  it("oculta coment�rios com conte�do [removido] (soft-delete) no fallback", async () => {
+    authOk()
+    const res = await callGet("comments")
+    expect(res.status).toBe(200)
+    const args = prismaMock.comment.findMany.mock.calls[0]![0]!
+    expect(args.where.content).toEqual({ not: "[removido]" })
+  })
 })
 
 describe("serverTime no envelope (revisao S)", () => {

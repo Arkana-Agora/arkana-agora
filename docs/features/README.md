@@ -11,6 +11,7 @@ Each frontend feature gets a doc file here, e.g. `docs/features/<feature-name>.m
 | Feature | Doc | Status |
 |---|---|---|
 | Authentication | [authentication.md](./authentication.md) | ✅ Implemented (Módulo 1 — Sprint 1) |
+| Social | [social.md](./social.md) | ✅ Implemented (Sprint 2 — feed/comentários/likes/notificações + realtime) |
 
 ## Conventions
 

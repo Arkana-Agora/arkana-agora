@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { REMOVED_COMMENT_CONTENT } from "@/lib/social/comments"
 
 /**
  * Schemas Zod das rotas sociais (T051/T064).
@@ -14,6 +15,10 @@ export const MAX_CONTENT_BY_TYPE = {
 } as const
 
 export const MAX_POST_IMAGES = 4
+
+// Comentários (T077/RF-SOC-005): 1–300 caracteres, aninhamento de 1 nível
+// (o nível é validado na rota — precisa consultar o parent no banco).
+export const MAX_COMMENT_CONTENT = 300
 
 // Ext canônico por MIME (image/jpeg → jpg) — single source do presign de
 // imagens de post (T064): o cliente e as rotas usam este mapa.
@@ -128,3 +133,59 @@ export const postImagesPresignSchema = z
   .strict()
 
 export type PostImagesPresignInput = z.infer<typeof postImagesPresignSchema>
+
+/**
+ * Criação de comentário (T077/RF-SOC-005): `content` 1–300 chars
+ * (`parentCommentId` opcional — existência/post/nível-1 são checados na
+ * rota com o mesmo 422 uniforme, anti-enumeration).
+ */
+/**
+ * Refine de `content` de comentário, compartilhado por criação e edição
+ * (T077/T079). Além do limite 1–300, rejeita o sentinel de soft delete
+ * (`[removido]`) — reservado à rota DELETE (T080); um usuário não pode
+ * fabricar a própria remoção.
+ */
+const commentContentRefine = (
+  value: { content: string },
+  ctx: z.RefinementCtx,
+) => {
+  if (value.content.trim().length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["content"],
+      message: "Conteudo obrigatorio",
+    })
+  }
+  if (value.content.length > MAX_COMMENT_CONTENT) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["content"],
+      message: `Maximo ${MAX_COMMENT_CONTENT} caracteres`,
+    })
+  }
+  if (value.content === REMOVED_COMMENT_CONTENT) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["content"],
+      message: "Conteudo reservado",
+    })
+  }
+}
+
+export const createCommentSchema = z
+  .object({
+    content: z.string(),
+    parentCommentId: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine(commentContentRefine)
+
+export type CreateCommentInput = z.infer<typeof createCommentSchema>
+
+/** Edição de comentário (T079): mesmo limite, janela de 15min na rota. */
+export const updateCommentSchema = z
+  .object({ content: z.string() })
+  .strict()
+  .superRefine(commentContentRefine)
+
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>

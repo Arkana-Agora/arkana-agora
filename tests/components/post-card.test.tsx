@@ -7,14 +7,23 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import type { ReactNode } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 vi.mock("next-auth/react", () => ({
   getSession: vi.fn().mockResolvedValue(null),
   useSession: vi.fn(() => ({ data: null })),
 }))
 
+const getMock = vi.hoisted(() => vi.fn())
+const postMock = vi.hoisted(() => vi.fn())
+
+vi.mock("@/lib/api", () => ({ default: { get: getMock, post: postMock } }))
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }))
+
 import { PostCard } from "@/components/social/post-card"
 import type { FeedPost } from "@/hooks/use-feed"
+import { useSocialStore } from "@/stores/social-store"
 
 function makePost(overrides: Record<string, unknown> = {}): FeedPost {
   return {
@@ -46,6 +55,13 @@ function makePost(overrides: Record<string, unknown> = {}): FeedPost {
 beforeEach(() => {
   cleanup()
   vi.clearAllMocks()
+  useSocialStore.setState(useSocialStore.getInitialState())
+  getMock.mockResolvedValue({
+    data: { data: [], pagination: { nextCursor: null } },
+  })
+  postMock.mockResolvedValue({
+    data: { data: { liked: true, likeCount: 4 } },
+  })
 })
 
 afterEach(() => {
@@ -185,5 +201,158 @@ describe("PostCard — base de imagens NEXT_PUBLIC_R2_PUBLIC_URL", () => {
       imageUrls: ["https://cdn.example.com/x.jpg"],
     })
     expect(srcs).toContain("https://cdn.example.com/x.jpg")
+  })
+})
+
+describe("PostCard — like e comentários ligados (T085, T076/T077)", () => {
+  function createWrapper() {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      )
+    }
+  }
+
+  it("curtir otimiza no SocialStore e reconcilia com o servidor", async () => {
+    render(<PostCard post={makePost()} />)
+
+    const likeButton = screen.getByRole("button", {
+      name: /Curtir, 3 curtidas/,
+    })
+    fireEvent.click(likeButton)
+
+    // otimista: contador 3 → 4 antes da resposta
+    expect(
+      screen.getByRole("button", { name: /Curtir, 4 curtidas/ }),
+    ).toBeDefined()
+    expect(
+      screen
+        .getByRole("button", { name: /Curtir, 4 curtidas/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true")
+    expect(postMock).toHaveBeenCalledWith("/social/posts/p1/like")
+    expect(useSocialStore.getState().postLikes["p1"]).toEqual({
+      liked: true,
+      likeCount: 4,
+    })
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+  })
+
+  it("falha no like reverte o overlay e mostra toast", async () => {
+    postMock.mockRejectedValue(new Error("offline"))
+    const { toast: toastMock } = await import("sonner")
+
+    render(<PostCard post={makePost()} />)
+    fireEvent.click(screen.getByRole("button", { name: /Curtir, 3 curtidas/ }))
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled())
+    expect(
+      screen.getByRole("button", { name: /Curtir, 3 curtidas/ }),
+    ).toBeDefined()
+    expect(useSocialStore.getState().postLikes["p1"]).toEqual({
+      liked: false,
+      likeCount: 3,
+    })
+  })
+
+  it("botão Comentar alterna a CommentSection", async () => {
+    render(<PostCard post={makePost()} />, { wrapper: createWrapper() })
+
+    expect(screen.queryByPlaceholderText(/comentario/)).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: /Comentar, 1/ }))
+    expect(await screen.findByPlaceholderText(/comentario/)).toBeDefined()
+    expect(getMock).toHaveBeenCalledWith(
+      "/social/posts/p1/comments",
+      expect.anything(),
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Comentar, 1/ }))
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText(/comentario/)).toBeNull(),
+    )
+  })
+
+  it("post com commentsDisabled mantém o botão inerte", async () => {
+    render(<PostCard post={makePost({ commentsDisabled: true })} />, {
+      wrapper: createWrapper(),
+    })
+
+    const button = screen.getByRole("button", { name: /Comentar, 1/ })
+    expect(button.getAttribute("aria-disabled")).toBe("true")
+
+    fireEvent.click(button)
+    expect(screen.queryByPlaceholderText(/comentario/)).toBeNull()
+    expect(getMock).not.toHaveBeenCalled()
+  })
+
+  it("liked já vem do servidor (viewerHasLiked) — não parte de false (R6)", () => {
+    render(<PostCard post={makePost({ viewerHasLiked: true })} />)
+
+    expect(
+      screen
+        .getByRole("button", { name: /Curtir, 3 curtidas/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true")
+  })
+
+  it("sem viewerHasLiked o liked cai em false (compatibilidade)", () => {
+    render(<PostCard post={makePost()} />)
+
+    expect(
+      screen
+        .getByRole("button", { name: /Curtir, 3 curtidas/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("false")
+  })
+
+  it("overlay otimista continua vencendo o valor do servidor", () => {
+    useSocialStore.setState({
+      postLikes: { p1: { liked: false, likeCount: 3 } },
+    })
+
+    render(<PostCard post={makePost({ viewerHasLiked: true })} />)
+
+    expect(
+      screen
+        .getByRole("button", { name: /Curtir, 3 curtidas/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("false")
+  })
+
+  it("descurte quando já havia sido curtido neste ciclo", async () => {
+    postMock.mockResolvedValueOnce({
+      data: { data: { liked: true, likeCount: 4 } },
+    })
+    postMock.mockResolvedValueOnce({
+      data: { data: { liked: false, likeCount: 3 } },
+    })
+    render(<PostCard post={makePost()} />)
+
+    const button = screen.getByRole("button", { name: /Curtir, 3 curtidas/ })
+    fireEvent.click(button)
+    expect(
+      screen.getByRole("button", { name: /Curtir, 4 curtidas/ }),
+    ).toBeDefined()
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole("button", { name: /Curtir, 4 curtidas/ }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2))
+    expect(
+      await screen.findByRole("button", { name: /Curtir, 3 curtidas/ }),
+    ).toBeDefined()
+    expect(useSocialStore.getState().postLikes["p1"]).toEqual({
+      liked: false,
+      likeCount: 3,
+    })
   })
 })

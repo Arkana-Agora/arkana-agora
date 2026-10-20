@@ -85,17 +85,49 @@
 ```typescript
 // src/lib/ai/client.ts
 
-import OpenAI from 'openai'
-
-export function getAIClient(): AIClient {
+export function resolveAIClientConfig() {
   const apiKey = process.env.AI_API_KEY
   if (!apiKey) throw new Error('AI_API_KEY environment variable is required')
-  return new OpenAI({ apiKey }) as AIClient
+  // Endpoint OpenAI-compatível opcional (ex.: z.ai/GLM). Ausente => OpenAI.
+  const baseURL = process.env.AI_BASE_URL?.trim()
+  if (!baseURL) return { apiKey }
+  // Como o SDK envia `Authorization: Bearer <AI_API_KEY>` para a baseURL,
+  // exige http(s) — e https em produção (evita a chave em claro).
+  const url = new URL(baseURL) // lança se não for URL válida
+  if (!['http:', 'https:'].includes(url.protocol))
+    throw new Error('AI_BASE_URL must use the http or https protocol')
+  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:')
+    throw new Error('AI_BASE_URL must use https in production')
+  return { apiKey, baseURL }
+}
+
+export function getAIClient(): AIClient {
+  return new OpenAI(resolveAIClientConfig()) as AIClient
 }
 
 // Modelos: AI_MODEL (interpretacoes) e AI_MODEL_FOLLOWUP (follow-ups)
 // src/lib/ai/models.ts → getInterpretationModel() / getFollowUpModel()
 ```
+
+### Endpoint OpenAI-compatível (`AI_BASE_URL`)
+
+O SDK permanece `openai` (ADR-012). `AI_BASE_URL` permite apontar o **mesmo**
+SDK para qualquer endpoint compatível com a API OpenAI (ex.: z.ai/GLM,
+`https://api.z.ai/api/paas/v4`) sem trocar de SDK nem de contrato de código.
+
+| `AI_BASE_URL` | Efeito |
+|---------------|--------|
+| Ausente / vazio (`""` ou espaços) | SDK usa o endpoint padrão da OpenAI |
+| Definido (ex.: `https://api.z.ai/api/paas/v4`) | Todas as chamadas (`interpret`, `follow-up`, horóscopo) vão para o endpoint informado |
+
+**Validação** (`resolveAIClientConfig`): `AI_BASE_URL` precisa ser uma URL `http(s)`; em produção exige-se `https` — a `AI_API_KEY` é enviada no header `Authorization` para esse host, então http em claro é rejeitado. `AI_BASE_URL` é confiada ao operador (env var server-side, nunca `NEXT_PUBLIC_*`). Erros: `AI_BASE_URL must be a valid URL`, `... must use the http or https protocol`, `... must use https in production`.
+
+- Aplica-se ao **client único** (`getAIClient`), portanto vale para todas as
+  features que usam o SDK: interpretação de tiragem/arcano, follow-up e horóscopo.
+- `AI_MODEL` / `AI_MODEL_FOLLOWUP` continuam sendo apenas **nomes de modelo**
+  enviados ao endpoint — ao usar um provider alternativo, defina nomes suportados
+  por ele (ex.: `glm-4-plus`).
+- Env var server-side (não `NEXT_PUBLIC_*`); nunca inclua credenciais no client.
 
 ---
 
@@ -199,6 +231,9 @@ O provedor deve atender:
 # ===== AI (openai SDK — src/lib/ai/client.ts) =====
 
 AI_API_KEY=sk-proj-abc123...
+# Endpoint OpenAI-compatível opcional (ex.: https://api.z.ai/api/paas/v4).
+# Ausente/vazio => OpenAI. Mantém o SDK openai (ADR-012).
+AI_BASE_URL=
 # Modelo para interpretacoes completas (tarot/arcano)
 AI_MODEL=gpt-4o
 # Modelo para follow-ups conversacionais (mais rapido/economico)
@@ -224,6 +259,7 @@ AI_CACHE_REDIS_URL=redis://localhost:6379
 
 ```env
 AI_API_KEY=...
+AI_BASE_URL=
 AI_MODEL=gpt-4o
 AI_MODEL_FOLLOWUP=gpt-4o-mini
 ```

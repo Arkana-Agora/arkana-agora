@@ -23,16 +23,21 @@ export function sanitizeInput(input: string): string {
 
 interface PromptCard {
   position: string
+  positionDescription?: string
   cardName: string
   cardNumber: number
   isReversed: boolean
   meaning: string
+  keywords?: string[]
+  advice?: string
 }
 
 interface UserPromptInput {
   userName: string
   deckName: string
+  deckDescription?: string
   spreadName: string
+  spreadDescription?: string
   cards: PromptCard[]
   mode: InterpretationMode
   mood?: string
@@ -72,6 +77,10 @@ export function buildUserPrompt(input: UserPromptInput): string {
     lines.push("", `Estado emocional: ${safeMood}`)
   }
 
+  if (safeQuestion && input.mode !== "yesno") {
+    lines.push("", `Pergunta do consultante: "${safeQuestion}"`)
+  }
+
   if (input.zodiacSign) {
     lines.push(`Signo solar: ${input.zodiacSign}`)
   }
@@ -82,8 +91,12 @@ export function buildUserPrompt(input: UserPromptInput): string {
 
   lines.push(
     "",
-    `Baralho: ${input.deckName}`,
-    `Espalhamento: ${input.spreadName}`,
+    `Baralho: ${input.deckName}${
+      input.deckDescription ? ` — ${input.deckDescription}` : ""
+    }`,
+    `Espalhamento: ${input.spreadName}${
+      input.spreadDescription ? ` (${input.spreadDescription})` : ""
+    }`,
   )
   lines.push("", "CARTAS:")
 
@@ -91,8 +104,17 @@ export function buildUserPrompt(input: UserPromptInput): string {
     const reversed = card.isReversed ? " (invertida)" : ""
     lines.push(
       `${card.position}: ${card.cardName} (${card.cardNumber})${reversed}`,
-      `   Significado: ${card.meaning}`,
     )
+    if (card.positionDescription) {
+      lines.push(`   O que a posição significa: ${card.positionDescription}`)
+    }
+    lines.push(`   Significado: ${card.meaning}`)
+    if (card.keywords && card.keywords.length > 0) {
+      lines.push(`   Palavras-chave: ${card.keywords.join(", ")}`)
+    }
+    if (card.advice) {
+      lines.push(`   Conselho: ${card.advice}`)
+    }
   }
 
   if (input.mode === "yesno") {

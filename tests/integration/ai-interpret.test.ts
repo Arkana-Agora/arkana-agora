@@ -12,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     aIDailyUsage: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      updateMany: vi.fn(),
     },
     interpretation: {
       findUnique: vi.fn(),
@@ -40,6 +41,7 @@ const mockReadingFindUnique = vi.mocked(prisma.reading.findUnique)
 const mockUserFindUnique = vi.mocked(prisma.user.findUnique)
 const mockUsageFindUnique = vi.mocked(prisma.aIDailyUsage.findUnique)
 const mockUsageUpsert = vi.mocked(prisma.aIDailyUsage.upsert)
+const mockUsageUpdateMany = vi.mocked(prisma.aIDailyUsage.updateMany)
 const mockInterpretationFindUnique = vi.mocked(prisma.interpretation.findUnique)
 const mockInterpretationFindFirst = vi.mocked(prisma.interpretation.findFirst)
 const mockInterpretationCreate = vi.mocked(prisma.interpretation.create)
@@ -120,6 +122,34 @@ describe("POST /api/v1/ai/interpret", () => {
   it("returns 422 with invalid body", async () => {
     const res = await POST(makeRequest({}))
     expect(res.status).toBe(422)
+  })
+
+  it("rejeita mood acima de 50 chars (R7b) antes de consultar o banco", async () => {
+    const res = await POST(
+      makeRequest({
+        readingId: "rdg_1",
+        mode: "general",
+        mood: "x".repeat(51),
+      }),
+    )
+
+    expect(res.status).toBe(422)
+    expect((await res.json()).error.code).toBe("VALIDATION_ERROR")
+    expect(mockReadingFindUnique).not.toHaveBeenCalled()
+  })
+
+  it("aceita mood de ate 50 chars (o cap nao bloqueia o valor legitimo)", async () => {
+    mockReadingFindUnique.mockResolvedValue(null)
+
+    const res = await POST(
+      makeRequest({
+        readingId: "rdg_1",
+        mode: "general",
+        mood: "x".repeat(50),
+      }),
+    )
+
+    expect(res.status).not.toBe(422)
   })
 
   it("returns 404 when reading not found", async () => {
@@ -204,5 +234,106 @@ describe("POST /api/v1/ai/interpret", () => {
     }
 
     expect(mockInterpretationCreate).toHaveBeenCalled()
+  })
+
+  it("does not refund quota on successful generation", async () => {
+    mockReading()
+    mockAIClient(["Olá"])
+
+    const res = await POST(
+      makeRequest({ readingId: "reading-1", mode: "general" }),
+    )
+    await res.text()
+
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("quota devolvida quando a geracao falha (bug da tiragem)", () => {
+  it("returns 503 AI_SERVICE_UNAVAILABLE and does NOT increment quota when AI client cannot initialize", async () => {
+    mockReading()
+    mockGetAIClient.mockImplementation(() => {
+      throw new Error("AI_API_KEY environment variable is required")
+    })
+
+    const res = await POST(
+      makeRequest({ readingId: "reading-1", mode: "general" }),
+    )
+
+    expect(res.status).toBe(503)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe("AI_SERVICE_UNAVAILABLE")
+    expect(mockUsageUpsert).not.toHaveBeenCalled()
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("refunds interpretation quota when generation fails mid-stream", async () => {
+    mockReading()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockRejectedValue(new Error("provider boom")),
+        },
+      },
+    } as never)
+
+    const res = await POST(
+      makeRequest({ readingId: "reading-1", mode: "general" }),
+    )
+    expect(res.status).toBe(200)
+
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    expect(mockUsageUpsert).toHaveBeenCalled()
+    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1" }),
+        data: { interpretationCount: { decrement: 1 } },
+      }),
+    )
+  })
+
+  it("refunds interpretation quota when provider completes with zero content (empty completion)", async () => {
+    mockReading()
+    mockAIClient([])
+
+    const res = await POST(
+      makeRequest({ readingId: "reading-1", mode: "general" }),
+    )
+    const text = await res.text()
+
+    expect(text).toContain('"type":"error"')
+    expect(text).toContain('"retryable":true')
+    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1" }),
+        data: { interpretationCount: { decrement: 1 } },
+      }),
+    )
+    expect(mockInterpretationCreate).not.toHaveBeenCalled()
+  })
+
+  it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {
+    mockReading()
+    mockGetAIClient.mockReturnValue({
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(async function* () {
+            yield { choices: [{ delta: { content: "parcial" } }] }
+            throw new Error("provider boom after delivery")
+          }),
+        },
+      },
+    } as never)
+
+    const res = await POST(
+      makeRequest({ readingId: "reading-1", mode: "general" }),
+    )
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+
+    expect(mockUsageUpsert).toHaveBeenCalled()
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 })

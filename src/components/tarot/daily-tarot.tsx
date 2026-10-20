@@ -2,10 +2,19 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { getDailyTarotCard, type DailyTarotCard } from "@/lib/tarot/daily"
+import { DeckImage } from "@/components/tarot/deck-image"
+import { CardBack } from "@/components/tarot/card-back"
+import {
+  getDailyTarotCard,
+  DEFAULT_DECK_ID,
+  type DailyTarotCard,
+} from "@/lib/tarot/daily"
+import { getDeckById } from "@/lib/tarot/decks"
+import { useSequentialReveal } from "@/hooks/use-sequential-reveal"
+import { motion } from "framer-motion"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Moon, RefreshCw, Star, Sun } from "lucide-react"
+import { RefreshCw, Star, Sun } from "lucide-react"
 import { useMemo, useState, useSyncExternalStore } from "react"
 
 let cachedNow = ""
@@ -22,6 +31,11 @@ function getServerDateSnapshot(): string {
 }
 
 function subscribeDate(callback: () => void) {
+  // cachedNow é module-level: entre navegações pode ficar obsoleto (nenhuma
+  // instância montada). Refresca no subscribe e força o snapshot pós-subscribe
+  // do useSyncExternalStore a corrigir a data (evita mostrar o arcano de ontem).
+  cachedNow = new Date().toISOString()
+  callback()
   const id = window.setInterval(() => {
     cachedNow = new Date().toISOString()
     callback()
@@ -52,6 +66,20 @@ export function DailyTarot() {
       return null
     }
   }, [date])
+
+  // BR-TIR-003 no cartao do dia: a unica carta e revelada apos 1.5s (mesmo
+  // intervalo das tiragens), sem pular. Chaveado por id — troca de dia reabre.
+  const [revealedCardId, setRevealedCardId] = useState<string | null>(null)
+  const deckBackImageUrl = getDeckById(DEFAULT_DECK_ID)?.cardBackImageUrl
+  useSequentialReveal({
+    count: dailyCard ? 1 : 0,
+    enabled: !!dailyCard && revealedCardId !== dailyCard.id,
+    intervalMs: 1500,
+    onReveal: () => {
+      if (dailyCard) setRevealedCardId(dailyCard.id)
+    },
+  })
+  const revealed = !!dailyCard && revealedCardId === dailyCard.id
 
   if (!date) {
     return (
@@ -92,29 +120,68 @@ export function DailyTarot() {
       {dailyCard ? (
         <Card className="max-w-xs mx-auto">
           <CardContent className="p-6 text-center">
-            <div className="relative aspect-[3/4] w-full max-w-xs mx-auto mb-4 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Moon
-                  className="h-16 w-16 text-primary/60"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="absolute bottom-4 left-4 right-4 flex justify-between text-xs text-primary-foreground/70">
-                <span>Arcano do Dia</span>
-                <span>
-                  <Star className="h-3 w-3 inline mr-1" aria-hidden="true" />
-                  {dailyCard.name}
-                </span>
-              </div>
-            </div>
-            <h3 className="text-lg font-semibold mt-4">{dailyCard.name}</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              {dailyCard.isReversed
-                ? dailyCard.reversedMeaning
-                : dailyCard.meaning}
-            </p>
-            {dailyCard.isReversed && (
-              <p className="text-xs text-muted-foreground mt-2">(Invertida)</p>
+            {!revealed ? (
+              <motion.div
+                key="verso"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="relative mx-auto mb-4 aspect-[3/4] w-full max-w-xs overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-br from-primary/20 to-primary/10"
+              >
+                <CardBack backImageUrl={deckBackImageUrl} />
+                <div
+                  className="absolute inset-x-0 bottom-4 text-center text-xs text-primary-foreground/70"
+                  aria-live="polite"
+                >
+                  Virando a carta…
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                <motion.div
+                  key="face"
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  className="relative mx-auto mb-4 aspect-[3/4] w-full max-w-xs overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-br from-primary/20 to-primary/10"
+                >
+                  <div className="absolute inset-0">
+                    <DeckImage
+                      src={dailyCard.image}
+                      alt={`Carta: ${dailyCard.name}`}
+                      fallbackLabel={dailyCard.name}
+                      fill
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4 flex justify-between text-xs text-white">
+                    <span>Arcano do Dia</span>
+                    <span>
+                      <Star
+                        className="mr-1 inline h-3 w-3"
+                        aria-hidden="true"
+                      />
+                      {dailyCard.name}
+                    </span>
+                  </div>
+                </motion.div>
+
+                <div aria-live="polite">
+                  <h3 className="mt-4 text-lg font-semibold">
+                    {dailyCard.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {dailyCard.isReversed
+                      ? dailyCard.reversedMeaning
+                      : dailyCard.meaning}
+                  </p>
+                  {dailyCard.isReversed && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      (Invertida)
+                    </p>
+                  )}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

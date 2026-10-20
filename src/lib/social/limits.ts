@@ -30,7 +30,14 @@ export interface LimitCheck {
 }
 
 export type SocialLimit =
-  "post" | "like" | "comment" | "follow" | "gift" | "upload" | "polling"
+  | "post"
+  | "like"
+  | "comment"
+  | "follow"
+  | "gift"
+  | "upload"
+  | "polling"
+  | "notification"
 
 const WINDOW_MS: Record<SocialLimit, number> = {
   post: DAY,
@@ -43,6 +50,9 @@ const WINDOW_MS: Record<SocialLimit, number> = {
   // usuário (janela compartilhada entre as 4 rotas) cobre ~2 abas com
   // margem e pune flood.
   polling: MINUTE,
+  // Revisão R7a: PATCH :id/read + PATCH read-all sem nenhum bucket antes —
+  // janela compartilhada entre as duas rotas, espelho do `polling`.
+  notification: MINUTE,
 }
 
 const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
@@ -52,6 +62,7 @@ const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
   gift: 10,
   upload: 20,
   polling: 60,
+  notification: 60,
 }
 
 export const POST_LIMIT_BY_TIER: Record<UserPlan, number> = {

@@ -12,7 +12,9 @@ import { z } from "zod"
 
 import authApi from "@/lib/api"
 import { useSocket } from "@/hooks/use-socket"
+import { POLLING_DEFAULT_SINCE_MS } from "@/lib/social/polling-window"
 import type { CreatePostInput } from "@/lib/validators/social"
+import { useSocialStore } from "@/stores/social-store"
 
 const feedAuthorSchema = z
   .object({
@@ -45,6 +47,13 @@ export const feedPostSchema = z
     createdAt: z.string().datetime(),
     updatedAt: z.string().optional(),
     author: feedAuthorSchema,
+    /**
+     * Revsao R6: o `liked` era derivado SÓ no client (partia de `false` e o
+     * servidor nunca dizia). O GET /social/feed o envia por post; opcional
+     * porque outros endpoints que reaproveitam este schema (polling,
+     * trending, criar post) ainda nao o emitem.
+     */
+    viewerHasLiked: z.boolean().optional(),
   })
   .passthrough()
 
@@ -211,20 +220,36 @@ function advanceSinceCursor(requestedAt: string, serverTime?: string): string {
  * que chegaram por evento viram pill "N novos posts" via
  * `emitPendingPost` (dedup por id acontece na fila, `useFeed`). Falha
  * offline: janela preservada para retry e falha engolida (sem crash).
+ *
+ * Também escuta `like-updated` (T076/T088) para reconciliar o overlay
+ * `postLikes` do SocialStore com o contador vindo do servidor — evita
+ * que o overlay otimista permaneça stale quando outros usuários curtam/
+ * descurtam.
  */
 export function useFeedRealtime(): void {
   const idsRef = useRef<Set<string>>(new Set())
-  const sinceRef = useRef<string>(new Date().toISOString())
+  // Ancoragem inicial de 5min (paridade com o INITIAL_CURSOR do use-socket),
+  // calculada no PRIMEIRO flush (não durante o render): o teste/usuário pode
+  // criar um post ANTES de o cliente hidratar e montar este hook — com
+  // `since` = instante da montagem esse post cai fora da janela do flush,
+  // a resposta volta vazia, `wanted` esvazia o lote e a pill "N novos
+  // posts" nunca nasce (sem retry: só falha re-agenda).
+  const sinceRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Revisão R1: o retry do catch re-agenda via ref (o flush não pode se
   // referenciar antes da própria declaração no useCallback)
   const flushRef = useRef<() => void>(() => undefined)
 
+  const updatePostLike = useSocialStore((state) => state.updatePostLike)
+  const updateCommentLike = useSocialStore((state) => state.updateCommentLike)
+
   const flush = useCallback(() => {
     timerRef.current = null
     const batch = idsRef.current
     idsRef.current = new Set()
-    const since = sinceRef.current
+    const since =
+      sinceRef.current ??
+      new Date(Date.now() - POLLING_DEFAULT_SINCE_MS).toISOString()
     const requestedAt = new Date().toISOString()
     void authApi
       .get("/social/polling/posts", { params: { since } })
@@ -268,6 +293,16 @@ export function useFeedRealtime(): void {
         timerRef.current = setTimeout(flush, FEED_REALTIME_BATCH_MS)
       }
     },
+    "like-updated": (event) => {
+      // Reconcilia o overlay otimista com o contador real do servidor
+      // event: { postId, newCount }
+      updatePostLike(event.postId, undefined, event.newCount)
+    },
+    "comment-like-updated": (event) => {
+      // Reconcilia o overlay de like de comentário
+      // event: { commentId, postId, newCount }
+      updateCommentLike(event.commentId, undefined, event.newCount)
+    },
   })
 
   useEffect(
@@ -293,6 +328,10 @@ export function useCreatePost() {
       return parsed.data.post
     },
     onSuccess: async () => {
+      // O refetch do feed volta com a verdade do servidor; o overlay otimista
+      // (`overlay ?? server`) a mascararia para sempre — limpa antes de
+      // invalidar para o refetch vencer.
+      useSocialStore.getState().clearPostOverlays()
       await queryClient.invalidateQueries({ queryKey: ["feed"] })
     },
   })

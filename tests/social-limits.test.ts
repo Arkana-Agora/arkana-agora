@@ -279,3 +279,39 @@ describe("checkSocialLimit polling (revisao O)", () => {
     )
   })
 })
+
+describe("checkSocialLimit notification (revisao R7a)", () => {
+  it("60/min com janela sliding e chave rl:notification", async () => {
+    const result = await checkSocialLimit("notification", "usr_1")
+
+    expect(result.allowed).toBe(true)
+    expect(result.max).toBe(60)
+    expect(evalArgsOfCall()[2]).toBe("rl:notification:usr_1")
+    expect(evalArgsOfCall()[6]).toBe("60")
+    expect(evalArgsOfCall()[7]).toBe("60000")
+  })
+
+  it("bloqueia acima de 60 no minuto (janela compartilhada entre as 2 rotas)", async () => {
+    redisMock.eval.mockResolvedValue(DENY(61, Date.now() - 1000))
+
+    const result = await checkSocialLimit("notification", "usr_1")
+
+    expect(result.allowed).toBe(false)
+    expect(result.remaining).toBe(0)
+  })
+
+  it("janela de minuto usa bypass logado sem Redis (fail-open, como polling)", async () => {
+    redisHolder.current = undefined
+
+    const result = await checkSocialLimit("notification", "usr_1")
+
+    expect(result.allowed).toBe(true)
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "redis_not_configured",
+        limit: "notification",
+      }),
+      "rate_limiter_bypass",
+    )
+  })
+})

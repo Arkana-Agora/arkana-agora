@@ -15,10 +15,12 @@ import { DailyLimitBanner } from "./daily-limit-banner"
 import { CardTable } from "./card-table"
 import { CardDetailPanel } from "./card-detail-panel"
 import { ShareModal } from "./share-modal"
+import { ReadingAIPanel } from "@/components/ai/reading-ai-panel"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorBoundary } from "@/components/error-boundary"
-import { getDeckCards } from "@/lib/tarot/decks"
+import { getDeckCards, getDeckById } from "@/lib/tarot/decks"
+import { useSequentialReveal } from "@/hooks/use-sequential-reveal"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { Spread } from "@/types/tarot"
@@ -78,8 +80,11 @@ export function ReadingSession({ className }: ReadingSessionProps) {
     cards,
     flippedCards,
     createdReadingId,
+    question,
     selectDeck,
     selectSpread,
+    setQuestion,
+    startDraw,
     setCards,
     setCreatedReadingId,
     setFlippedCard,
@@ -96,6 +101,11 @@ export function ReadingSession({ className }: ReadingSessionProps) {
   }, [createReading.mutateAsync])
 
   const [drawError, setDrawError] = useState<string | null>(null)
+  // Seed vinda do store: em reload mid-draw o partialize rehidrata
+  // step="question" + question persistida — o draft não pode começar vazio.
+  const [questionDraft, setQuestionDraft] = useState(
+    () => useReadingStore.getState().question,
+  )
   const [selectedDetail, setSelectedDetail] = useState<EnrichedCard | null>(
     null,
   )
@@ -106,9 +116,44 @@ export function ReadingSession({ className }: ReadingSessionProps) {
   const spread: Spread | undefined = spreads?.find((s) => s.id === spreadId)
   const enrichedCards = enrichCards(deckId, cards)
   const flippedSet = new Set(flippedCards)
+  // BR-TIR-003: o resumo cresce conforme cada carta e revelada.
+  const revealedCards = enrichedCards.filter((drawn) =>
+    flippedSet.has(drawn.positionIndex),
+  )
+  // VERSO do baralho (BR-TIR-002): a imagem de fundo da carta virada para
+  // baixo vem do baralho, nao de uma carta especifica.
+  const deckBackImageUrl = deckId
+    ? getDeckById(deckId)?.cardBackImageUrl
+    : undefined
+
+  // BR-TIR-003: revela uma a uma, na ordem do espalhamento, 1.5s por carta;
+  // o usuario pode adiantar clicando numa carta (a sequencia segue para as
+  // demais). `isRevealed` evita re-armar timers para cartas ja viradas.
+  useSequentialReveal({
+    count: enrichedCards.length,
+    enabled: step === "reveal",
+    intervalMs: 1500,
+    isRevealed: (index) => {
+      const card = enrichedCards[index]
+      if (!card) return false
+      return useReadingStore
+        .getState()
+        .flippedCards.includes(card.positionIndex)
+    },
+    onReveal: (index) => {
+      const card = enrichedCards[index]
+      if (!card) return
+      // setFlippedCard alterna — o reveal automatico so liga cartas ainda
+      // fechadas (um clique manual durante a sequencia nao pode desvirar).
+      if (useReadingStore.getState().flippedCards.includes(card.positionIndex))
+        return
+      setFlippedCard(card.positionIndex)
+    },
+  })
 
   const handleReset = useCallback(() => {
     drawSeqRef.current += 1
+    setQuestionDraft("")
     reset()
   }, [reset])
 
@@ -224,6 +269,53 @@ export function ReadingSession({ className }: ReadingSessionProps) {
           </section>
         )}
 
+        {step === "question" && (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold">Sua pergunta (opcional)</h2>
+            <p className="text-sm text-muted-foreground">
+              Escreva uma pergunta ou intenção para direcionar a leitura. Se
+              preferir, pule e comece o sorteio.
+            </p>
+            <label htmlFor="reading-question" className="sr-only">
+              Pergunta ou intencao
+            </label>
+            <textarea
+              id="reading-question"
+              maxLength={200}
+              rows={3}
+              value={questionDraft}
+              onChange={(e) => setQuestionDraft(e.target.value)}
+              placeholder="Ex: O que preciso saber sobre minha carreira agora?"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              {questionDraft.length}/200
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => {
+                  setQuestion(questionDraft.trim())
+                  startDraw()
+                }}
+              >
+                Sortear cartas
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setQuestion("")
+                  startDraw()
+                }}
+              >
+                Pular
+              </Button>
+              <Button variant="ghost" onClick={handleReset}>
+                Voltar
+              </Button>
+            </div>
+          </section>
+        )}
+
         {step === "draw" && (
           <section className="space-y-4" aria-live="polite">
             {createReading.isPending ? (
@@ -248,37 +340,90 @@ export function ReadingSession({ className }: ReadingSessionProps) {
           </section>
         )}
 
-        {step === "reveal" && spread && (
+        {step === "reveal" && (
           <section className="space-y-6">
-            <CardTable
-              spread={spread}
-              cards={enrichedCards}
-              onCardFlip={handleFlip}
-              flippedCards={flippedSet}
-            />
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Sua tiragem</h2>
+              <Button onClick={handleReset}>Nova tiragem</Button>
+            </div>
+            <div
+              data-testid="reveal-grid"
+              className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+            >
+              <div className="space-y-4">
+                {spread ? (
+                  <CardTable
+                    spread={spread}
+                    cards={enrichedCards}
+                    onCardFlip={handleFlip}
+                    flippedCards={flippedSet}
+                    backImageUrl={deckBackImageUrl}
+                  />
+                ) : (
+                  <Skeleton className="h-64 w-full rounded-lg" />
+                )}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (createdReadingId) {
-                    router.push(`/tiragem/${createdReadingId}`)
-                  }
-                }}
-                disabled={!createdReadingId}
-              >
-                Ver detalhes e interpretação
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShareOpen(true)}
-                disabled={!createdReadingId}
-              >
-                Compartilhar
-              </Button>
-              <Button variant="ghost" onClick={handleReset}>
-                Nova tiragem
-              </Button>
+                {/* Resumo textual das cartas ja reveladas (posicao +
+                    orientacao) para quem nao acompanha a revelacao visual. */}
+                {revealedCards.length > 0 && (
+                  <ul
+                    data-testid="drawn-cards-summary"
+                    aria-label="Cartas tiradas"
+                    className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm"
+                  >
+                    {revealedCards.map((drawn) => {
+                      const positionName =
+                        spread?.positions?.[drawn.positionIndex]?.name ??
+                        `Carta ${drawn.positionIndex + 1}`
+                      return (
+                        <li key={drawn.positionIndex}>
+                          <span className="text-muted-foreground">
+                            {positionName}:
+                          </span>{" "}
+                          <span className="font-medium">{drawn.card.name}</span>
+                          {drawn.isReversed && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              (invertida)
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (createdReadingId) {
+                        router.push(`/tiragem/${createdReadingId}`)
+                      }
+                    }}
+                    disabled={!createdReadingId}
+                  >
+                    Ver detalhes e interpretação
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShareOpen(true)}
+                    disabled={!createdReadingId}
+                  >
+                    Compartilhar
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                {createdReadingId && (
+                  <ReadingAIPanel
+                    readingId={createdReadingId}
+                    autoStart
+                    question={question}
+                  />
+                )}
+              </div>
             </div>
           </section>
         )}

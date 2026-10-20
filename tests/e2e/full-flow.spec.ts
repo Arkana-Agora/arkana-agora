@@ -68,7 +68,9 @@ test.describe("T118: full flow — register → login → profile → tiragem �
     const decks = await request.get(`${BASE_URL}/api/v1/decks`)
     expect(decks.status()).toBe(200)
 
-    const spreads = await request.get(`${BASE_URL}/api/v1/spreads?deckType=rws`)
+    const spreads = await request.get(
+      `${BASE_URL}/api/v1/spreads?deckType=tarot`,
+    )
     expect(spreads.status()).toBe(200)
 
     const create = await request.post(`${BASE_URL}/api/v1/readings`, {
@@ -138,8 +140,8 @@ test.describe("T118: full flow — register → login → profile → tiragem �
   }) => {
     await page.goto("/login")
     await page.getByLabel(/e-?mail/i).fill(TEST_EMAIL)
-    await page.getByLabel(/senha/i).fill(PASSWORD)
-    await page.getByRole("button", { name: /entrar|logar|login/i }).click()
+    await page.getByTestId("password").fill(PASSWORD)
+    await page.getByRole("button", { name: "Entrar", exact: true }).click()
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
 
     await expect(

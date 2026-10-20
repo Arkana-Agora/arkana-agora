@@ -2,12 +2,16 @@ import { z } from "zod"
 import { logger, newReqId } from "@/lib/logger"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { getAIClient } from "@/lib/ai/client"
 import { getFollowUpModel } from "@/lib/ai/models"
 import { withRetry } from "@/lib/ai/retry"
 import { getSystemPrompt } from "@/lib/ai/prompts/system"
 import { buildFollowUpPrompt } from "@/lib/ai/prompts/user"
 import { prisma } from "@/lib/prisma"
+import {
+  requireAIClient,
+  createQuotaReservation,
+  sseResponse,
+} from "@/app/api/v1/ai/_helpers"
 import {
   getFollowUpContext,
   checkAndIncrementFollowUpUsage,
@@ -47,11 +51,18 @@ export async function POST(request: Request): Promise<Response> {
 
   const { interpretationId, message } = parsed.data
 
+  const quota = createQuotaReservation(reqId, auth.userId, "followUp")
   try {
     const ctx = await getFollowUpContext(interpretationId, auth.userId)
     if ("error" in ctx) {
       return apiError(ctx.error, "Erro ao buscar dados", reqId, ctx.status)
     }
+
+    // Fail-fast: cliente IA inicia ANTES da quota — falha de
+    // configuração/provider não pode queimar mensagem do plano.
+    const aiClientOrResponse = requireAIClient(reqId, "ai/follow-up")
+    if (aiClientOrResponse instanceof Response) return aiClientOrResponse
+    const aiClient = aiClientOrResponse
 
     const limitResult = await checkAndIncrementFollowUpUsage(
       auth.userId,
@@ -69,6 +80,7 @@ export async function POST(request: Request): Promise<Response> {
         },
       )
     }
+    quota.markConsumed()
 
     const systemPrompt = getSystemPrompt(
       ctx.interpretation.mode as "general" | "love" | "career" | "yesno",
@@ -86,18 +98,20 @@ export async function POST(request: Request): Promise<Response> {
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       async start(controller) {
+        let userMessageId: string | null = null
+        let fullText = ""
         try {
-          await prisma.followUpMessage.create({
+          const userMessage = await prisma.followUpMessage.create({
             data: {
               interpretationId,
               role: "user",
               content: message,
             },
           })
+          userMessageId = userMessage.id
 
-          const client = getAIClient()
           const aiResponse = await withRetry(() =>
-            client.chat.completions.create({
+            aiClient.chat.completions.create({
               model: getFollowUpModel(),
               messages: [
                 { role: "system", content: systemPrompt },
@@ -109,7 +123,6 @@ export async function POST(request: Request): Promise<Response> {
             }),
           )
 
-          let fullText = ""
           for await (const chunk of aiResponse) {
             const token = chunk.choices[0]?.delta?.content ?? ""
             if (token) {
@@ -122,6 +135,32 @@ export async function POST(request: Request): Promise<Response> {
             }
           }
 
+          // Completion sem tokens é falha: mesmo tratamento do catch —
+          // compensa o turno do usuário persistido e devolve a quota,
+          // senão o histórico guarda uma mensagem da IA em branco.
+          if (fullText === "") {
+            if (userMessageId) {
+              try {
+                await prisma.followUpMessage.deleteMany({
+                  where: { id: userMessageId },
+                })
+              } catch (deleteErr) {
+                logger.error(
+                  { reqId, err: deleteErr },
+                  "[ai/follow-up] falha ao remover mensagem do usuario",
+                )
+              }
+            }
+            await quota.tryRefund("ai/follow-up")
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a resposta. Tente novamente.", retryable: true })}\n\n`,
+              ),
+            )
+            controller.close()
+            return
+          }
+
           await saveAssistantFollowUpMessage(interpretationId, fullText)
 
           controller.enqueue(
@@ -129,7 +168,30 @@ export async function POST(request: Request): Promise<Response> {
           )
           controller.close()
         } catch (error) {
-          logger.error({ reqId, error }, "[ai/follow-up] erro no streaming")
+          logger.error(
+            {
+              reqId,
+              err: error instanceof Error ? error : new Error(String(error)),
+            },
+            "[ai/follow-up] erro no streaming",
+          )
+          if (fullText === "") {
+            // Nada entregue: compensa a mensagem do usuário persistida
+            // (senão o retry duplica o turno no histórico) e devolve a quota.
+            if (userMessageId) {
+              try {
+                await prisma.followUpMessage.deleteMany({
+                  where: { id: userMessageId },
+                })
+              } catch (deleteErr) {
+                logger.error(
+                  { reqId, err: deleteErr },
+                  "[ai/follow-up] falha ao remover mensagem do usuario",
+                )
+              }
+            }
+            await quota.tryRefund("ai/follow-up")
+          }
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a resposta. Tente novamente.", retryable: true })}\n\n`,
@@ -140,17 +202,10 @@ export async function POST(request: Request): Promise<Response> {
       },
     })
 
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    })
+    return sseResponse(stream)
   } catch (err) {
     logger.error({ reqId, err }, "[ai/follow-up] erro interno")
+    await quota.tryRefund("ai/follow-up")
     return apiError("INTERNAL_ERROR", "Erro interno", reqId, 500)
   }
 }
