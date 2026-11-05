@@ -1,6 +1,6 @@
 # Documentation Maintenance — Pattern Registry
 
-> **Date**: 2026-09-10 | **Updated**: 2026-10-05
+> **Date**: 2026-09-10 | **Updated**: 2026-10-20
 > **Session**: Documentation refresh to align pattern registry with current state
 
 ## Context
@@ -133,14 +133,14 @@ This refresh ensures the pattern registry reflects all documented solutions in `
 |------------------|--------------|--------|
 | Security | 6 | 5 Current, 1 Pending (account lifecycle) |
 | Backend | 7 | 6 Current, 1 Pending (admin health) |
-| Frontend | 1 | 1 Current |
+| Frontend | 2 | 2 Current |
 | Observability | 2 | 2 Current |
 | CI/CD | 5 | 1 Current, 4 Resolved |
 | Operations | 1 | 1 Resolved |
 | Auth | 2 | 2 Current |
 | **Calculation/Determinism** | **2** | **2 Current** |
 | Testing | 1 | 1 Current |
-| **Total** | **27** | **20 Current, 2 Pending, 5 Resolved** |
+| **Total** | **28** | **21 Current, 2 Pending, 5 Resolved** |
 
 ## Related Changes
 
@@ -219,6 +219,13 @@ This refresh ensures the pattern registry reflects all documented solutions in `
     - **Problem**: `socket-service` keeps a **dual lock** (`bun.lock` dev path + `package-lock.json` Docker path). Editing `socket-service/package.json` without regenerating the npm lock (commit `7d8dc3d`) left the deps out of sync → CI `lockfile-sync` red **and** `npm ci --omit=dev` (Dockerfile) failed `EUSAGE ... Missing: dotenv@18.0.8 from lock file`
     - **Solution**: regenerate with `npm install --package-lock-only --ignore-scripts` in `socket-service/` (additive, no churn); guard is `tests/unit/lockfile-sync.test.ts`; fast local signal = `npm ci --dry-run` in `socket-service/` (`EUSAGE` = drift)
     - **Implemented**: `socket-service/package-lock.json` (+16 lines, `dotenv@18.0.8`); verified `npm ci --dry-run` EXIT=0 + `lockfile-sync` 4/4; contract in `docs/environments.md` / `docs/infrastructure.md`
+
+### New Patterns (2026-10-20)
+
+28. **`docs/solutions/patterns/frontend/keyed-remount-server-backed-forms.md`** (2026-10-20, Current)
+    - **Problem**: server-backed settings forms need to hydrate local state from a React Query `GET`, but `useEffect(() => { if (data) setForm(data) }, [data])` is an ERROR in this repo (`react-hooks/set-state-in-effect`, severity `error` via `eslint-plugin-react-hooks@7.1.1` recommended preset through `eslint-config-next/core-web-vitals`) — and it also flickers after paint and resets after user interaction
+    - **Solution**: split the component — parent queries and gates (`isLoading || !settings` → loading placeholder, `isError` → error card), child mounts **only with data** holding `useState(settings)` seeded from props, keyed by content: `key={JSON.stringify(settings)}` — identical refetch ⇒ same instance (local edits preserved), real change after `invalidateQueries` ⇒ remount with fresh server state; zero effects, zero setState-in-render
+    - **Implemented**: `src/components/horoscopes/notification-settings.tsx` (T103, Phase 4, RF-HORO-008), invalidation loop in `src/hooks/use-horoscopes.ts` (`useSaveHoroscopeNotificationSettings.onSuccess`), mounted from `src/app/(app)/perfil/own-profile.tsx`; tests `tests/components/notification-settings.test.tsx` (6 pass) — ⚠️ the `reflete estado salvo após invalidação` test is currently **non-discriminating** (passes with the `key` removed; strengthening documented as Planned Extension)
 
 ## Related Changes
 

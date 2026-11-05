@@ -3,13 +3,19 @@
 import { ProfileHeader } from "@/components/profile/profile-header"
 import { ProfileStats } from "@/components/profile/profile-stats"
 import { ProfileAstrology } from "@/components/profile/profile-astrology"
+import { ProfileHoroscopes } from "@/components/horoscopes/profile-horoscopes"
+import type { ProfileHoroscopeSigns } from "@/components/horoscopes/profile-horoscopes"
 import type { PublicProfile } from "@/hooks/use-profile"
 
 interface PublicProfileClientProps {
   profile: PublicProfile
+  horoscopeSigns: ProfileHoroscopeSigns | null
 }
 
-export function PublicProfileClient({ profile }: PublicProfileClientProps) {
+export function PublicProfileClient({
+  profile,
+  horoscopeSigns,
+}: PublicProfileClientProps) {
   return (
     <main className="max-w-2xl mx-auto p-4 space-y-6">
       <ProfileHeader profile={profile} />
@@ -19,6 +25,7 @@ export function PublicProfileClient({ profile }: PublicProfileClientProps) {
         personalArcana={profile.astrology?.personalArcana ?? null}
         kinMaya={profile.astrology?.kinMaya ?? null}
       />
+      <ProfileHoroscopes signs={horoscopeSigns} />
     </main>
   )
 }

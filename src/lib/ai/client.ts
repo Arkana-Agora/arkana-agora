@@ -15,16 +15,23 @@ export type AIStreamResponse = AsyncIterable<AIStreamChunk>
 export interface AIClient {
   chat: {
     completions: {
-      create(params: {
-        model: string
-        messages: AIChatMessage[]
-        stream: true
-        max_tokens?: number
-        temperature?: number
-        top_p?: number
-        presence_penalty?: number
-        frequency_penalty?: number
-      }): Promise<AIStreamResponse>
+      create(
+        params: {
+          model: string
+          messages: AIChatMessage[]
+          stream: true
+          max_tokens?: number
+          temperature?: number
+          top_p?: number
+          presence_penalty?: number
+          frequency_penalty?: number
+        },
+        options?: {
+          /** Abort do SDK openai-node (2º arg): cancela o stream quando o
+           * cliente desconecta (SSE) ou o job exige timeout (worker). */
+          signal?: AbortSignal
+        },
+      ): Promise<AIStreamResponse>
     }
   }
 }

@@ -3,6 +3,8 @@ import Redis from "ioredis"
 import { z } from "zod"
 
 import { getEnv } from "@/lib/env"
+import { logger } from "@/lib/logger"
+import { periodRowKey } from "@/lib/horoscopes/dates"
 import {
   HOROSCOPE_TYPES,
   PROMPT_PERIODS,
@@ -51,10 +53,12 @@ export function buildHoroscopeQueueOptions(): Omit<QueueOptions, "connection"> {
 export function buildHoroscopeJobOptions(
   job: HoroscopeGenerationJob,
 ): JobsOptions {
-  // jobId determinístico: cron T097 re-enfileira sem duplicar o mesmo dia
+  // jobId determinístico por ROW key: weekly/monthly compartilham a mesma
+  // row na semana/mês corrente — dedupir pela data plana enfileiraria
+  // jobs concorrentes para a mesma row a cada dia novo (review julik I1/I5).
   const element = job.element ? `${job.element}:` : ""
   return {
-    jobId: `${job.type}:${element}${job.signId}:${job.period}:${job.date}`,
+    jobId: `${job.type}:${element}${job.signId}:${job.period}:${periodRowKey(job.period, job.date)}`,
   }
 }
 
@@ -68,11 +72,22 @@ export function getHoroscopeQueue(): Queue<HoroscopeGenerationJob> {
         "REDIS_URL não configurado — fila horoscope-generation indisponível",
       )
     }
-    // BullMQ exige maxRetriesPerRequest: null na conexão dedicada
-    const connection = new Redis(redisUrl, { maxRetriesPerRequest: null })
+    // Producer (cron diário): conexão limitada — Redis fora do ar vira
+    // 500 rápido em vez de retry infinito (maxRetriesPerRequest: null é só
+    // para conexões blocking/worker; ver services/worker + horoscope-worker).
+    const connection = new Redis(redisUrl, {
+      maxRetriesPerRequest: 1,
+      commandTimeout: 5_000,
+      enableOfflineQueue: false,
+    })
     queue = new Queue<HoroscopeGenerationJob>(HOROSCOPE_QUEUE_NAME, {
       ...buildHoroscopeQueueOptions(),
       connection,
+    })
+    // Sem listener, evento 'error' da conexão vira exceção não tratada e
+    // derruba a invocação do cron no meio.
+    queue.on("error", (err) => {
+      logger.error({ err }, "[queue:horoscope] erro de conexao Redis")
     })
   }
   return queue

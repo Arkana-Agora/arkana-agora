@@ -3,6 +3,8 @@
 import { ProfileHeader } from "@/components/profile/profile-header"
 import { ProfileStats } from "@/components/profile/profile-stats"
 import { ProfileAstrology } from "@/components/profile/profile-astrology"
+import { MyProfileHoroscopes } from "@/components/horoscopes/profile-horoscopes"
+import { NotificationSettings } from "@/components/horoscopes/notification-settings"
 import { Button } from "@/components/ui/button"
 import type { PublicProfile } from "@/hooks/use-profile"
 import Link from "next/link"
@@ -23,6 +25,8 @@ export function OwnProfile({ profile }: OwnProfileProps) {
         personalArcana={profile.astrology?.personalArcana ?? null}
         kinMaya={profile.astrology?.kinMaya ?? null}
       />
+      <MyProfileHoroscopes />
+      <NotificationSettings />
 
       <section className="flex flex-wrap gap-2">
         <Button asChild>

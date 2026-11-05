@@ -1,6 +1,6 @@
 # Escalabilidade — arkana-agora
 
-> Versão: 1.0 | Última atualização: 2025-07-11
+> Versão: 1.1 | Última atualização: 2026-10-20
 
 ---
 
@@ -238,7 +238,7 @@ Usuário solicita leitura IA
   com progresso em tempo real
 ```
 
-> **Status (Sprint 2 Phase 0.5):** `bullmq` já está instalado e a primeira fila real existe — `src/lib/queue/horoscope-queue.ts` (enqueue/clean de geração de horóscopos; worker e cron são T098). O diagrama acima (API → queue → AI worker → SSE) continua **planejado**: não existe worker de IA nem stream SSE de leitura, e a rota `/api/v1/readings` segue síncrona.
+> **Status (Sprint 2 Phase 4):** `bullmq` está instalado e a fila real existe — `src/lib/queue/horoscope-queue.ts` (fila `horoscope-generation`, enqueue/clean de geração de horóscopos), e **o worker existe desde a Phase 4**: `services/worker/index.ts` → `startHoroscopeWorker()` (`src/jobs/horoscope-worker.ts`, T098), com o tick horário de notificações (T102) no mesmo processo (`bun run dev:worker`); a geração do dia é disparada pelo Vercel Cron diário `GET /api/cron/horoscope-generation` (07:00 UTC, `vercel.json`). O diagrama acima (API → queue → **AI worker** → SSE de leitura) continua **planejado** no que diz respeito a IA: a fila de hoje só consome geração de horóscopos, não existe worker de IA genérico nem stream SSE de leitura, e a rota `/api/v1/readings` segue síncrona.
 
 ### 5.2 Rate Limiting da IA
 

@@ -1,6 +1,6 @@
 # Arquitetura do Sistema — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-10-03
+> Versão: 1.2 | Última atualização: 2026-10-20
 
 ---
 
@@ -141,13 +141,13 @@ As rotas de API seguem o padrão RESTful:
 
 ### 2.3 Mini Services
 
-Serviços complementares que rodam em portas separadas:
+Serviços complementares que rodam em processos separados (o worker, sem porta HTTP):
 
 | Serviço | Porta | Tecnologia | Responsabilidade |
 |---------|-------|------------|-----------------|
 | **Socket.io Service** (`socket-service/`) | 3003 | `node:http` + Socket.io (Node.js) | Real-time: feed, notificações, presença — **implementado** (Phase 2.5, T066–T075; `bun run dev:ws`) |
 | **AI Service** (futuro) | 3004 | Node.js | Processamento assíncrono de leituras IA |
-| **Worker** (futuro) | 3005 | BullMQ | Jobs em background (horóscopos diários, emails) |
+| **Worker** (`services/worker/`, hoje na raiz do repo) | — (sem porta HTTP) | Node.js + BullMQ (`bullmq`) | Jobs em background — **implementado** (Sprint 2 Phase 4, T098/T102: worker BullMQ da fila `horoscope-generation` + tick horário de notificações de horóscopo; `bun run dev:worker`, produção PM2 planejada); emails ainda planejados. O design original previa porta 3005 — descartado (YAGNI: o processo não expõe HTTP) |
 
 ---
 

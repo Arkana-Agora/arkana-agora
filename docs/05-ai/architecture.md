@@ -193,7 +193,7 @@ const MODEL_ROUTES: ModelRoute[] = [
 
 ### Implementação (Server)
 
-> **Implementado**: `src/app/api/v1/ai/interpret/route.ts` (contrato SSE flat — `type: token|done|error`).
+> **Implementado**: `src/app/api/v1/ai/interpret/route.ts` (contrato SSE flat — `type: token|done|error`), com o mesmo contrato em `follow-up/route.ts`, `arcana-interpret/route.ts` e `horoscope-interpret/route.ts` (Phase 4, T101 — `src/lib/horoscopes/prompts.ts` para o prompt, sem `interpretationId` no `done`).
 > O snippet abaixo é **ilustrativo do design legado** (`/ai/reading/stream` — rota não existe);
 > use o route implementado como fonte de verdade.
 

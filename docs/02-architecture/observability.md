@@ -1,6 +1,6 @@
 # Observabilidade — arkana-agora
 
-> Versão: 1.2 | Última atualização: 2026-10-02
+> Versão: 1.3 | Última atualização: 2026-10-20
 
 ---
 
@@ -258,6 +258,17 @@ export function initAnalytics() {
 | `arcana_calculate` | `method` (date/name/combined), `arcanaNumber` | Arcano pessoal calculado |
 
 Gate: `analytics-consent === "true"` no localStorage (banner LGPD); sem consentimento, `track*` é no-op.
+
+**Telemetria de sistema no servidor — Implementado (T145, `src/lib/server-analytics.ts`):**
+
+| Função | Evento | `distinct_id` | Quando Disparado |
+|--------|--------|---------------|-----------------|
+| `trackServerEvent(name, props)` | nome genérico de servidor | `"system-cron"` | Qualquer evento de infra/cron |
+| `trackHoroscopeMissing(...)` | `horoscope_missing` (props do dia/tipo/período) | `"system-cron"` | `GET /api/cron/horoscope-availability` detecta geração ausente (`src/jobs/horoscope-availability-check.ts`) |
+
+- **Fora do gate de consentimento (CHK017)**: é evento de sistema sem PII/usuário identificável — o banner LGPD não se aplica.
+- No-op quando `NODE_ENV === "development"` ou sem `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`; **nunca lança** (o cron não pode falhar por analytics).
+- **Diferente** do client `src/lib/analytics.ts` (T115): não lê localStorage, não envia `person` e não é usuário. Server-side capture de eventos **de usuário** (PostHog-node) segue **pendente** (T136).
 
 **Planejado (não implementado — nomes aspiracionais):**
 

@@ -1,7 +1,7 @@
 # Social Module — Backend
 
 > Canonical backend documentation for the social domain (feed, posts, comments, likes, follows, notifications, explore/search, realtime fallback).
-> Last updated: 2026-10-19 (branch `sprint2-f3` — multi-agent review fixes C-1/C-2 + R1–R9, all TDD'd).
+> Last updated: 2026-10-20 (Sprint 2 Phase 4 — `notification` rate bucket gains a third consumer, `PATCH /api/v1/horoscopes/notifications/settings`; antes: 2026-10-19 sprint2-f3 review fixes).
 
 ## Purpose
 
@@ -68,7 +68,7 @@ Owns the entire in-app social network of Arkana Agora: following users, creating
 | `gift` | 10 | fixed UTC day | **bucket defined; no route consumes it yet** (POST /gifts = T120, planned); Prisma fallback counts `Gift` rows |
 | `upload` | 20 | fixed UTC day | **no backing table** — Redis only; Prisma fallback logs `rate_limiter_bypass` (decision S2-10) |
 | `polling` | 60 | sliding minute | **shared window across all 4 polling routes** (key `rl:polling:<userId>`) — covers ~2 tabs of 30s polling with margin |
-| `notification` | 60 | sliding minute | **shared window across `:id/read` + `read-all`** (review R7a — these two writes previously had no bucket) |
+| `notification` | 60 | sliding minute | **shared window across `:id/read` + `read-all`** (review R7a — these two writes previously had no bucket); since Sprint 2 Phase 4 the **same key `rl:notification:<userId>` also covers `PATCH /api/v1/horoscopes/notifications/settings`** (T103 — outside the social domain, so the effective ceiling for all three is 60/min) |
 
 Mechanics: atomic Lua sorted-set script (prune + count + add + TTL in one round-trip — no check-then-act race, review I3); daily buckets use a **fixed UTC day** (identical to the Prisma fallback window); fail-open when Redis is down/unconfigured with logged `rate_limiter_bypass` (daily `post`/`gift` fall back to Prisma counts first); attempt-vs-row semantics (Redis counts approved attempts, Prisma counts persisted rows — accepted divergence, arch INFO-3). Headers and the 429 body derive from `check.max` via `enforceSocialLimit` — never hardcode limits elsewhere.
 
@@ -163,7 +163,7 @@ Explicitly **not implemented** — do not document as done:
 - `read-all` has no UI button yet; polling fallback can burst up to 50 invalidations/refetches (pending badge unification, T132).
 - Upload-limit bypass when Redis is down is intentional (S2-10) — logged, not enforced.
 - Attempt-vs-row rate semantics can diverge for actions that fail after the check (accepted; documented in limits.ts).
-- `GET /social/notifications` has no dedicated rate bucket (reads unbucketed by rule; only the two writes are covered by `notification`).
+- `GET /social/notifications` has no dedicated rate bucket (reads unbucketed by rule; only the two writes are covered by `notification` — plus, since Phase 4, `PATCH /api/v1/horoscopes/notifications/settings` shares that same key).
 - Post images bytes are not revalidated at presign (Content-Length there measures the JSON); the 5MB guard is the `HeadObject` at creation — a large object uploaded and never posted lingers in R2 until lifecycle rules apply.
 
 ## Safe Change Checklist for Future AI Work

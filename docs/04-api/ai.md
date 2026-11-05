@@ -10,6 +10,7 @@
 - [POST /ai/follow-up](#post-aifollow-up) _(implementado)_
 - [GET /ai/usage](#get-aiusage) _(implementado)_
 - [POST /ai/arcana-interpret](#post-aiarcana-interpret) _(implementado)_
+- [POST /ai/horoscope-interpret](#post-aihoroscope-interpret) _(implementado)_
 - [POST /ai/reading](#post-aireading) _(planejado)_
 - [POST /ai/reading/stream](#post-aireadingstream) _(planejado)_
 - [GET /ai/models](#get-aimodels) _(planejado)_
@@ -28,6 +29,7 @@
 | `POST /api/v1/ai/follow-up` | **Implementado** (SSE) | `src/app/api/v1/ai/follow-up/route.ts` |
 | `GET /api/v1/ai/usage` | **Implementado** | `src/app/api/v1/ai/usage/route.ts` |
 | `POST /api/v1/ai/arcana-interpret` | **Implementado** (SSE) | `src/app/api/v1/ai/arcana-interpret/route.ts` |
+| `POST /api/v1/ai/horoscope-interpret` | **Implementado** (SSE — Phase 4, T101) | `src/app/api/v1/ai/horoscope-interpret/route.ts` |
 | `POST /ai/reading`, `/ai/reading/stream`, `/ai/chat`, `GET /ai/models` | **Planejados — não existem no repo** | — |
 
 ## Visão Geral
@@ -292,6 +294,58 @@ Content-Type: application/json
 `checkAndIncrementDailyUsage(userId, plan)` (`src/services/ai-service.ts`) **antes** de abrir o stream.
 
 Coberto por `tests/integration/arcana-interpret.test.ts` (caso `arcanaNumber: 22` aceito → 200 SSE).
+
+---
+
+## POST /ai/horoscope-interpret _(implementado)_
+
+Interpretação detalhada de horóscopo via IA (SSE) — RF-HORO-006/AC-17, **Sprint 2 Phase 4 (T101)**.
+
+> **Implementado** em `src/app/api/v1/ai/horoscope-interpret/route.ts` (`POST`, `requireAuth`, Zod,
+> quota via `checkDailyAILimit` (`src/lib/ai/rate-limit.ts`), SSE via `withRetry` +
+> `getInterpretationModel()`, `max_tokens: 4096`, `temperature: 0.7`).
+
+### Requisição
+
+```http
+POST /api/v1/ai/horoscope-interpret
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{ "type": "western", "signId": "aries", "period": "daily", "date": "2026-10-20" }
+```
+
+### Validação
+
+| Campo | Tipo | Regras |
+|-------|------|--------|
+| `type` | enum | `HOROSCOPE_TYPES` (`src/lib/horoscopes/prompts.ts`) |
+| `signId` | string | `min(1)` |
+| `element` | string? | nullish — desambigua as 5 rows do horóscopo **chinês**; ocidental omite |
+| `period` / `date` | — | `horoscopePeriodFields` + `refineHoroscopeDate` (`src/app/api/v1/horoscopes/_helpers.ts`): `date` é a key do `HoroscopeContent` (daily `YYYY-MM-DD`, weekly `YYYY-Www`, monthly `YYYY-MM`); ausente → data civil BRT do período |
+
+### Comportamento
+
+1. Ordem canônica: `requireAuth` → Zod (**422**) → `requireAIClient` (fail-fast **503 antes** de tocar na quota) → `checkDailyAILimit(userId, plan)` (**429 `AI_DAILY_LIMIT_REACHED`** com `remaining`/`totalLimit`) → `quota.markConsumed()`.
+2. **Compartilha o mesmo balde diário** de interpretações (`AIDailyUsage.interpretationCount`, limite FREE 10/dia) usado por `POST /ai/interpret` — consumir aqui também baixa o saldo do tarô.
+3. Base do prompt: row `HoroscopeContent` do período (`prisma.horoscopeContent.findFirst`, escrita pelo T093) validada por `horoscopeContentShape` (`src/lib/horoscopes/validation.ts`); sem row válida → `buildFallbackFor()` (`src/lib/horoscopes/fallback.ts`, T032). **Somente leitura** — a rota nunca grava conteúdo.
+4. Prompt: `buildHoroscopeInterpretationPrompt({type, signId, element, period, date, content, profileName})` (`src/lib/horoscopes/prompts.ts`).
+5. SSE: `token`* → `done` **sem `interpretationId`** (ao contrário do `/ai/interpret` — nada é persistido como interpretação). Completion vazia, erro de rede ou exceção no stream → `quota.tryRefund()` (one-shot) + evento `error` `AI_SERVICE_UNAVAILABLE` (`retryable: true`).
+
+### Erros
+
+| Status | Código | Descrição |
+|--------|--------|-----------|
+| 400 | `INVALID_BODY` | Corpo não-JSON |
+| 401 | `AUTH_TOKEN_*` / `UNAUTHORIZED` | Token ausente/inválido ou usuário não existe mais |
+| 422 | `VALIDATION_ERROR` | Zod (`type`/`signId`/`date` inválidos) |
+| 429 | `AI_DAILY_LIMIT_REACHED` | Cota diária de interpretações (`remaining`/`totalLimit`) |
+| 500 | `INTERNAL_ERROR` | Falha interna (quota devolvida) |
+| SSE | `AI_SERVICE_UNAVAILABLE` | Erro/completion vazia no stream (retryable; quota devolvida) |
+
+Coberto por `tests/integration/ai-horoscope-interpret.test.ts`.
 
 ---
 
@@ -608,12 +662,12 @@ Content-Type: application/json
 
 ## Formato SSE
 
-### Implementado (`POST /ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret`)
+### Implementado (`POST /ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret`, `/ai/horoscope-interpret`)
 
 Eventos flat (sem wrapper `payload`):
 
 ```jsonc
-// Token parcial (interpret / follow-up / arcana-interpret)
+// Token parcial (interpret / follow-up / arcana-interpret / horoscope-interpret)
 {"type": "token", "token": "Suas cartas revelam..."}
 
 // Conclusão do interpret — persistência ANTES do done; interpretationId para o painel de IA
@@ -729,7 +783,7 @@ recebeu:
 
 - **Fail-fast**: se o cliente de IA não está inicializado (ex.: `AI_API_KEY` ausente), a rota
   responde **503 `AI_SERVICE_UNAVAILABLE`** *antes* de consumir quota (`requireAIClient`
-  em `src/app/api/v1/ai/_helpers.ts`, usado nas rotas `interpret`, `arcana-interpret` e `follow-up`).
+  em `src/app/api/v1/ai/_helpers.ts`, usado nas rotas `interpret`, `arcana-interpret`, `follow-up` e `horoscope-interpret`).
 - **Devolução só sem entrega**: a rota chama `refundInterpretationQuota(userId)` /
   `refundFollowUpQuota(userId)` (`src/services/ai-service.ts` — decremento com guarda
   `gt: 0`) **apenas quando `fullText === ""`**, ou seja, nenhum token foi enfileirado
@@ -744,12 +798,12 @@ recebeu:
 - **Follow-up compensa a mensagem**: em falha sem entrega, a rota também **remove a
   mensagem do usuário** persistida no início do stream (`followUpMessage.deleteMany`
   pelo id capturado) — sem isso, o retry duplicaria o turno no histórico.
-- Rotas afetadas: `POST /ai/interpret`, `POST /ai/arcana-interpret`, `POST /ai/follow-up`.
+- Rotas afetadas: `POST /ai/interpret`, `POST /ai/arcana-interpret`, `POST /ai/follow-up`, `POST /ai/horoscope-interpret`.
 
 ### Fail-fast de billing (códigos não-retryable)
 
-As três rotas de IA envolvem a chamada OpenAI através de `withRetry` (`src/lib/ai/retry.ts`,
-usado nas rotas `interpret/route.ts`, `follow-up/route.ts` e `arcana-interpret/route.ts`).
+As quatro rotas de IA envolvem a chamada OpenAI através de `withRetry` (`src/lib/ai/retry.ts`,
+usado nas rotas `interpret/route.ts`, `follow-up/route.ts`, `arcana-interpret/route.ts` e `horoscope-interpret/route.ts`).
 Por padrão `withRetry` faz até **3 retries** com backoff exponencial (`baseDelayMs=1000` →
 esperas de 1s/2s/4s). Códigos de **falha de billing/quota** da OpenAI são tratados como
 **não-retryable** — retry apenas prolonga a falha:
@@ -761,7 +815,7 @@ esperas de 1s/2s/4s). Códigos de **falha de billing/quota** da OpenAI são trat
 
 - `extractErrorCode` (`retry.ts`) lê o código do erro OpenAI tanto do campo de **top-level** (`error.code`) quanto de um **objeto aninhado** (`error.error.code`), cobrindo as duas formas em que o SDK OpenAI pode expor o código.
 - `isRetryable` também trata `TypeError` (ex.: falha de rede antes de qualquer resposta HTTP) como não-retryable e honra a flag explícita `retryable: false` quando presente no objeto de erro.
-- Quando um código não-retryable é lançado, o erro propaga **imediatamente** do `withRetry` para o catch da rota (sem esperar os backoffs de 1s/2s/4s). A rota então emite o evento SSE de erro padrão — `{"type":"error","code":"AI_SERVICE_UNAVAILABLE","message":"...","retryable":true}` (código genérico hardcoded nos catches de `interpret`, `follow-up` e `arcana-interpret`; o código de billing da OpenAI **não** é exposto ao cliente). Como nenhum token foi entregue (`fullText === ""`), a quota reservada é devolvida (ver §Reserva e devolução de quota).
+- Quando um código não-retryable é lançado, o erro propaga **imediatamente** do `withRetry` para o catch da rota (sem esperar os backoffs de 1s/2s/4s). A rota então emite o evento SSE de erro padrão — `{"type":"error","code":"AI_SERVICE_UNAVAILABLE","message":"...","retryable":true}` (código genérico hardcoded nos catches de `interpret`, `follow-up`, `arcana-interpret` e `horoscope-interpret`; o código de billing da OpenAI **não** é exposto ao cliente). Como nenhum token foi entregue (`fullText === ""`), a quota reservada é devolvida (ver §Reserva e devolução de quota).
 
 > Testes: `tests/unit/ai-retry.test.ts` cobre os cenários de fail-fast para `credit_balance_exhausted` e `insufficient_quota`.
 

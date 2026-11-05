@@ -4,6 +4,7 @@ export type AppNavHref =
   | "/tirar"
   | "/minhas-tiragens"
   | "/meu-arcano"
+  | "/horoscopos/ocidental"
   | "/perfil"
 
 export function isAppNavActive(pathname: string, href: AppNavHref): boolean {
@@ -21,6 +22,8 @@ export function isAppNavActive(pathname: string, href: AppNavHref): boolean {
       )
     case "/meu-arcano":
       return pathname.startsWith("/meu-arcano")
+    case "/horoscopos/ocidental":
+      return pathname.startsWith("/horoscopos")
     case "/perfil":
       return pathname === "/perfil" || pathname.startsWith("/perfil/")
   }

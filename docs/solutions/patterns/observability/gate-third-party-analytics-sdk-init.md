@@ -98,6 +98,7 @@ Any posthog-js option whose feature lazy-loads a remote script must be set **loc
 - Re-grant (in `setAnalyticsConsent(true)`): `initAnalytics()` if `!initialized` → `posthog.opt_in_capturing({ captureEventName: false })` when `initialized` — clears a persisted opt-out **in place**, no reload, no `$opt_in` event; guarded by `initialized` so the dev/missing-key paths never call it.
 - **`resetUser()` is consent-aware on its own** — it re-asserts `opt_out_capturing()` after `posthog.reset()` whenever `localStorage["analytics-consent"] !== "true"`. This is what makes the **logout/delete path** safe: `logout()` and `deleteAccount()` (`src/stores/auth-store.ts`) call `resetUser()` directly, never `setAnalyticsConsent()`, and without the re-assert a logout would silently re-enable auto-capture for a user who had revoked consent.
 - The dev gate is **additive** — it never replaces or bypasses consent.
+- **Server-side capture is a separate path (T145, Sprint 2 Phase 4)**: `src/lib/server-analytics.ts` (`trackServerEvent`/`trackHoroscopeMissing`, PostHog-node, `distinct_id: "system-cron"`) posts system events **outside** this client gate — a cron/worker process has no browser `localStorage`, and the event carries no PII (LGPD review: `docs/07-security/lgpd.md`, "Fora do gate (T145)"). Two consequences for future work: (a) do **not** "fix" `server-analytics.ts` by trying to apply `hasConsent()`/`initAnalytics()` to it, and (b) do **not** read this pattern as "every PostHog capture is consent-gated" — user-bound server capture (PostHog-node per user, pending T136) will need its own server-side consent decision before it ships.
 
 ### 3.1 Consent-aware identity reset — the ordering contract
 
@@ -191,6 +192,7 @@ Also pin: revoke→re-grant captures without a second `init` (`init` called once
 ## Source of Truth Files
 
 - `src/lib/analytics.ts` — guard chain + init options (canonical)
+- `src/lib/server-analytics.ts` — server-side system events, deliberately outside this gate (T145)
 - `tests/analytics.test.ts` — env-branch and option assertions
 - `src/components/providers.tsx` — boot path via `initAnalyticsWithConsent()`
 - `src/components/analytics/consent-banner.tsx` — LGPD consent UI (calls `setAnalyticsConsent`)

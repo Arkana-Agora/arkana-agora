@@ -1,6 +1,6 @@
 # Estratégia de Monorepo — arkana-agora
 
-> Versão: 1.1 | Última atualização: 2026-10-02
+> Versão: 1.2 | Última atualização: 2026-10-20
 
 ---
 
@@ -25,6 +25,7 @@ arkana-agora/                   # Raiz do projeto (monolito)
 │   └── seed.ts                # Seed admin + test user (idempotente)
 ├── public/                    # Assets estáticos (vazio)
 ├── tests/                     # Testes (tests/health.test.ts, vitest)
+├── services/worker/           # Worker BullMQ + tick horário de notificações (Sprint 2 Phase 4, T098/T102): index.ts + env.ts; sem package.json próprio (usa tsconfig paths `@/*`); `bun run dev:worker`
 ├── package.json               # Scripts bun: dev, build, lint, type-check, test, seed
 ├── next.config.ts             # output: "standalone" só fora da Vercel (#96646) + serverExternalPackages
 ├── tsconfig.json
@@ -131,7 +132,7 @@ arkana-agora/
 │   │   │   └── rooms.ts       # Gerenciamento de salas
 │   │   └── package.json
 │   │
-│   └── worker/                # Jobs em background (futuro)
+│   └── worker/                # Jobs em background (hoje já existe como `services/worker/` na raiz desde a Phase 4 — 2026-10-20 — mover aqui na Fase 3)
 │       ├── src/
 │       │   ├── jobs/          # Definição de jobs
 │       │   │   ├── daily-horoscope.ts
@@ -279,7 +280,7 @@ pnpm changeset publish  # Publica pacotes no registry
 ### Fase 3: Microsserviços (Sprint 7-8)
 - [ ] Mover `socket-service/` da raiz para `services/socket-service/` (o serviço já existe na raiz desde a Phase 2.5 — 2026-10-02 — como `socket-service/`, não `ws-service`)
 - [ ] Criar `services/ai-service/` (separar lógica IA do web)
-- [ ] Criar `services/worker/` (jobs em background com BullMQ)
+- [x] Criar `services/worker/` (jobs em background com BullMQ) — **criado na raiz do repo na Sprint 2 Phase 4** (T098/T102: `services/worker/index.ts` = worker BullMQ `horoscope-generation` + tick horário `runHoroscopeNotifications()`; `services/worker/env.ts` dotenv `.env.local` > `.env`; script `dev:worker`). Falta apenas **mover** para `services/worker/` completo na Fase 3 (hoje sem `package.json` próprio — roda com os paths do app root)
 - [ ] Configurar Event Bus inter-service (Redis Pub/Sub) — o bus **dentro** do socket-service já existe (`socket-service/src/bus.ts`, canal `realtime:events`, Redis Pub/Sub ou EventEmitter in-process); falta o bus **entre serviços distintos** (feed → ai-service/worker)
 
 ### Fase 4: Admin e Expansão (Sprint 9+)

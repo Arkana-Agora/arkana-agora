@@ -2,7 +2,7 @@
 
 > Canonical architecture reference for the **arkana-agora** project.
 > Authoritative source of truth is the pt-BR SDD under `docs/`; this file is the English operational summary with concrete pointers to those pages.
-> Last updated: 2026-10-03.
+> Last updated: 2026-10-20.
 
 ## Implementation status (read first)
 
@@ -20,10 +20,10 @@ Arkana Agora is a Brazilian platform for Tarot, Lenormand (Baralho Cigano), nume
 
 - **Clients**: Browser (Next.js web app), Mobile (Expo React Native) **[planned]**, Admin panel (Next.js) **[planned]**.
 - **Edge**: Cloudflare CDN/DNS/WAF + Caddy as API gateway (SSL, rate limiting) — `docs/02-architecture/deployment.md`.
-- **Application**: Next.js App Router app (port 3000) with API Routes; separate **Socket.io mini-service** (port 3003) for real-time; **AI Service** (port 3004) **[planned]**; **BullMQ Worker** (port 3005) **[planned]**.
+- **Application**: Next.js App Router app (port 3000) with API Routes; separate **Socket.io mini-service** (port 3003) for real-time; **background worker** `services/worker/` (no HTTP port — BullMQ `horoscope-generation` + hourly horoscope notification tick, implemented in Sprint 2 Phase 4); **AI Service** (port 3004) **[planned]**.
 - **Data layer**: PostgreSQL (Neon) via Prisma, Redis (Upstash) for sessions/cache, Cloudflare R2 for images — `docs/02-architecture/architecture.md` §1, `docs/02-architecture/deployment.md` §4.
 
-**Boundaries**: the web app owns HTTP/SSE (REST CRUD + AI streaming); the Socket.io service owns bidirectional real-time (feed, notifications, presence); background jobs (daily horoscope, emails) are delegated to a future worker; payments are delegated to Mercado Pago via webhooks (ADR-008).
+**Boundaries**: the web app owns HTTP/SSE (REST CRUD + AI streaming); the Socket.io service owns bidirectional real-time (feed, notifications, presence); background jobs run in the separate `services/worker/` process (horoscope generation queue + hourly notification tick implemented; emails **[planned]**); payments are delegated to Mercado Pago via webhooks (ADR-008).
 
 ## Technology Stack
 
@@ -46,10 +46,10 @@ Except for the skeleton scaffolding (Next.js 16, Prisma, bun, vitest), the Auth.
 | Cloudflare R2 | Card images, avatars, post images | MVP | `docs/02-architecture/architecture.md` §1; `docs/02-architecture/deployment.md` §4 |
 | Socket.io (mini-service, :3003) | Real-time: feed, notifications, presence | MVP — server + client implemented (Sprint 2 Phase 2.5) | ADR-007; `docs/02-architecture/architecture.md` §2.3/§6.3 |
 | Docker / docker-compose | Local stack (postgres, redis, migrate, web); **no `ws` service in compose** (`socket-service/` runs via `bun run dev:ws` with its own Dockerfile/PM2); Caddy deferred | MVP | `docs/02-architecture/deployment.md` §5 |
-| Pino + Sentry + PostHog + Vercel Analytics | Logging, error tracking, analytics, Web Vitals | MVP — Pino/Sentry implemented in F4 (Sentry disabled without DSN); PostHog events implemented T115 (consent-gated, session recording + dead-click capture off, init skipped in development); Vercel Analytics still planned | `docs/02-architecture/observability.md` |
+| Pino + Sentry + PostHog + Vercel Analytics | Logging, error tracking, analytics, Web Vitals | MVP — Pino/Sentry implemented in F4 (Sentry disabled without DSN); PostHog events implemented T115 (consent-gated, session recording + dead-click capture off, init skipped in development) + server-side system telemetry T145 (`src/lib/server-analytics.ts`, `distinct_id: "system-cron"`, no-op without token); Vercel Analytics still planned | `docs/02-architecture/observability.md` |
 | PWA (manifest, service worker, offline cache) | Installable mobile web app | **[planned]** (V1) | `docs/01-product/mvp.md` V1-009; `docs/00-overview/roadmap.md` |
 | Turborepo + pnpm workspaces | Monorepo orchestration | **[planned]** (V1+) | ADR-005; `docs/02-architecture/monorepo.md` |
-| BullMQ worker (:3005) | Background jobs (daily horoscope, emails) | **[planned]** | `docs/02-architecture/architecture.md` §2.3; `docs/02-architecture/scalability.md` §5 |
+| BullMQ worker `services/worker/` (no HTTP port) | Background jobs: horoscope generation queue + hourly notification tick; emails later | **Implemented in repo** (Sprint 2 Phase 4, T098/T102 — `bun run dev:worker`); hosting (PM2) **[planned]** | `docs/02-architecture/architecture.md` §2.3; `docs/02-architecture/scalability.md` §5 |
 | Expo React Native | Mobile app sharing types/api-client | **[planned]** | `docs/02-architecture/architecture.md` §7 |
 | OpenTelemetry | Distributed tracing | **[planned]** | `docs/02-architecture/observability.md` §8 |
 
@@ -70,7 +70,7 @@ src/
 └── types/          # domain contracts
 ```
 
-**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, social under `/api/v1/social/*` (`posts`, `feed`, `follow/:userId`, `explore/{trending,hashtags,suggestions}`, `search`, `posts/:id`, `posts/:id/og-image`, `posts/images/presign`, `polling/{posts,likes,comments,notifications}` — Sprint 2 Phase 1/2 + polling na Phase 2.5; **Phase 3 (2026-10-05)**: `posts/:id/like`, `posts/:id/comments` (POST+GET), `comments/:id` (PATCH+DELETE), `comments/:id/like`, `notifications` (GET), `notifications/:id/read` e `notifications/read-all` (PATCH); contrato em `docs/04-api/social.md`), `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming routes **implementados**: `POST /api/v1/ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret` (`docs/04-api/ai.md` §Status das rotas; `POST /api/v1/ai/reading/stream` é design legado — rota não existe).
+**API Routes** (RESTful, `docs/02-architecture/architecture.md` §2.2; versioned `/api/v1` per `docs/04-api/overview.md`): `/api/auth/*` (Auth.js v5 — ADR-010), `/api/readings` CRUD, social under `/api/v1/social/*` (`posts`, `feed`, `follow/:userId`, `explore/{trending,hashtags,suggestions}`, `search`, `posts/:id`, `posts/:id/og-image`, `posts/images/presign`, `polling/{posts,likes,comments,notifications}` — Sprint 2 Phase 1/2 + polling na Phase 2.5; **Phase 3 (2026-10-05)**: `posts/:id/like`, `posts/:id/comments` (POST+GET), `comments/:id` (PATCH+DELETE), `comments/:id/like`, `notifications` (GET), `notifications/:id/read` e `notifications/read-all` (PATCH); contrato em `docs/04-api/social.md`), `/api/marketplace/products`, `/api/v1/payments/create`, `/api/v1/webhooks/mercadopago`. AI streaming routes **implementados**: `POST /api/v1/ai/interpret`, `/ai/follow-up`, `/ai/arcana-interpret`, `/ai/horoscope-interpret` (`docs/04-api/ai.md` §Status das rotas; `POST /api/v1/ai/reading/stream` é design legado — rota não existe).
 
 ### Mini-services (separate ports)
 
@@ -78,7 +78,7 @@ src/
 |---|---|---|---|
 | Socket.io service (`socket-service/`) | 3003 | Real-time: feed updates, notifications, presence | **Implemented in repo** (Sprint 2 Phase 2.5, T066–T075: server, emitters, `use-socket` hook, polling fallback, E2E); Railway deploy **[planned]** (ADR-007) |
 | AI Service | 3004 | Async AI reading processing | **[planned]** (`architecture.md` §2.3) |
-| Worker (BullMQ) | 3005 | Background jobs: daily horoscope, emails | **[planned]** |
+| Worker (`services/worker/`) | — (no HTTP) | Background jobs: BullMQ `horoscope-generation` (T098) + hourly horoscope notification tick (T102) | **Implemented in repo** (Sprint 2 Phase 4); emails/other jobs **[planned]**; hosting (PM2) **[planned]** |
 
 ### Layered architecture
 
