@@ -65,6 +65,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 - **Persistência**: única fonte é `localStorage["analytics-consent"]`; o banner deve sempre passar por `setAnalyticsConsent()` — nunca `localStorage.setItem` cru da chave de consentimento
 - **Gate**: `initAnalytics()` e todo `track*`/`setUserProperties` são no-op sem `localStorage["analytics-consent"] === "true"`; revogação chama `resetUser()` (`posthog.reset()`, que **apaga** a chave de consentimento `__ph_opt_in_out_*` persistida pelo SDK) **e depois** `posthog.opt_out_capturing()` (re-afirma o opt-out — a ordem importa); concessão chama `initAnalytics()` (se necessário) + `opt_in_capturing({ captureEventName: false })`
 - **Reabertura a qualquer momento**: botão "Preferências de Analytics" (bottom-right)
+- **Fora do gate (T145, Phase 4)**: `src/lib/server-analytics.ts` (`trackServerEvent`/`trackHoroscopeMissing`) envia eventos de **sistema** do servidor (`horoscope_missing`, `distinct_id: "system-cron"`) via HTTP direto — sem cookie, sem `localStorage`, sem identificador de usuário e sem PII ⇒ **não** passa por este consentimento (CHK017); no-op em dev/sem `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` e **nunca lança** (o cron não pode falhar por analytics). Telemetria de **usuário** via PostHog-node segue pendente (T136) e terá de repetir esta política de consentimento.
 
 ---
 
@@ -82,6 +83,7 @@ A conformidade LGPD é um requisito transversal que impacta todos os módulos da
 | Histórico de leituras | Funcionalidade da plataforma | Execução de contrato | Enquanto ativo + 90 dias | Sim* |
 | Histórico de pagamentos | Obrigação legal, fiscal | Obrigação legal | 5 anos (fiscal) | Não |
 | Preferências de notificação | Funcionamento do serviço | Consentimento | Enquanto ativo | Não |
+| Preferências de notificação de horóscopo (`HoroscopeNotification`: `westernEnabled`/`chineseEnabled`/`mayaEnabled`/`hour`, `horoscope_notifications`) | Entrega in-app de horóscopos (T103, Phase 4) | Execução de contrato (opt-in do serviço; sem PII além do vínculo com `userId`) | Enquanto ativo (`onDelete: Cascade` com o usuário) | Não |
 | Dados de dispositivo | Push notifications | Consentimento | Enquanto ativo | Não |
 | Conteúdo de posts/comentários (`Post.content`, `Comment.content`) | Uso da plataforma, moderação | Execução de contrato | Enquanto ativo (+ purga no hard-delete) | Não |
 | Texto livre de notificações (`Notification.message`/`data`) | Push/in-app de atividade social | Execução de contrato | Purgado no hard-delete do destinatário/doador | Não |

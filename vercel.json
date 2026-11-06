@@ -13,6 +13,14 @@
     {
       "path": "/api/cron/counter-reconcile",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/horoscope-generation",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/horoscope-availability",
+      "schedule": "0 9 * * *"
     }
   ],
   "headers": [

@@ -50,7 +50,8 @@ function getPrivateKey(): string {
   if (!key) {
     throw new Error("JWT_PRIVATE_KEY nao configurado")
   }
-  return key
+  // Support both literal newlines and escaped newlines (\n) in env var
+  return key.replace(/\\n/g, "\n")
 }
 
 function getPublicKey(): string {
@@ -58,7 +59,8 @@ function getPublicKey(): string {
   if (!key) {
     throw new Error("JWT_PUBLIC_KEY nao configurado")
   }
-  return key
+  // Support both literal newlines and escaped newlines (\n) in env var
+  return key.replace(/\\n/g, "\n")
 }
 
 export interface AccessTokenClaims {

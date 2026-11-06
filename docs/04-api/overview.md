@@ -94,12 +94,18 @@ Cliente → POST /api/v1/auth/refresh (refresh token via cookie httpOnly) → no
 > **Rotas internas (cron, `vercel.json`):** `GET /api/cron/hard-delete` (Vercel Cron 03:00 UTC,
 > `0 3 * * *`), `GET /api/cron/feed-cache-refresh` (diário 00:00 UTC, `0 0 * * *` — SC34, job
 > `src/jobs/feed-cache-refresh.ts`) e `GET /api/cron/counter-reconcile` (diário 04:00 UTC,
-> `0 4 * * *` — T147, job `src/jobs/counter-reconcile.ts`) — todas protegidas por `Authorization: Bearer $CRON_SECRET`
+> `0 4 * * *` — T147, job `src/jobs/counter-reconcile.ts`), `GET /api/cron/horoscope-generation` (diário 07:00 UTC,
+> `0 7 * * *` — **Phase 4**, T096: dispara a geração do dia na fila `horoscope-generation`,
+> `src/jobs/horoscope-generation.ts`) e `GET /api/cron/horoscope-availability` (diário 09:00 UTC,
+> `0 9 * * *` — **Phase 4**, T099: publica `availableFrom`/`availableUntil`, `src/jobs/horoscope-availability-check.ts`) — todas protegidas por `Authorization: Bearer $CRON_SECRET`
 > e todas retornam `{ ok: true, data: <summary>, meta: { requestId } }` (401 `{ error: { code:
 > "UNAUTHORIZED" } }` sem/errado o header — o Vercel injeta `CRON_SECRET` sozinho nos runs
 > agendados). `hard-delete`: `{ processed, failed, readingsPurged, errors }` (T148 adicionou
 > `readingsPurged` — ver `docs/04-api/authentication.md` §GET /cron/hard-delete);
 > `counter-reconcile`: `{ posts, comments, total }` (rows divergentes corrigidas; 0 = idempotente).
+> **Fora do Vercel**: a cadência horária de notificações de horóscopo (T102) **não** é rota cron —
+> roda dentro de `services/worker/index.ts` (tick alinhado à hora cheia UTC), porque o Hobby só
+> aceita crons ≥ 24h (SC34).
 
 ### SSE (Server-Sent Events — streaming de IA)
 
@@ -113,8 +119,8 @@ data: {"type": "token", "token": "Hermitano sugere..."}
 data: {"type": "done", "cached": false, "interpretationId": "itr_abc123"}
 ```
 
-> **Implementado:** `POST /api/v1/ai/interpret` (SSE flat: `token`/`done`/`error`) e
-> `POST /api/v1/ai/follow-up`. Cache-hit do interpret responde **JSON** `{ cached: true, content, interpretationId, tokensUsed: 0 }`
+> **Implementado:** `POST /api/v1/ai/interpret` (SSE flat: `token`/`done`/`error`),
+> `POST /api/v1/ai/follow-up`, `POST /api/v1/ai/arcana-interpret` e `POST /api/v1/ai/horoscope-interpret` (Phase 4, T101 — mesmo pipeline, consome cota diária via `checkDailyAILimit`). Cache-hit do interpret responde **JSON** `{ cached: true, content, interpretationId, tokensUsed: 0 }`
 > (não stream). O evento `done` carrega `interpretationId` para o painel de IA reter o vínculo
 > (`src/components/ai/reading-ai-panel.tsx`). Rotas planejadas `POST /ai/reading`,
 > `/ai/reading/stream`, `/ai/chat`, `GET /ai/models` **não estão implementadas**.
@@ -167,9 +173,9 @@ GET /api/v1/social/feed?cursor=eyJpZCI6MTIzfQ&limit=20
 }
 ```
 
-> **Usado em**: Feed social, listas de followers/following (T044/T045), notificações, histórico de tiragens.
+> **Usado em**: Feed social, listas de followers/following (T044/T045), notificações, histórico de tiragens, histórico de horóscopos (T095).
 >
-> **Implementado**: existem hoje **dois** cursores reais que reutilizam o mesmo encoder `encodeFeedCursor`/`decodeFeedCursor` (base64url de `{createdAt, id}`): (1) o de feed — `src/lib/social/feed-algorithm.ts` (`FEED_DEFAULT_LIMIT=10`, `FEED_MAX_LIMIT=50`), cuja lib devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`); e (2) as listas `GET /api/v1/users/:username/{followers,following}` (**Sprint 2 Phase 1**, T044/T045; `limit` default 20, máx 50, cursor inválido → página vazia). O envelope `{ data, pagination }` acima é o contrato vencedor (S2-18/SC30) e **ambas as rotas já respondem nele** desde o Phase 1 — e, **desde o Sprint 2 Phase 2 (T052, 2026-10-01)**, também `GET /api/v1/social/feed` (`{ data: page.posts, pagination: { nextCursor } }`, headers `Cache-Control: private, no-store` + `Vary: Authorization`). **`prevCursor`/`hasMore`/`limit` do exemplo não são emitidos por nenhuma rota hoje** (só `nextCursor`, que é `null` no fim).
+> **Implementado**: existem hoje **quatro** consumidores do mesmo encoder `encodeFeedCursor`/`decodeFeedCursor` (base64url de `{createdAt, id}`): (1) o de feed — `src/lib/social/feed-algorithm.ts` (`FEED_DEFAULT_LIMIT=10`, `FEED_MAX_LIMIT=50`), cuja lib devolve **`{ posts, nextCursor }`** (sem `prevCursor`/`hasMore`); (2) as listas `GET /api/v1/users/:username/{followers,following}` (**Sprint 2 Phase 1**, T044/T045; `limit` default 20, máx 50, cursor inválido → página vazia); (3) `GET /api/v1/social/notifications` (Phase 3, T082) e (4) `GET /api/v1/horoscopes/history` (**Phase 4**, T095 — `limit` default 20, máx 50, filtros `type`/`period`, cursor inválido → página vazia; responde `{ data: { entries }, pagination: { nextCursor } }`). O envelope `{ data, pagination }` acima é o contrato vencedor (S2-18/SC30) e **todas as rotas (2)–(4) já respondem nele** desde o Phase 1 — e, **desde o Sprint 2 Phase 2 (T052, 2026-10-01)**, também `GET /api/v1/social/feed` (`{ data: page.posts, pagination: { nextCursor } }`, headers `Cache-Control: private, no-store` + `Vary: Authorization`). **`prevCursor`/`hasMore`/`limit` do exemplo não são emitidos por nenhuma rota hoje** (só `nextCursor`, que é `null` no fim).
 
 ### Offset-based (Listas paginadas simples)
 

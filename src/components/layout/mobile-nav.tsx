@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils"
 import { useNotifications } from "@/components/social/notifications-provider"
 import { isAppNavActive } from "@/lib/navigation"
-import { History, Home, Newspaper, SquarePen, User } from "lucide-react"
+import { History, Home, Newspaper, SquarePen, Stars, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/feed", label: "Feed", icon: Newspaper },
   { href: "/tirar", label: "Tirar", icon: SquarePen },
   { href: "/minhas-tiragens", label: "Histórico", icon: History },
+  { href: "/horoscopos/ocidental", label: "Horóscopos", icon: Stars },
   { href: "/perfil", label: "Perfil", icon: User },
 ] as const
 

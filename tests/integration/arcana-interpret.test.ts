@@ -130,14 +130,15 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
     expect(text).toContain("done")
   })
 
-  it("increments usage count", async () => {
+  it("increments usage count on successful stream", async () => {
     mockUser()
     mockAIClient()
 
-    await interpretPOST(
+    const res = await interpretPOST(
       makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
     )
 
+    await res.text() // consumir stream até o fim para disparar commitDailyAIUsage
     expect(mockUsageUpsert).toHaveBeenCalled()
   })
 
@@ -163,7 +164,7 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
   })
 })
 
-describe("quota devolvida quando a geracao falha (arcana)", () => {
+describe("quota NOT incremented when generation fails (arcana)", () => {
   it("returns 503 AI_SERVICE_UNAVAILABLE and does NOT increment quota when AI client cannot initialize", async () => {
     mockUser()
     mockGetAIClient.mockImplementation(() => {
@@ -180,7 +181,7 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(mockUsageUpsert).not.toHaveBeenCalled()
   })
 
-  it("refunds interpretation quota when generation fails mid-stream", async () => {
+  it("does NOT increment quota when generation fails before delivering tokens", async () => {
     mockUser()
     mockGetAIClient.mockReturnValue({
       chat: {
@@ -198,14 +199,12 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     const text = await res.text()
     expect(text).toContain('"type":"error"')
 
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // With new pattern (commit after delivery), no increment to revert
+    expect(mockUsageUpsert).not.toHaveBeenCalled()
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("refunds interpretation quota when provider completes with zero content (empty completion)", async () => {
+  it("does NOT increment quota when provider completes with zero content (empty completion)", async () => {
     mockUser()
     mockAIClient([])
 
@@ -217,14 +216,11 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(text).toContain('"type":"error"')
     expect(text).toContain('"retryable":true')
     expect(text).not.toContain('"type":"done"')
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // With new pattern (commit after delivery), no increment to revert
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {
+  it("does NOT refund quota when failure happens after tokens were delivered (forced abort) - quota is committed but stream ends without error response (known limitation)", async () => {
     mockUser()
     mockGetAIClient.mockReturnValue({
       chat: {

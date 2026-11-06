@@ -34,7 +34,7 @@ For full definitions (Arcanos Maiores/Menores, numerologia pitagórica, Tzolkin 
 | PostgreSQL (Docker Postgres 16 dev / Neon prod) | Dev/prod databases — same engine since F1 (no SQLite) | `docs/02-architecture/deployment.md` §1 |
 | Upstash Redis | Serverless Redis: sessions, cache, rate limit, BullMQ queues, Pub/Sub | `docs/02-architecture/scalability.md` |
 | Cloudflare R2 | Object storage for card images, avatars, posts | `docs/02-architecture/deployment.md` §4 |
-| BullMQ | Background job queue (worker :3005) — planned | `docs/02-architecture/architecture.md`, `docs/02-architecture/scalability.md` |
+| BullMQ | Background job queue — **implemented since Sprint 2 Phase 4** (fila `horoscope-generation`, worker `services/worker/` sem porta HTTP; email/image jobs still planned) | `docs/02-architecture/architecture.md`, `docs/02-architecture/scalability.md` |
 | openai SDK | Official OpenAI Node client used for AI interpretations (OpenAI GPT-4o / GPT-4o-mini) | `docs/05-ai/providers.md`, `docs/05-ai/architecture.md` |
 | Model Router | Feature → model mapping with fallback chain | `docs/05-ai/providers.md` |
 | Event Bus | Inter-service event propagation — Redis Pub/Sub (`realtime:events` + `auth:kicks` for revocation kicks) when `REDIS_URL` is set (docker dev + prod), in-process EventEmitter otherwise (tests); realtime events only, business events planned; fail-fast per publish + auto-heal (`socket-service/src/bus.ts`) | `docs/02-architecture/architecture.md` §6 |

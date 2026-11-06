@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const queueAdd = vi.hoisted(() => vi.fn())
 const queueClose = vi.hoisted(() => vi.fn())
+const queueOn = vi.hoisted(() => vi.fn())
 const QueueMock = vi.hoisted(() =>
-  vi.fn(() => ({ add: queueAdd, close: queueClose })),
+  vi.fn(() => ({ add: queueAdd, close: queueClose, on: queueOn })),
 )
 const RedisMock = vi.hoisted(() => vi.fn(() => ({ marker: "redis-conn" })))
 
@@ -21,6 +22,7 @@ import {
   HOROSCOPE_WORKER_CONCURRENCY,
 } from "@/lib/queue/horoscope-queue"
 import { resetEnvCache } from "@/lib/env"
+import { periodRowKey } from "@/lib/horoscopes/dates"
 
 const originalRedisUrl = process.env.REDIS_URL
 
@@ -73,6 +75,20 @@ describe("buildHoroscopeJobOptions (T033)", () => {
       }).jobId,
     ).toBe("chinese:fogo:aries:daily:2026-09-26")
   })
+
+  it("jobId de weekly/monthly deduplica pela ROW key (não pela data plana)", () => {
+    const weekly = buildHoroscopeJobOptions({ ...JOB, period: "weekly" })
+    expect(weekly.jobId).toBe(
+      `western:aries:weekly:${periodRowKey("weekly", JOB.date)}`,
+    )
+    expect(periodRowKey("weekly", JOB.date)).not.toBe(JOB.date)
+
+    const monthly = buildHoroscopeJobOptions({ ...JOB, period: "monthly" })
+    expect(monthly.jobId).toBe(
+      `western:aries:monthly:${periodRowKey("monthly", JOB.date)}`,
+    )
+    expect(periodRowKey("monthly", JOB.date)).not.toBe(JOB.date)
+  })
 })
 
 describe("getHoroscopeQueue (T033)", () => {
@@ -92,7 +108,11 @@ describe("getHoroscopeQueue (T033)", () => {
       expect.objectContaining({ connection: { marker: "redis-conn" } }),
     )
     expect(RedisMock).toHaveBeenCalledWith("redis://localhost:6379", {
-      maxRetriesPerRequest: null,
+      // producer one-shot: conexão limitada (não é a conexão blocking do
+      // worker — ver horoscope-worker.ts com maxRetriesPerRequest: null)
+      maxRetriesPerRequest: 1,
+      commandTimeout: 5_000,
+      enableOfflineQueue: false,
     })
   })
 })

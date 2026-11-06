@@ -8,6 +8,7 @@
     "build": "prisma generate && node --max-old-space-size=4096 node_modules/next/dist/bin/next build",
     "start": "next start",
     "dev:ws": "tsx watch socket-service/index.ts",
+    "dev:worker": "tsx watch services/worker/index.ts",
     "dev:all": "echo \"Run full local stack (Next.js + Socket.io + Caddy) — not scaffolded yet\"",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",

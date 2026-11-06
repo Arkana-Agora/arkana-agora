@@ -6,7 +6,11 @@ import { WESTERN_SIGNS } from "@/lib/horoscopes/western"
 
 const prismaMock = vi.hoisted(() => ({
   user: { upsert: vi.fn() },
-  horoscopeContent: { findMany: vi.fn(), createMany: vi.fn() },
+  horoscopeContent: {
+    findMany: vi.fn(),
+    createMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
   horoscopeNotification: { upsert: vi.fn() },
 }))
 
@@ -204,7 +208,14 @@ describe("seedHoroscopeFallbacks (T017 + T032)", () => {
       expect(row.element).toEqual(
         row.type === "chinese" ? expect.any(String) : null,
       )
-      expect(row.content).toMatchObject({ fallback: true, date: row.date })
+      const content = row.content as { fallback: boolean; date: string }
+      expect(content.fallback).toBe(true)
+      // `content.date` obedece o shape T035 (`horoscopeContentShape`) — a
+      // chave da row é a civil key do período (2026-W41/2026-10), mas o campo
+      // interno é sempre uma data civil YYYY-MM-DD (exigido pelo parse do
+      // hook useHoroscopes e pela validação do worker T098).
+      expect(content.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      if (row.period === "daily") expect(content.date).toBe(row.date)
     }
   })
 
@@ -226,6 +237,61 @@ describe("seedHoroscopeFallbacks (T017 + T032)", () => {
     const rows = prismaMock.horoscopeContent.createMany.mock.calls[0]![0]
       .data as unknown[]
     expect(rows).toHaveLength(TOTAL_FALLBACK_ROWS - 2)
+  })
+
+  it("repara rows existentes com content.date fora do shape T035 (self-heal)", async () => {
+    prismaMock.horoscopeContent.findMany.mockResolvedValue([
+      {
+        type: "western",
+        signId: "aries",
+        element: null,
+        period: "weekly",
+        date: "2026-W43",
+        content: { fallback: true, date: "2026-W43" },
+      },
+    ])
+
+    await seedHoroscopeFallbacks()
+
+    expect(prismaMock.horoscopeContent.updateMany).toHaveBeenCalledTimes(1)
+    const updateCall = prismaMock.horoscopeContent.updateMany.mock.calls[0]![0]
+    expect(updateCall.where).toEqual({
+      type: "western",
+      signId: "aries",
+      element: null,
+      period: "weekly",
+      date: "2026-W43",
+    })
+    const updatedContent = updateCall.data.content as {
+      date: string
+      fallback?: boolean
+    }
+    expect(updatedContent.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(updatedContent.fallback).toBe(true)
+
+    // row reparada continua existindo → não é recriada (as outras 11
+    // combinações western/weekly continuam ausentes e são criadas)
+    const created = (prismaMock.horoscopeContent.createMany.mock.calls[0]?.[0]
+      ?.data ?? []) as Array<{
+      type: string
+      signId: string
+      period: string
+      date: string
+    }>
+    expect(
+      created.some(
+        (row) =>
+          row.type === "western" &&
+          row.signId === "aries" &&
+          row.period === "weekly" &&
+          row.date === "2026-W43",
+      ),
+    ).toBe(false)
+    expect(
+      created.filter(
+        (row) => row.type === "western" && row.period === "weekly",
+      ),
+    ).toHaveLength(12)
   })
 })
 

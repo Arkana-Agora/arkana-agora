@@ -4,7 +4,9 @@
  * (RF-HORO-001; faixas de palavras por período para o validador T035).
  */
 
+import { CHINESE_ANIMALS } from "@/lib/horoscopes/chinese"
 import { PERIOD_WORD_RANGES } from "@/lib/horoscopes/validation"
+import { WESTERN_SIGNS } from "@/lib/horoscopes/western"
 
 // Enums em runtime (single-source): tipos/períodos como valores exportados
 // servem zod (fila T033), testes e o type derivado — sem repetir a união.
@@ -113,4 +115,94 @@ export function buildHoroscopePrompt(
     "Retorne apenas o JSON estruturado com os campos general, love, career, health, luckyNumber, luckyColor, mood, compatibility e date.",
     "Não invente previsões absolutas (morte, doença, dinheiro garantido) nem dê conselhos médicos, jurídicos ou financeiros.",
   ].join("\n")
+}
+
+/**
+ * Rótulo pt-BR do signo para prompts (T034/T101): ocidental → nome do
+ * catálogo, chinês → animal (+elemento quando presente), maia → kin.
+ * Fonte única compartilhada pelo worker T098 e pela interpretação T101.
+ */
+export function horoscopeSignLabel(
+  type: HoroscopeType,
+  signId: string,
+  element?: string | null,
+): string {
+  if (type === "western") {
+    return WESTERN_SIGNS.find((sign) => sign.id === signId)?.name ?? signId
+  }
+  if (type === "chinese") {
+    const animal = CHINESE_ANIMALS.find((a) => a.id === signId)
+    if (!animal) return signId
+    return element ? `${animal.name} (${element})` : animal.name
+  }
+  return `Kin ${signId}`
+}
+
+/** Rótulos pt-BR de tipo/período — fonte única (UI + docs). */
+export const HOROSCOPE_TYPE_LABELS: Record<HoroscopeType, string> = {
+  western: "Ocidental",
+  chinese: "Chinês",
+  maya: "Maia",
+}
+
+export const HOROSCOPE_PERIOD_LABELS: Record<PromptPeriod, string> = {
+  daily: "Diário",
+  weekly: "Semanal",
+  monthly: "Mensal",
+}
+
+export interface HoroscopeInterpretationInput {
+  type: HoroscopeType
+  signId: string
+  element?: string | null | undefined
+  period: PromptPeriod
+  date: string
+  content: {
+    general: string
+    love: string
+    career: string
+    health: string
+  } | null
+  profileName: string | null
+}
+
+/**
+ * Prompt da interpretação detalhada (RF-HORO-006/T101): contexto sistema +
+ * signo/kin + período + perfil do usuário + horóscopo de base (row T093 ou
+ * fallback T032 sintetizado). Regras de segurança idênticas ao prompt T034.
+ */
+export function buildHoroscopeInterpretationPrompt(
+  input: HoroscopeInterpretationInput,
+): { system: string; user: string } {
+  const signLabel = horoscopeSignLabel(input.type, input.signId, input.element)
+
+  const system = [
+    "Você é o astrólogo da Arkana Agora. Interpreta horóscopos em pt-BR para publicação no app, em tom acessível e acolhedor.",
+    "Interprete o horóscopo de base em parágrafos curtos, conectando-o ao signo e ao período informados; aprofunde amor, carreira e saúde sem repetir literalmente o texto base.",
+    "Não invente previsões absolutas (morte, doença, dinheiro garantido) nem dê conselhos médicos, jurídicos ou financeiros.",
+    "Horóscopo é convite à reflexão, não previsão literal: não apresente resultados como garantidos.",
+  ].join("\n")
+
+  const lines = [
+    `Tipo: ${input.type}`,
+    `Signo: ${signLabel}`,
+    `Período: ${input.period} (${input.date})`,
+    `Perfil: ${input.profileName ?? "não informado"}`,
+    "Horóscopo de base:",
+  ]
+  if (input.content) {
+    lines.push(
+      `general: ${input.content.general}`,
+      `love: ${input.content.love}`,
+      `career: ${input.content.career}`,
+      `health: ${input.content.health}`,
+    )
+  } else {
+    lines.push(
+      "(sem horóscopo de base — interprete a partir do signo e do período).",
+    )
+  }
+  lines.push("Interprete detalhadamente este horóscopo para o usuário.")
+
+  return { system, user: lines.join("\n") }
 }

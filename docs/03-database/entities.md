@@ -1,6 +1,6 @@
 # Definição de Entidades — arkana-agora
 
-> Versão: 1.3 | Última atualização: 2026-09-28
+> Versão: 1.4 | Última atualização: 2026-10-20
 
 ---
 
@@ -222,7 +222,7 @@ Cálculo do arcano pessoal do usuário baseado em data de nascimento e nome.
 
 Entrada de horóscopo para o usuário.
 
-> **Status (Sprint 2, Phase 0):** ✅ **implementada** (migration `20260926182325_sprint2_social_horoscopes`) — **shape diferente do alvo**: `id`, `userId`, `type String` (`'western'` \| `'chinese'` \| `'maya'`), `signId String`, `element String?`, `period String` (`'daily'` \| `'weekly'` \| `'monthly'`), `createdAt` + `@@index([userId, createdAt])` (RF-HORO-007). **Não existem** `zodiacSign`, `chineseAnimal`, `mayanKin`, `content` nem `sourceDate`. A tabela abaixo é o **formato alvo** (ainda plano); escrita/leitura acontecem nas fases 5/6 do plano Sprint 2.
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (migration `20260926182325_sprint2_social_horoscopes`) — **shape diferente do alvo**: `id`, `userId`, `type String` (`'western'` \| `'chinese'` \| `'maya'`), `signId String`, `element String?`, `period String` (`'daily'` \| `'weekly'` \| `'monthly'`), `createdAt` + `@@index([userId, createdAt])` (RF-HORO-007). **Não existem** `zodiacSign`, `chineseAnimal`, `mayanKin`, `content` nem `sourceDate`. A tabela abaixo é o **formato alvo** (sem `zodiacSign`/`chineseAnimal`/`mayanKin`/`content`/`sourceDate`); **escrita e leitura implementadas na Sprint 2 Phase 4**: `GET /api/v1/horoscopes/western` (registra `HoroscopeEntry` via `prisma.horoscopeEntry.create`, T093) e `GET /api/v1/horoscopes/history` (keyset com `encodeFeedCursor`, T095).
 >
 > ⚠️ **Gap de design nível spec (review data N3)**: `HoroscopeEntry`/`HoroscopeLog` **não têm coluna de data civil** — só `createdAt` (UTC), enquanto todo o domínio usa data civil BRT (Q25). "Já buscou *hoje*?" derivado de `createdAt` erra entre 00:00–03:00 BRT. `.specs/006-horoscopes/design.md` §5 define assim, portanto é **gap do spec, não desvio do schema** — submeter ao design (adicionar `date String` + `@@unique([userId, type, period, date])` com as tabelas vazias é grátis) **sem alterar spec/ADR unilateralmente**.
 >
@@ -462,7 +462,7 @@ Presente virtual enviado entre usuários.
 
 Notificação para o usuário.
 
-> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`notifications`) — `id`, `userId`, `type String` (`'follow'` \| `'like'` \| `'comment'` \| `'gift'` \| `'mention'` \| `'horoscope'`), `message String` (**não** `title`/`body`), `data Json?`, `isRead Boolean @default(false)`, `createdAt` + `@@index([userId, isRead, createdAt])`. Não existem `title`, `body` nem o enum `NotificationType` do alvo — a lista de categorias abaixo é o formato planejado. As 6 categorias estão agora **DB-enforced** por `notifications_type_check` (`type IN ('follow','like','comment','gift','mention','horoscope')`, migration `20260927222620_sprint2_review_fixes`); escrever uma 7ª categoria viola a constraint (não há rota de escrita de notificações ainda).
+> **Status (Sprint 2, Phase 0):** ✅ **implementada** (`notifications`) — `id`, `userId`, `type String` (`'follow'` \| `'like'` \| `'comment'` \| `'gift'` \| `'mention'` \| `'horoscope'`), `message String` (**não** `title`/`body`), `data Json?`, `isRead Boolean @default(false)`, `createdAt` + `@@index([userId, isRead, createdAt])`. Não existem `title`, `body` nem o enum `NotificationType` do alvo — a lista de categorias abaixo é o formato planejado. As 6 categorias estão agora **DB-enforced** por `notifications_type_check` (`type IN ('follow','like','comment','gift','mention','horoscope')`, migration `20260927222620_sprint2_review_fixes`); escrever qualquer outra viola a constraint. **Writers existem desde o Phase 1/Phase 4**: `POST /api/v1/social/follow/:userId` grava `'follow'` (T043) e o tick horário `runHoroscopeNotifications()` (`src/jobs/horoscope-notifications.ts`, T102) grava `'horoscope'` — ambos dentro da lista permitida.
 
 | Campo | Tipo | Restrições | Descrição |
 |-------|------|------------|-----------|

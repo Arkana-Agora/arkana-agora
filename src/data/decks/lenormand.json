@@ -7,8 +7,8 @@
     "year": 1799,
     "cardCount": 36,
     "hasReversals": false,
-    "coverImageUrl": "/images/decks/lenormand-cover.jpg",
-    "cardBackImageUrl": "/images/decks/lenormand-back.jpg"
+    "coverImageUrl": "/images/decks/lenormand-cover.svg",
+    "cardBackImageUrl": "/images/decks/lenormand-back.svg"
   },
   "cards": [
     {

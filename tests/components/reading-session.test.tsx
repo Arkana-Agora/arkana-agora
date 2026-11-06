@@ -377,23 +377,23 @@ describe("ReadingSession revelacao sequencial e resumo (BR-TIR-003)", () => {
     useReadingStore.getState().reset()
   })
 
-  it("revela as cartas uma a uma, na ordem, a cada 1.5s", () => {
+  it("revela as cartas uma a uma, na ordem, a cada 300ms", () => {
     render(<ReadingSession />)
 
     expect(useReadingStore.getState().flippedCards).toEqual([])
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     expect(useReadingStore.getState().flippedCards).toEqual([0])
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     expect(useReadingStore.getState().flippedCards).toEqual([0, 1])
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     expect(useReadingStore.getState().flippedCards).toEqual([0, 1, 2])
   })
@@ -405,7 +405,7 @@ describe("ReadingSession revelacao sequencial e resumo (BR-TIR-003)", () => {
     expect(screen.queryByTestId("drawn-cards-summary")).not.toBeInTheDocument()
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     let summary = screen.getByTestId("drawn-cards-summary")
     expect(summary).toHaveTextContent("Passado")
@@ -414,7 +414,7 @@ describe("ReadingSession revelacao sequencial e resumo (BR-TIR-003)", () => {
     expect(summary).not.toHaveTextContent("A Sacerdotisa")
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     summary = screen.getByTestId("drawn-cards-summary")
     expect(summary).toHaveTextContent("Presente")
@@ -423,7 +423,7 @@ describe("ReadingSession revelacao sequencial e resumo (BR-TIR-003)", () => {
     expect(summary).not.toHaveTextContent("A Sacerdotisa")
 
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     summary = screen.getByTestId("drawn-cards-summary")
     expect(summary).toHaveTextContent("Futuro")
@@ -436,7 +436,7 @@ describe("ReadingSession revelacao sequencial e resumo (BR-TIR-003)", () => {
 
     // Apenas a carta pendente (indice 2) deve ser revelada, no 1º intervalo.
     act(() => {
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(300)
     })
     expect(useReadingStore.getState().flippedCards).toEqual([0, 1, 2])
   })

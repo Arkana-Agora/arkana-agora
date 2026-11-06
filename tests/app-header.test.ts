@@ -36,6 +36,16 @@ describe("isAppNavActive", () => {
     expect(isAppNavActive("/feed", "/feed")).toBe(true)
     expect(isAppNavActive("/dashboard", "/feed")).toBe(false)
   })
+
+  it("highlights Horóscopos em qualquer subrota (CHK009)", () => {
+    expect(
+      isAppNavActive("/horoscopos/ocidental", "/horoscopos/ocidental"),
+    ).toBe(true)
+    expect(
+      isAppNavActive("/horoscopos/historico", "/horoscopos/ocidental"),
+    ).toBe(true)
+    expect(isAppNavActive("/feed", "/horoscopos/ocidental")).toBe(false)
+  })
 })
 
 describe("App Header Navigation", () => {
@@ -76,6 +86,11 @@ describe("App Header Navigation", () => {
 
   it("inclui /feed nos itens (CHK009 — rota alcançável pelo login)", () => {
     expect(headerContent).toContain('href: "/feed"')
+  })
+
+  it("inclui /horoscopos/ocidental nos itens (CHK009)", () => {
+    expect(headerContent).toContain('href: "/horoscopos/ocidental"')
+    expect(headerContent).toContain("Horóscopos")
   })
 
   it("uses Lucide icons", () => {

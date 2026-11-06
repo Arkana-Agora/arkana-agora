@@ -14,7 +14,7 @@ tags:
   - quota-exploit
   - one-shot-refund
   - sprint2-f3
-module: ai (src/app/api/v1/ai/_helpers.ts → interpret, arcana-interpret, follow-up)
+module: ai (src/app/api/v1/ai/_helpers.ts → interpret, arcana-interpret, follow-up, horoscope-interpret)
 date: 2026-10-16
 established_in: "SPRINT2-F3 post-review security fix (2026-10-16): refund conditioned on fullText === '' instead of 'any stream error', closing the abort-and-refund free-generation exploit; shared createQuotaReservation helper + requireAIClient fail-fast + follow-up user-turn compensation; 9 cases (3 per route) across tests/integration/{ai-interpret,ai-followup,arcana-interpret}.test.ts"
 ---
@@ -23,7 +23,7 @@ established_in: "SPRINT2-F3 post-review security fix (2026-10-16): refund condit
 
 ## Problem / When to Use This
 
-Use this pattern whenever a **rate-limited paid-generation endpoint reserves quota BEFORE an SSE stream starts** (the reservation must be up-front to prevent concurrency overshoot — two parallel requests must not both pass the check), and therefore needs a **compensation (refund) path when generation fails**. The trap is deciding *when* to refund: the natural instinct — "refund on any stream error" — is an **exploit**. The client controls when the stream ends: `POST → read tokens → abort (botão Parar / fechar aba / drop connection) → quota refunded → repeat` yields **unlimited free generations**, bypassing the daily plan limit entirely with unbounded provider cost. The refund MUST instead be conditioned on **zero delivery to the client (`fullText === ""`)** — no token was ever enqueued, so the user received nothing and paying would be wrong. A failure *after* the first token was delivered is a cost the user already consumed; it is never refunded. Two supporting pieces make this safe: (1) a **fail-fast** `requireAIClient` that returns 503 *before* quota is touched (config failures like a missing `AI_API_KEY` must not burn plan quota), and (2) for flows that **persist a user turn at stream start** (follow-up chat), a **compensation delete** of that persisted row when refunding, so a retry does not duplicate history. Three consumers already share the helper: `src/app/api/v1/ai/interpret/route.ts`, `src/app/api/v1/ai/arcana-interpret/route.ts`, `src/app/api/v1/ai/follow-up/route.ts`.
+Use this pattern whenever a **rate-limited paid-generation endpoint reserves quota BEFORE an SSE stream starts** (the reservation must be up-front to prevent concurrency overshoot — two parallel requests must not both pass the check), and therefore needs a **compensation (refund) path when generation fails**. The trap is deciding *when* to refund: the natural instinct — "refund on any stream error" — is an **exploit**. The client controls when the stream ends: `POST → read tokens → abort (botão Parar / fechar aba / drop connection) → quota refunded → repeat` yields **unlimited free generations**, bypassing the daily plan limit entirely with unbounded provider cost. The refund MUST instead be conditioned on **zero delivery to the client (`fullText === ""`)** — no token was ever enqueued, so the user received nothing and paying would be wrong. A failure *after* the first token was delivered is a cost the user already consumed; it is never refunded. Two supporting pieces make this safe: (1) a **fail-fast** `requireAIClient` that returns 503 *before* quota is touched (config failures like a missing `AI_API_KEY` must not burn plan quota), and (2) for flows that **persist a user turn at stream start** (follow-up chat), a **compensation delete** of that persisted row when refunding, so a retry does not duplicate history. Four consumers already share the helper: `src/app/api/v1/ai/interpret/route.ts`, `src/app/api/v1/ai/arcana-interpret/route.ts`, `src/app/api/v1/ai/follow-up/route.ts`, `src/app/api/v1/ai/horoscope-interpret/route.ts` (Sprint 2 Phase 4, T101).
 
 ## Source of Truth Files
 
@@ -31,16 +31,18 @@ Use this pattern whenever a **rate-limited paid-generation endpoint reserves quo
 - `src/app/api/v1/ai/interpret/route.ts` — reserve → fail-fast → `checkAndIncrementDailyUsage` → `markConsumed()` → stream; refund only `if (fullText === "")`
 - `src/app/api/v1/ai/arcana-interpret/route.ts` — same shape, interpretation kind
 - `src/app/api/v1/ai/follow-up/route.ts` — same shape, `followUp` kind, **plus** `prisma.followUpMessage.deleteMany({ where: { id: userMessageId } })` compensation before `tryRefund`
+- `src/app/api/v1/ai/horoscope-interpret/route.ts` (Phase 4, T101) — same contract, `interpretation` kind; the daily check is `checkDailyAILimit` (`src/lib/ai/rate-limit.ts`) instead of `checkAndIncrementDailyUsage`, but it charges the **same** `AIDailyUsage.interpretationCount` bucket; context row (`HoroscopeContent`/fallback) is read-only — no persisted side effect to compensate
 - `src/services/ai-service.ts` — `refundInterpretationQuota(userId)` / `refundFollowUpQuota(userId)` (decrement with `gt: 0` guard), `checkAndIncrementDailyUsage`, `checkAndIncrementFollowUpUsage`
 - `tests/integration/ai-interpret.test.ts` — describe `quota devolvida quando a geracao falha (bug da tiragem)`: 503-no-consume, zero-token refund, **partial-delivery no-refund** (async generator yields one chunk then throws)
 - `tests/integration/ai-followup.test.ts` — describe `quota devolvida quando a geracao falha (follow-up)`: 503, refund + `deleteMany` compensation, partial-delivery no-refund (keeps message)
 - `tests/integration/arcana-interpret.test.ts` — describe `quota devolvida quando a geracao falha (arcana)`: same 3-case trio
+- `tests/integration/ai-horoscope-interpret.test.ts` — Phase 4 suite for `POST /api/v1/ai/horoscope-interpret`
 - `docs/04-api/ai.md` — §Reserva e devolução de quota (written contract: reserve-before-stream, refund-only-on-zero-delivery, one-shot, follow-up compensation)
 
 ## Current Implementation Snapshot
 
 - `createQuotaReservation(reqId, userId, kind: "interpretation" | "followUp")` returns `{ markConsumed(), tryRefund(scope) }` over a closure `let consumed = false`: `markConsumed()` flips it true right after the daily/follow-up limit check passes; `tryRefund` is **one-shot** (returns early if `!consumed`, then sets `consumed = false` before awaiting the refund) so a stream-catch and an outer catch firing together can never double-decrement.
-- Route order (all three AI routes): auth (Bearer `requireAuth`) → JSON → Zod → `createQuotaReservation` → context lookup → **`requireAIClient` 503 fail-fast** → `checkAndIncrement*Usage` (429 if not allowed) → `quota.markConsumed()` → prompt/cache → `ReadableStream` → `sseResponse`.
+- Route order (all four AI routes): auth (Bearer `requireAuth`) → JSON → Zod → `createQuotaReservation` → context lookup → **`requireAIClient` 503 fail-fast** → `checkAndIncrement*Usage` (429 if not allowed; **`checkDailyAILimit` on `horoscope-interpret`** — same bucket) → `quota.markConsumed()` → prompt/cache → `ReadableStream` → `sseResponse`.
 - Inside the stream catch: `logger.error` → **`if (fullText === "") { await quota.tryRefund(...) }`** → enqueue `{ type: "error", code: "AI_SERVICE_UNAVAILABLE", retryable: true }` → `controller.close()`. `fullText` accumulates every enqueued token, so `fullText === ""` is precisely "zero delivery".
 - The outer (pre-stream) catch also calls `tryRefund` — harmless if the stream never started because `consumed` is still false or already spent (one-shot).
 - Follow-up compensation: the user message row is created at stream start and its `id` captured in `userMessageId`; on zero-delivery failure the route runs `prisma.followUpMessage.deleteMany({ where: { id: userMessageId } })` (itself wrapped in try/catch that only logs) **before** `tryRefund`, so a retry re-posts the turn instead of duplicating it in `conversationHistory`.
@@ -177,7 +179,7 @@ Key points:
 
 ### Step 5: Pin the exploit closed with partial-delivery tests
 
-[Files: `tests/integration/ai-interpret.test.ts`, `tests/integration/ai-followup.test.ts`, `tests/integration/arcana-interpret.test.ts`]
+[Files: `tests/integration/ai-interpret.test.ts`, `tests/integration/ai-followup.test.ts`, `tests/integration/arcana-interpret.test.ts`, `tests/integration/ai-horoscope-interpret.test.ts`]
 
 ```typescript
 it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {
@@ -270,8 +272,8 @@ try {
 - [ ] Follow-up zero-delivery failure also deletes the persisted user turn: `prisma.followUpMessage.deleteMany({ where: { id: userMessageId } })` by the **captured id**, before `tryRefund`.
 - [ ] Refund/compensation failures are `logger.error`-swallowed — never surface as a second error to the client.
 - [ ] Streams still emit `{ type: "error", code: "AI_SERVICE_UNAVAILABLE", retryable: true }` on failure regardless of refund outcome.
-- [ ] All three routes (`interpret`, `arcana-interpret`, `follow-up`) stay in lockstep on this contract — a new AI streaming route must use the same helper and gates.
-- [ ] Tests keep the partial-delivery no-refund case in each of `tests/integration/{ai-interpret,ai-followup,arcana-interpret}.test.ts`.
+- [ ] All four routes (`interpret`, `arcana-interpret`, `follow-up`, `horoscope-interpret`) stay in lockstep on this contract — a new AI streaming route must use the same helper and gates.
+- [ ] Tests keep the partial-delivery no-refund case in each of `tests/integration/{ai-interpret,ai-followup,arcana-interpret,ai-horoscope-interpret}.test.ts`.
 
 ## Anti-Patterns (What NOT to Do)
 
@@ -296,7 +298,7 @@ try {
 
 1. **New AI streaming endpoint**: import `createQuotaReservation`, `requireAIClient`, `sseResponse` from `src/app/api/v1/ai/_helpers.ts`; follow the Complete Example ordering (fail-fast → charge → markConsumed → stream → `fullText === ""` gate → optional compensation → one-shot refund).
 2. **Any change to the catch block**: verify the refund condition is still literally `fullText === ""` and that `fullText` is appended for every enqueued token; if the stream gains a pre-first-token side effect (persisted row), add a matching compensation under the same gate.
-3. **Refund logic change**: touch `createQuotaReservation` in `_helpers.ts` once — all three routes share it; keep one-shot (`consumed = false` before the `await`) and error-swallowing semantics.
-4. **Test sync**: keep/extend the 3-case trio (503-no-consume, zero-token refund+compensation, partial-delivery no-refund) plus success-no-refund in `tests/integration/ai-interpret.test.ts`, `tests/integration/ai-followup.test.ts`, `tests/integration/arcana-interpret.test.ts`.
+3. **Refund logic change**: touch `createQuotaReservation` in `_helpers.ts` once — all four routes share it; keep one-shot (`consumed = false` before the `await`) and error-swallowing semantics.
+4. **Test sync**: keep/extend the 3-case trio (503-no-consume, zero-token refund+compensation, partial-delivery no-refund) plus success-no-refund in `tests/integration/ai-interpret.test.ts`, `tests/integration/ai-followup.test.ts`, `tests/integration/arcana-interpret.test.ts`, `tests/integration/ai-horoscope-interpret.test.ts`.
 5. **Docs sync**: update `docs/04-api/ai.md` §Reserva e devolução de quota to match any contract change (it is the written source of truth for this behavior).
-6. **Verification**: `bun run test tests/integration/ai-interpret.test.ts tests/integration/ai-followup.test.ts tests/integration/arcana-interpret.test.ts` (run through the `test` **script** — it carries `--max-old-space-size=4096`, never bare `npx vitest run`, see `docs/solutions/ci-cd/turbopack-postcss-oom.md`), then `bun run type-check` and `bun run lint`; full suite before merge: `bun run test`.
+6. **Verification**: `bun run test tests/integration/ai-interpret.test.ts tests/integration/ai-followup.test.ts tests/integration/arcana-interpret.test.ts tests/integration/ai-horoscope-interpret.test.ts` (run through the `test` **script** — it carries `--max-old-space-size=4096`, never bare `npx vitest run`, see `docs/solutions/ci-cd/turbopack-postcss-oom.md`), then `bun run type-check` and `bun run lint`; full suite before merge: `bun run test`.

@@ -1,6 +1,6 @@
 # Estratégia de Deploy — arkana-agora
 
-> Versão: 1.3 | Última atualização: 2026-10-03
+> Versão: 1.4 | Última atualização: 2026-10-20
 
 ---
 
@@ -34,7 +34,7 @@
 | **Backend (API)** | Next.js API Routes + Prisma + Auth.js v5 + Zod | `src/app/api/v1/*` (mesmo app — MVP) | 3000 | `/api/v1/*` |
 | **Backend — WebSocket** | Node.js + Socket.io | `socket-service/` (raiz do repo — ADR-007; **não** existe `services/ws-service`) | 3003 | `bun run dev:ws` (`tsx watch socket-service/index.ts`) |
 | **Backend — IA** (futuro) | Node.js | `services/ai-service` | 3004 | — |
-| **Backend — Worker** (futuro) | Node.js + BullMQ | `services/worker` | 3005 | — |
+| **Backend — Worker** | Node.js + BullMQ | `services/worker/` (raiz do repo — **implementado na Phase 4**, T098/T102; mover para `services/` completo na Fase 3) | — (sem porta HTTP) | `bun run dev:worker` (`tsx watch services/worker/index.ts`) |
 | **Packages** (monorepo futuro) | pnpm workspace | `packages/{ui,types,config,utils,api-client}` | — | via Turborepo |
 
 Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bibliotecas backend documentadas: Prisma (ORM), Auth.js v5 (auth — ADR-010), Zod (validação), Mercado Pago SDK (payments), `openai` SDK (IA). Frontend documentado: shadcn/ui (preset radix-nova — "New York" na nomenclatura antiga da CLI) + Tailwind CSS 4 + Zustand + TanStack Query + Framer Motion. Detalhes em `docs/02-architecture/architecture.md` e `docs/02-architecture/monorepo.md`.
@@ -50,7 +50,7 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
      ▼              ▼              ▼
 ┌──────────┐ ┌──────────┐ ┌──────────────┐
 │ Next.js  │ │Socket.io │ │ BullMQ       │
-│ :3000    │ │ :3003    │ │ :3005 (fut.) │
+│ :3000    │ │ :3003    │ │ dev:worker   │
 └────┬─────┘ └────┬─────┘ └──────┬───────┘
      │            │              │
      ▼            ▼              ▼
@@ -60,7 +60,7 @@ Backend no MVP = API Routes do próprio Next.js (monólito modular, ADR-001). Bi
 └────────────┘ └──────────┘ └──────────┘
 ```
 
-> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** — **não há serviço `ws` no compose**: o `socket-service/` scaffoldado na Phase 2.5 tem `Dockerfile`/`ecosystem.config.js` próprios e roda fora do compose via `bun run dev:ws`. **Caddy continua fora do compose** (adiado). O diagrama acima é o stack local completo documentado.
+> **Nota F1:** o `docker-compose.yml` atual sobe **postgres + redis + migrate + web** — **não há serviço `ws` nem `worker` no compose**: o `socket-service/` scaffoldado na Phase 2.5 tem `Dockerfile`/`ecosystem.config.js` próprios e roda fora do compose via `bun run dev:ws`, e o worker `services/worker/` (Phase 4 — BullMQ `horoscope-generation` + tick horário de notificações) roda fora do compose via `bun run dev:worker` (produção: PM2, ainda sem serviço documentado). **Caddy continua fora do compose** (adiado). O diagrama acima é o stack local completo documentado.
 
 ### 2.3 Comandos de Desenvolvimento
 
@@ -143,7 +143,7 @@ SMTP_USER=
 SMTP_PASS=
 # Resend (e-mails transacionais — src/lib/email/email.ts); em dev use AUTH_EMAIL_SKIP_SEND=true para logar no console
 RESEND_API_KEY=
-# Vercel Cron (T16 — GET /api/cron/hard-delete 0 3 * * *, GET /api/cron/feed-cache-refresh 0 0 * * * e GET /api/cron/counter-reconcile 0 4 * * *, todos em vercel.json):
+# Vercel Cron (5 rotas em vercel.json: hard-delete 0 3 * * * (T16), feed-cache-refresh 0 0 * * * , counter-reconcile 0 4 * * * (T147), horoscope-generation 0 7 * * * e horoscope-availability 0 9 * * * (Phase 4)):
 # obrigatório em prod; sem ele os crons retornam 401
 CRON_SECRET=
 
@@ -239,7 +239,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
      │   Vercel     │  │   Railway     │  │   Railway     │
      │   (Web)      │  │   (WS)       │  │   (Worker)   │
      │   Next.js    │  │   Socket.io  │  │   BullMQ     │
-     │   Serverless │  │   :3003      │  │   (futuro)   │
+     │   Serverless │  │   :3003      │  │  (planejado) │
      └──────┬──────┘  └──────┬───────┘  └──────┬───────┘
             │                │                 │
             ▼                ▼                 ▼
@@ -250,6 +250,8 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
      │              │ │   Cache)     │ │   cartas)    │
      └──────────────┘ └──────────────┘ └──────────────┘
 ```
+
+> **Worker (Phase 4):** `services/worker/` (BullMQ `horoscope-generation` + tick horário de notificações) é código pronto mas **ainda não hospedado na Railway/PM2** — em dev roda com `bun run dev:worker` fora do compose; a caixa `(planejado)` acima refere-se ao **hosting** do worker, não ao código. Os crons diários da geração/publicação (`horoscope-generation` 07:00 UTC, `horoscope-availability` 09:00 UTC) rodam **na Vercel** (`vercel.json`), e o tick horário (T102) roda **no worker** porque o Hobby não aceita crons `<24h` (SC34).
 
 ### 4.2 Environment Variables
 
@@ -286,8 +288,8 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `SOCKET_PORT` | `3003` | Production | Porta do mini-service Socket.io (`socket-service/` — scaffolded na Phase 2.5/T066; default 3003 validado em `socket-service/src/lib/env.ts` e `src/lib/env.ts`) |
 | `ACCESS_TOKEN_TTL_SECONDS` | `900` | Production | TTL do access token em segundos (token-service `src/services/token-service.ts`, default 900 = 15 min; **revisão R2**: também validado no boot do socket-service em `socket-service/src/lib/env.ts` e usado no `maxTokenAge` do handshake — **o valor tem de ser o MESMO nos dois processos**, senão o handshake rejeita tokens ainda válidos ou aceita além do TTL do emissor; `REFRESH_TOKEN_TTL_DAYS` default 30, só do token-service) |
 | `NEXT_PUBLIC_WS_URL` | `wss://ws.arkanaagora.com.br` | Production | URL do socket-service lida por `src/hooks/use-socket.ts` (domínio `ws.*` da §4.3; socket.io aceita `ws(s)://`/`http(s)://`; **sem a var em produção o realtime fica desabilitado** — `resolveSocketUrl` devolve `null`, `connect()` não abre socket e o fallback de polling cobre posts/notificações, **nunca localhost**, que mandaria o access token no handshake para um processo local; em dev cai no fallback `http://localhost:3003`). Também é a origem esperada do CORS do socket-service. **Inlined em build time** — precisa estar definida ANTES de `next build` (revisão I-e: `next.config.ts` emite WARN no build de produção sem a var; o CI builda sem ela de propósito e não falha) |
-| `AI_HOROSCOPE_API_KEY` | *Chave dedicada* | Production | Opcional — chave separada p/ geração de horóscopos (Sprint 2; **sem consumidor até as fases 5/6** do plano) |
-| `AI_HOROSCOPE_MODEL` | `gpt-4o-mini` | Production | Modelo da geração de horóscopos (idem — pendente de T097/T098) |
+| `AI_HOROSCOPE_API_KEY` | *Chave dedicada* | Production | Opcional — chave separada p/ geração de horóscopos (declarada em `src/lib/env.ts`; **ainda sem consumidor** — a geração implementada no T097–T100 usa o client compartilhado `AI_API_KEY`) |
+| `AI_HOROSCOPE_MODEL` | `gpt-4o-mini` | Production | Modelo da geração de horóscopos (idem — declarado, **sem consumidor**; a geração usa `AI_MODEL`) |
 | `MODERATION_BLOCKED_WORDS` | *palavra1,palavra2* | Production | Palavras bloqueadas da moderação de posts/comentários (Sprint 2 T025 — declarada em `src/lib/env.ts`, consumida por `src/lib/moderation.ts` `checkContent()` desde o Phase 0.5; **primeiro consumidor de rota desde o Sprint 2 Phase 2 (2026-10-01)**: `POST /api/v1/social/posts` (T051) responde **403 `CONTENT_BLOCKED`** com `details.flaggedWords`; escopo restante de T129 pendente) |
 | `SHARP_IGNORE_GLOBAL_LIBVIPS` | `true` \| `false` | Production | Flag do Sharp para upload de imagens (Sprint 2 — `src/lib/env.ts`) |
 | `MP_ACCESS_TOKEN` | *Token Mercado Pago* | Production | Token de acesso do Mercado Pago |
@@ -298,7 +300,7 @@ Lint → Type Check → Unit Tests → Build → Preview Deploy
 | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | *Token do projeto PostHog* | Production | Client analytics PostHog (`src/lib/analytics.ts`); sem ele, `console.warn("[Analytics] PostHog key not configured")` e não init (fora de development) |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` | Production | Host do PostHog (`src/lib/analytics.ts`; default `https://app.posthog.com`; override com `us.i.posthog.com`/`eu.i.posthog.com` conforme a região do projeto) |
 | `AUTH_URL` | `https://arkanaagora.com.br` | Production + Preview | Origem canônica da aplicação (HTTPS obrigatório); guard de runtime em `src/auth/auth.config.ts` (`AUTH_URL_in_env`/`AUTH_URL_empty` no erro — redeploy após editar env) |
-| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`), `feed-cache-refresh` (Sprint 2, `0 0 * * *` diário — SC34) e `counter-reconcile` (Sprint 2 T147 — reconciliação de contadores, `0 4 * * *`); obrigatório, sem ele os crons retornam 401 |
+| `CRON_SECRET` | *Secret do Vercel Cron* | Production | Protege **todas** as rotas `GET /api/cron/*` agendadas em `vercel.json`: `hard-delete` (T16 — LGPD hard-delete, `0 3 * * *`), `feed-cache-refresh` (Sprint 2, `0 0 * * *` diário — SC34), `counter-reconcile` (Sprint 2 T147 — reconciliação de contadores, `0 4 * * *`), `horoscope-generation` (Phase 4 T096 — dispara a fila `horoscope-generation`, `0 7 * * *`) e `horoscope-availability` (Phase 4 T099 — publica disponibilidade do dia, `0 9 * * *`); obrigatório, sem ele os crons retornam 401. **Não protege** o tick horário de notificações T102 — ele roda dentro de `services/worker/`, fora da Vercel |
 
 **Build time (revisão I-e)**: variáveis `NEXT_PUBLIC_*` são resolvidas no **build**, não no runtime — definir `NEXT_PUBLIC_WS_URL` no ambiente do servidor *depois* do `next build` não tem efeito no bundle. Sem ela, em **produção** `resolveSocketUrl()` devolve `null` e `connect()` não abre socket: o realtime fica desabilitado (fallback de polling cobre posts/notificações; **nunca localhost** — C1 da revisão multi-agente 2026-10-04) e em **dev** cai no fallback `http://localhost:3003`; `resolveSocketUrl()` lança apenas para URL malformada/protocolo inválido. `next.config.ts` emite um **WARN** (não erro) quando `NODE_ENV=production` e a variável está ausente no momento do build.
 
@@ -316,7 +318,7 @@ Acesse `https://vercel.com/dedsdeads-projects/arkana-agora/settings/environment-
 1. Crie uma variável `AUTH_URL` com valor `https://arkana-agora.vercel.app` (ou `https://staging.arkanaagora.com.br` se configurado)
 2. Configure as outras variáveis de ambiente conforme a tabela acima
 
-**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron — `hard-delete` + `feed-cache-refresh` + `counter-reconcile`) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
+**Nota**: As variáveis `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, `REDIS_URL`, `SENTRY_DSN` e `CRON_SECRET` (Vercel Cron — `hard-delete` + `feed-cache-refresh` + `counter-reconcile` + `horoscope-generation` + `horoscope-availability`) são obrigatórias em produção. Em staging, apenas `AUTH_URL` e `AUTH_SECRET` são obrigatórios para evitar o erro de `AUTH_URL missing`.
 
 ### 4.3 Serviços de Produção
 

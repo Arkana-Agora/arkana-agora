@@ -16,9 +16,11 @@ import {
   getFollowUpContext,
   checkAndIncrementFollowUpUsage,
   saveAssistantFollowUpMessage,
+  commitDailyAIUsage,
 } from "@/services/ai-service"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 const followUpSchema = z.object({
   interpretationId: z.string().min(1),
@@ -96,6 +98,28 @@ export async function POST(request: Request): Promise<Response> {
     })
 
     const encoder = new TextEncoder()
+    // AbortController for client disconnect handling
+    const streamAbort = new AbortController()
+    const safeEnqueue = (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+      bytes: Uint8Array,
+    ): void => {
+      try {
+        controller.enqueue(bytes)
+      } catch {
+        // controller already closed (client disconnected)
+      }
+    }
+    const safeClose = (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+    ): void => {
+      try {
+        controller.close()
+      } catch {
+        // already closed
+      }
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
         let userMessageId: string | null = null
@@ -124,10 +148,12 @@ export async function POST(request: Request): Promise<Response> {
           )
 
           for await (const chunk of aiResponse) {
+            if (streamAbort.signal.aborted) break
             const token = chunk.choices[0]?.delta?.content ?? ""
             if (token) {
               fullText += token
-              controller.enqueue(
+              safeEnqueue(
+                controller,
                 encoder.encode(
                   `data: ${JSON.stringify({ type: "token", token })}\n\n`,
                 ),
@@ -191,13 +217,47 @@ export async function POST(request: Request): Promise<Response> {
               }
             }
             await quota.tryRefund("ai/follow-up")
+            safeEnqueue(
+              controller,
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a resposta. Tente novamente.", retryable: true })}\n\n`,
+              ),
+            )
+            safeClose(controller)
+            return
+          } else {
+            // Tokens foram entregues: commit da quota e envia erro via SSE
+            try {
+              await commitDailyAIUsage(auth.userId)
+            } catch (commitErr) {
+              logger.error(
+                { reqId, err: commitErr },
+                "[ai/follow-up] falha ao commitar quota apos entrega parcial",
+              )
+            }
+            try {
+              safeEnqueue(
+                controller,
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a resposta. Tente novamente.", retryable: true })}\n\n`,
+                ),
+              )
+            } catch (enqueueErr) {
+              logger.error(
+                { reqId, err: enqueueErr },
+                "[ai/follow-up] falha ao enviar frame de erro",
+              )
+            }
+            try {
+              safeClose(controller)
+            } catch (closeErr) {
+              logger.error(
+                { reqId, err: closeErr },
+                "[ai/follow-up] falha ao fechar stream",
+              )
+            }
+            return
           }
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a resposta. Tente novamente.", retryable: true })}\n\n`,
-            ),
-          )
-          controller.close()
         }
       },
     })

@@ -10,6 +10,7 @@ import {
   Newspaper,
   Sparkles,
   SquarePen,
+  Stars,
   User,
 } from "lucide-react"
 import Link from "next/link"
@@ -25,6 +26,7 @@ const NAV_ITEMS: ReadonlyArray<{
   { href: "/tirar", label: "Tirar", icon: SquarePen },
   { href: "/minhas-tiragens", label: "Histórico", icon: History },
   { href: "/meu-arcano", label: "Meu Arcano", icon: Sparkles },
+  { href: "/horoscopos/ocidental", label: "Horóscopos", icon: Stars },
   { href: "/perfil", label: "Perfil", icon: User },
 ]
 
