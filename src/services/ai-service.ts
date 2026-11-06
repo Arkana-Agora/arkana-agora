@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma"
-import { computeCacheHash, type InterpretationMode } from "@/lib/ai/cache"
 import {
   findCachedInterpretation,
   saveInterpretation,
@@ -7,6 +6,15 @@ import {
 import { getSystemPrompt } from "@/lib/ai/prompts/system"
 import { buildUserPrompt } from "@/lib/ai/prompts/user"
 import { resolveReadingPromptContext } from "@/lib/ai/prompts/reading-context"
+import { computeCacheHash, type InterpretationMode } from "@/lib/ai/cache"
+
+export {
+  commitDailyAIUsage,
+  checkAndIncrementFollowUpUsage,
+  checkDailyAILimit,
+  refundInterpretationQuota,
+  refundFollowUpQuota,
+} from "@/lib/ai/rate-limit"
 
 export const MODEL_VERSION = "gpt-4o-2024-08-06"
 
@@ -85,137 +93,6 @@ export async function getInterpretationContext(
       cards: reading.cards,
     },
     tier,
-  }
-}
-
-function todayStart(): Date {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-export async function checkAndIncrementDailyUsage(
-  userId: string,
-  tier: string,
-): Promise<{
-  allowed: boolean
-  remaining: number
-  totalLimit: number
-  tier: string
-}> {
-  const normalizedTier = tier.toUpperCase()
-  const limit =
-    normalizedTier in AI_DAILY_LIMITS ? AI_DAILY_LIMITS[normalizedTier]! : 10
-  const date = todayStart()
-
-  const usage = await prisma.aIDailyUsage.findUnique({
-    where: { userId_date: { userId, date } },
-  })
-
-  const currentCount = usage?.interpretationCount ?? 0
-
-  if (currentCount >= limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      totalLimit: limit,
-      tier: normalizedTier,
-    }
-  }
-
-  // NÃO incrementa aqui — só reserva (check). O commit acontece
-  // após a chamada de IA bem-sucedida (evita consumir quota em falhas).
-  const remaining =
-    limit === Number.MAX_SAFE_INTEGER
-      ? Number.MAX_SAFE_INTEGER
-      : limit - currentCount - 1
-
-  return {
-    allowed: true,
-    remaining,
-    totalLimit: limit,
-    tier: normalizedTier,
-  }
-}
-
-/**
- * Commits the AI quota usage after a successful AI call.
- * Should be called AFTER the AI stream completes successfully (at least 1 token delivered).
- */
-export async function commitDailyAIUsage(userId: string): Promise<void> {
-  const date = todayStart()
-  await prisma.aIDailyUsage.upsert({
-    where: { userId_date: { userId, date } },
-    create: { userId, date, interpretationCount: 1, followUpCount: 0 },
-    update: { interpretationCount: { increment: 1 } },
-  })
-}
-
-// Devolução de quota quando a geração falha: o incremento acontece antes
-// do stream (para não estourar o limite sob concorrência), então uma
-// falha de provider/configuração precisa desfazer a contagem — senão o
-// usuário perde leitura sem receber nada. Guarda gt(0) evita negativo.
-export async function refundInterpretationQuota(userId: string): Promise<void> {
-  const date = todayStart()
-  await prisma.aIDailyUsage.updateMany({
-    where: { userId, date, interpretationCount: { gt: 0 } },
-    data: { interpretationCount: { decrement: 1 } },
-  })
-}
-
-export async function refundFollowUpQuota(userId: string): Promise<void> {
-  const date = todayStart()
-  await prisma.aIDailyUsage.updateMany({
-    where: { userId, date, followUpCount: { gt: 0 } },
-    data: { followUpCount: { decrement: 1 } },
-  })
-}
-
-export async function checkAndIncrementFollowUpUsage(
-  userId: string,
-  tier: string,
-): Promise<{
-  allowed: boolean
-  remaining: number
-  followUpLimit: number
-  tier: string
-}> {
-  const normalizedTier = tier.toUpperCase()
-  const limit =
-    normalizedTier in FOLLOW_UP_LIMITS ? FOLLOW_UP_LIMITS[normalizedTier]! : 10
-  const date = todayStart()
-
-  const usage = await prisma.aIDailyUsage.findUnique({
-    where: { userId_date: { userId, date } },
-  })
-
-  const currentCount = usage?.followUpCount ?? 0
-
-  if (currentCount >= limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      followUpLimit: limit,
-      tier: normalizedTier,
-    }
-  }
-
-  await prisma.aIDailyUsage.upsert({
-    where: { userId_date: { userId, date } },
-    create: { userId, date, interpretationCount: 0, followUpCount: 1 },
-    update: { followUpCount: { increment: 1 } },
-  })
-
-  const remaining =
-    limit === Number.MAX_SAFE_INTEGER
-      ? Number.MAX_SAFE_INTEGER
-      : limit - currentCount - 1
-
-  return {
-    allowed: true,
-    remaining,
-    followUpLimit: limit,
-    tier: normalizedTier,
   }
 }
 

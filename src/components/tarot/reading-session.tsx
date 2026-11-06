@@ -25,6 +25,9 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { Spread } from "@/types/tarot"
 
+// Named constants for magic numbers
+const REVEAL_INTERVAL_MS = 300
+
 interface ReadingSessionProps {
   className?: string
 }
@@ -132,7 +135,7 @@ export function ReadingSession({ className }: ReadingSessionProps) {
   useSequentialReveal({
     count: enrichedCards.length,
     enabled: step === "reveal",
-    intervalMs: 300,
+    intervalMs: REVEAL_INTERVAL_MS,
     isRevealed: (index) => {
       const card = enrichedCards[index]
       if (!card) return false

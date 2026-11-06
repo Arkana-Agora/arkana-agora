@@ -82,6 +82,118 @@ export async function commitDailyAIUsage(userId: string): Promise<void> {
   })
 }
 
+export async function checkAndIncrementFollowUpUsage(
+  userId: string,
+  tier: string,
+): Promise<{
+  allowed: boolean
+  remaining: number
+  followUpLimit: number
+  tier: string
+}> {
+  const normalizedTier = tier.toUpperCase()
+  const limit =
+    normalizedTier in FOLLOW_UP_LIMITS ? FOLLOW_UP_LIMITS[normalizedTier]! : 10
+  const date = todayStart()
+
+  const usage = await prisma.aIDailyUsage.findUnique({
+    where: { userId_date: { userId, date } },
+  })
+
+  const currentCount = usage?.followUpCount ?? 0
+
+  if (currentCount >= limit) {
+    return {
+      allowed: false,
+      remaining: 0,
+      followUpLimit: limit,
+      tier: normalizedTier,
+    }
+  }
+
+  await prisma.aIDailyUsage.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, interpretationCount: 0, followUpCount: 1 },
+    update: { followUpCount: { increment: 1 } },
+  })
+
+  const remaining =
+    limit === Number.MAX_SAFE_INTEGER
+      ? Number.MAX_SAFE_INTEGER
+      : limit - currentCount - 1
+
+  return {
+    allowed: true,
+    remaining,
+    followUpLimit: limit,
+    tier: normalizedTier,
+  }
+}
+
+export async function checkAndIncrementDailyUsage(
+  userId: string,
+  tier: string,
+): Promise<{
+  allowed: boolean
+  remaining: number
+  totalLimit: number
+  tier: string
+}> {
+  const normalizedTier = tier.toUpperCase()
+  const limit =
+    normalizedTier in AI_DAILY_LIMITS ? AI_DAILY_LIMITS[normalizedTier]! : 10
+  const date = todayStart()
+
+  const usage = await prisma.aIDailyUsage.findUnique({
+    where: { userId_date: { userId, date } },
+  })
+
+  const currentCount = usage?.interpretationCount ?? 0
+
+  if (currentCount >= limit) {
+    return {
+      allowed: false,
+      remaining: 0,
+      totalLimit: limit,
+      tier: normalizedTier,
+    }
+  }
+
+  await prisma.aIDailyUsage.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, interpretationCount: 1, followUpCount: 0 },
+    update: { interpretationCount: { increment: 1 } },
+  })
+
+  const remaining =
+    limit === Number.MAX_SAFE_INTEGER
+      ? Number.MAX_SAFE_INTEGER
+      : limit - currentCount - 1
+
+  return {
+    allowed: true,
+    remaining,
+    totalLimit: limit,
+    tier: normalizedTier,
+  }
+}
+
+export async function refundFollowUpQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date },
+    data: { followUpCount: { decrement: 1 } },
+  })
+}
+
+export async function refundInterpretationQuota(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.updateMany({
+    where: { userId, date },
+    data: { interpretationCount: { decrement: 1 } },
+  })
+}
+
 export async function checkFollowUpLimit(
   userId: string,
   tier: string,

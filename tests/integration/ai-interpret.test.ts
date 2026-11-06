@@ -270,7 +270,7 @@ describe("quota devolvida quando a geracao falha (bug da tiragem)", () => {
     expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("NAO incrementa cota quando a geracao falha antes de entregar tokens (erro é enviado pois stream não iniciou)", async () => {
+  it("does NOT increment quota when generation fails before delivering tokens (error sent as stream never started)", async () => {
     mockReading()
     mockGetAIClient.mockReturnValue({
       chat: {
@@ -288,12 +288,12 @@ describe("quota devolvida quando a geracao falha (bug da tiragem)", () => {
     const text = await res.text()
 
     expect(text).toContain('"type":"error"')
-    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    // With new pattern (commit after delivery), no increment to revert
     expect(mockUsageUpsert).not.toHaveBeenCalled()
     expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("NAO incrementa cota quando o provedor completa com zero conteudo (empty completion) - erro é enviado pois stream não iniciou", async () => {
+  it("does NOT increment quota when provider completes with zero content (empty completion) - error sent as stream never started", async () => {
     mockReading()
     mockAIClient([])
 
@@ -304,7 +304,7 @@ describe("quota devolvida quando a geracao falha (bug da tiragem)", () => {
 
     expect(text).toContain('"type":"error"')
     expect(text).toContain('"retryable":true')
-    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    // With new pattern (commit after delivery), no increment to revert
     expect(mockUsageUpdateMany).not.toHaveBeenCalled()
     expect(mockInterpretationCreate).not.toHaveBeenCalled()
   })

@@ -11,7 +11,7 @@ import {
 } from "@/app/api/v1/ai/_helpers"
 import {
   getInterpretationContext,
-  checkAndIncrementDailyUsage,
+  checkDailyAILimit,
   commitDailyAIUsage,
   buildInterpretationPrompt,
   lookupCachedInterpretation,
@@ -19,6 +19,7 @@ import {
 } from "@/services/ai-service"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 const interpretSchema = z.object({
   readingId: z.string().min(1),
@@ -68,7 +69,7 @@ export async function POST(request: Request): Promise<Response> {
     if (aiClientOrResponse instanceof Response) return aiClientOrResponse
     const aiClient = aiClientOrResponse
 
-    const limitResult = await checkAndIncrementDailyUsage(auth.userId, ctx.tier)
+    const limitResult = await checkDailyAILimit(auth.userId, ctx.tier)
     if (!limitResult.allowed) {
       return apiError(
         "AI_DAILY_LIMIT_REACHED",
@@ -208,17 +209,45 @@ export async function POST(request: Request): Promise<Response> {
             "[ai/interpret] erro no streaming",
           )
           if (fullText !== "") {
-            await commitDailyAIUsage(auth.userId)
+            try {
+              await commitDailyAIUsage(auth.userId)
+            } catch (commitErr) {
+              logger.error(
+                { reqId, err: commitErr },
+                "[ai/interpret] falha ao commitar quota apos entrega parcial",
+              )
+            }
           } else {
-            await quota.tryRefund("ai/interpret")
+            try {
+              await quota.tryRefund("ai/interpret")
+            } catch (refundErr) {
+              logger.error(
+                { reqId, err: refundErr },
+                "[ai/interpret] falha ao devolver quota",
+              )
+            }
           }
-          safeEnqueue(
-            controller,
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
-            ),
-          )
-          safeClose(controller)
+          try {
+            safeEnqueue(
+              controller,
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
+              ),
+            )
+          } catch (enqueueErr) {
+            logger.error(
+              { reqId, err: enqueueErr },
+              "[ai/interpret] falha ao enviar frame de erro",
+            )
+          }
+          try {
+            safeClose(controller)
+          } catch (closeErr) {
+            logger.error(
+              { reqId, err: closeErr },
+              "[ai/interpret] falha ao fechar stream",
+            )
+          }
         }
       },
     })

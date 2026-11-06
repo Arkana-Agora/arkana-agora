@@ -31,7 +31,7 @@ function CardFrontPlaceholder({
   fill = false,
 }: {
   fallbackLabel: string
-  className?: string | undefined
+  className?: string
   fill?: boolean
 }) {
   return (
@@ -238,7 +238,7 @@ function DeckImageInner({
     return (
       <CardFrontPlaceholder
         fallbackLabel={fallbackLabel}
-        className={className}
+        {...(className !== undefined ? { className } : {})}
         fill={fill}
       />
     )

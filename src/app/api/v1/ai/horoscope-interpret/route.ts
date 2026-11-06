@@ -269,17 +269,45 @@ export async function POST(request: Request): Promise<Response> {
             "[ai/horoscope-interpret] erro no streaming",
           )
           if (fullText !== "") {
-            await commitDailyAIUsage(auth.userId)
+            try {
+              await commitDailyAIUsage(auth.userId)
+            } catch (commitErr) {
+              logger.error(
+                { reqId, err: commitErr },
+                "[ai/horoscope-interpret] falha ao commitar quota apos entrega parcial",
+              )
+            }
           } else {
-            await quota.tryRefund("ai/horoscope-interpret")
+            try {
+              await quota.tryRefund("ai/horoscope-interpret")
+            } catch (refundErr) {
+              logger.error(
+                { reqId, err: refundErr },
+                "[ai/horoscope-interpret] falha ao devolver quota",
+              )
+            }
           }
-          safeEnqueue(
-            controller,
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
-            ),
-          )
-          safeClose(controller)
+          try {
+            safeEnqueue(
+              controller,
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
+              ),
+            )
+          } catch (enqueueErr) {
+            logger.error(
+              { reqId, err: enqueueErr },
+              "[ai/horoscope-interpret] falha ao enviar frame de erro",
+            )
+          }
+          try {
+            safeClose(controller)
+          } catch (closeErr) {
+            logger.error(
+              { reqId, err: closeErr },
+              "[ai/horoscope-interpret] falha ao fechar stream",
+            )
+          }
         }
       },
       cancel() {

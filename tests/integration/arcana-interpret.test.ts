@@ -164,7 +164,7 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
   })
 })
 
-describe("quota devolvida quando a geracao falha (arcana)", () => {
+describe("quota NOT incremented when generation fails (arcana)", () => {
   it("returns 503 AI_SERVICE_UNAVAILABLE and does NOT increment quota when AI client cannot initialize", async () => {
     mockUser()
     mockGetAIClient.mockImplementation(() => {
@@ -181,7 +181,7 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(mockUsageUpsert).not.toHaveBeenCalled()
   })
 
-  it("NAO incrementa cota quando a geracao falha antes de entregar tokens", async () => {
+  it("does NOT increment quota when generation fails before delivering tokens", async () => {
     mockUser()
     mockGetAIClient.mockReturnValue({
       chat: {
@@ -199,11 +199,12 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     const text = await res.text()
     expect(text).toContain('"type":"error"')
 
-    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    // With new pattern (commit after delivery), no increment to revert
+    expect(mockUsageUpsert).not.toHaveBeenCalled()
     expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("NAO incrementa cota quando o provedor completa com zero conteudo (empty completion)", async () => {
+  it("does NOT increment quota when provider completes with zero content (empty completion)", async () => {
     mockUser()
     mockAIClient([])
 
@@ -215,11 +216,11 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(text).toContain('"type":"error"')
     expect(text).toContain('"retryable":true')
     expect(text).not.toContain('"type":"done"')
-    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    // With new pattern (commit after delivery), no increment to revert
     expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {
+  it("does NOT refund quota when failure happens after tokens were delivered (forced abort) - quota is committed but stream ends without error response (known limitation)", async () => {
     mockUser()
     mockGetAIClient.mockReturnValue({
       chat: {

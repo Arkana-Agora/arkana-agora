@@ -14,12 +14,10 @@ import {
   createQuotaReservation,
   sseResponse,
 } from "@/app/api/v1/ai/_helpers"
-import {
-  checkAndIncrementDailyUsage,
-  commitDailyAIUsage,
-} from "@/services/ai-service"
+import { checkDailyAILimit, commitDailyAIUsage } from "@/services/ai-service"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 const arcanaInterpretSchema = z.object({
   arcanaNumber: z.number().int().min(1).max(22),
@@ -76,7 +74,7 @@ export async function POST(request: Request): Promise<Response> {
     if (aiClientOrResponse instanceof Response) return aiClientOrResponse
     const aiClient = aiClientOrResponse
 
-    const limitResult = await checkAndIncrementDailyUsage(auth.userId, tier)
+    const limitResult = await checkDailyAILimit(auth.userId, tier)
     if (!limitResult.allowed) {
       return apiError(
         "AI_DAILY_LIMIT_REACHED",
@@ -185,17 +183,45 @@ export async function POST(request: Request): Promise<Response> {
             "[ai/arcana-interpret] erro no streaming",
           )
           if (fullText !== "") {
-            await commitDailyAIUsage(auth.userId)
+            try {
+              await commitDailyAIUsage(auth.userId)
+            } catch (commitErr) {
+              logger.error(
+                { reqId, err: commitErr },
+                "[ai/arcana-interpret] falha ao commitar quota apos entrega parcial",
+              )
+            }
           } else {
-            await quota.tryRefund("ai/arcana-interpret")
+            try {
+              await quota.tryRefund("ai/arcana-interpret")
+            } catch (refundErr) {
+              logger.error(
+                { reqId, err: refundErr },
+                "[ai/arcana-interpret] falha ao devolver quota",
+              )
+            }
           }
-          safeEnqueue(
-            controller,
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
-            ),
-          )
-          safeClose(controller)
+          try {
+            safeEnqueue(
+              controller,
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
+              ),
+            )
+          } catch (enqueueErr) {
+            logger.error(
+              { reqId, err: enqueueErr },
+              "[ai/arcana-interpret] falha ao enviar frame de erro",
+            )
+          }
+          try {
+            safeClose(controller)
+          } catch (closeErr) {
+            logger.error(
+              { reqId, err: closeErr },
+              "[ai/arcana-interpret] falha ao fechar stream",
+            )
+          }
         }
       },
     })
