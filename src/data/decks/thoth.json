@@ -7,8 +7,8 @@
     "year": 1969,
     "cardCount": 78,
     "hasReversals": true,
-    "coverImageUrl": "/images/decks/thoth-cover.jpg",
-    "cardBackImageUrl": "/images/decks/thoth-back.jpg"
+    "coverImageUrl": "/images/decks/thoth-cover.svg",
+    "cardBackImageUrl": "/images/decks/thoth-back.svg"
   },
   "cards": [
     {

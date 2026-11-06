@@ -7,8 +7,8 @@
     "year": 1909,
     "cardCount": 78,
     "hasReversals": true,
-    "coverImageUrl": "/images/decks/rws-cover.jpg",
-    "cardBackImageUrl": "/images/decks/rws-back.jpg"
+    "coverImageUrl": "/images/decks/rws-cover.svg",
+    "cardBackImageUrl": "/images/decks/rws-back.svg"
   },
   "cards": [
     {

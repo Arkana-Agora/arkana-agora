@@ -87,10 +87,10 @@ export function TarotCard({
         {isFlipped ? (
           <motion.div
             key="face"
-            initial={{ rotateY: -90, opacity: 0 }}
+            initial={{ rotateY: 180, opacity: 0 }}
             animate={{ rotateY: 0, opacity: 1 }}
-            exit={{ rotateY: 90, opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            exit={{ rotateY: -180, opacity: 0 }}
+            transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
             className="absolute inset-0 h-full w-full overflow-hidden rounded-lg shadow-lg backface-hidden"
             style={{
               transformStyle: "preserve-3d",
@@ -129,10 +129,10 @@ export function TarotCard({
         ) : (
           <motion.div
             key="verso"
-            initial={{ rotateY: 90, opacity: 0 }}
+            initial={{ rotateY: -180, opacity: 0 }}
             animate={{ rotateY: 0, opacity: 1 }}
-            exit={{ rotateY: -90, opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            exit={{ rotateY: 180, opacity: 0 }}
+            transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
             className="absolute inset-0 h-full w-full overflow-hidden rounded-lg shadow-lg backface-hidden"
             style={{
               transformStyle: "preserve-3d",

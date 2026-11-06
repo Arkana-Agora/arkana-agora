@@ -130,14 +130,15 @@ describe("POST /api/v1/ai/arcana-interpret", () => {
     expect(text).toContain("done")
   })
 
-  it("increments usage count", async () => {
+  it("increments usage count on successful stream", async () => {
     mockUser()
     mockAIClient()
 
-    await interpretPOST(
+    const res = await interpretPOST(
       makeInterpretRequest({ arcanaNumber: 5, mode: "general" }),
     )
 
+    await res.text() // consumir stream até o fim para disparar commitDailyAIUsage
     expect(mockUsageUpsert).toHaveBeenCalled()
   })
 
@@ -180,7 +181,7 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(mockUsageUpsert).not.toHaveBeenCalled()
   })
 
-  it("refunds interpretation quota when generation fails mid-stream", async () => {
+  it("NAO incrementa cota quando a geracao falha antes de entregar tokens", async () => {
     mockUser()
     mockGetAIClient.mockReturnValue({
       chat: {
@@ -198,14 +199,11 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     const text = await res.text()
     expect(text).toContain('"type":"error"')
 
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("refunds interpretation quota when provider completes with zero content (empty completion)", async () => {
+  it("NAO incrementa cota quando o provedor completa com zero conteudo (empty completion)", async () => {
     mockUser()
     mockAIClient([])
 
@@ -217,11 +215,8 @@ describe("quota devolvida quando a geracao falha (arcana)", () => {
     expect(text).toContain('"type":"error"')
     expect(text).toContain('"retryable":true')
     expect(text).not.toContain('"type":"done"')
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
   it("does NOT refund quota when failure happens after tokens were delivered (abort forcável)", async () => {

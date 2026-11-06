@@ -14,7 +14,10 @@ import {
   createQuotaReservation,
   sseResponse,
 } from "@/app/api/v1/ai/_helpers"
-import { checkAndIncrementDailyUsage } from "@/services/ai-service"
+import {
+  checkAndIncrementDailyUsage,
+  commitDailyAIUsage,
+} from "@/services/ai-service"
 
 export const dynamic = "force-dynamic"
 
@@ -86,12 +89,35 @@ export async function POST(request: Request): Promise<Response> {
         },
       )
     }
-    quota.markConsumed()
+    // NÃO marca quota como consumida aqui — o commit acontece após
+    // o stream entregar pelo menos 1 token (evita consumir quota em falhas).
 
     const systemPrompt = getSystemPrompt(mode)
     const userPrompt = buildArcanaPrompt(arcanaData, mode, user.name)
 
     const encoder = new TextEncoder()
+    // Abort do stream (cliente desconectou) aborta o iterator da IA
+    // e impede enqueue em controlador já fechado.
+    const streamAbort = new AbortController()
+    const safeEnqueue = (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+      bytes: Uint8Array,
+    ): void => {
+      try {
+        controller.enqueue(bytes)
+      } catch {
+        // controlador já fechado (cliente desconectou) — ignora
+      }
+    }
+    const safeClose = (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+    ): void => {
+      try {
+        controller.close()
+      } catch {
+        // já fechado — ignora
+      }
+    }
     const stream = new ReadableStream({
       async start(controller) {
         let fullText = ""
@@ -110,10 +136,12 @@ export async function POST(request: Request): Promise<Response> {
           )
 
           for await (const chunk of aiResponse) {
+            if (streamAbort.signal.aborted) break
             const token = chunk.choices[0]?.delta?.content ?? ""
             if (token) {
               fullText += token
-              controller.enqueue(
+              safeEnqueue(
+                controller,
                 encoder.encode(
                   `data: ${JSON.stringify({ type: "token", token })}\n\n`,
                 ),
@@ -125,22 +153,30 @@ export async function POST(request: Request): Promise<Response> {
           // (não há persist aqui, mas `done` vazio enganaria o cliente).
           if (fullText === "") {
             await quota.tryRefund("ai/arcana-interpret")
-            controller.enqueue(
+            safeEnqueue(
+              controller,
               encoder.encode(
                 `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
               ),
             )
-            controller.close()
+            safeClose(controller)
             return
           }
 
-          controller.enqueue(
+          // Commit quota apenas após entregar pelo menos 1 token (sucesso real).
+          await commitDailyAIUsage(auth.userId)
+
+          safeEnqueue(
+            controller,
             encoder.encode(
               `data: ${JSON.stringify({ type: "done", cached: false })}\n\n`,
             ),
           )
-          controller.close()
+          safeClose(controller)
         } catch (error) {
+          if (streamAbort.signal.aborted) {
+            return
+          }
           logger.error(
             {
               reqId,
@@ -148,15 +184,18 @@ export async function POST(request: Request): Promise<Response> {
             },
             "[ai/arcana-interpret] erro no streaming",
           )
-          if (fullText === "") {
+          if (fullText !== "") {
+            await commitDailyAIUsage(auth.userId)
+          } else {
             await quota.tryRefund("ai/arcana-interpret")
           }
-          controller.enqueue(
+          safeEnqueue(
+            controller,
             encoder.encode(
               `data: ${JSON.stringify({ type: "error", code: "AI_SERVICE_UNAVAILABLE", message: "Nao foi possivel gerar a interpretacao agora. Tente novamente em alguns minutos.", retryable: true })}\n\n`,
             ),
           )
-          controller.close()
+          safeClose(controller)
         }
       },
     })

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   checkDailyAILimit,
   checkFollowUpLimit,
+  commitDailyAIUsage,
   type AIDailyUsage,
 } from "@/lib/ai/rate-limit"
 
@@ -75,11 +76,20 @@ describe("checkDailyAILimit", () => {
     expect(result.totalLimit).toBe(Number.MAX_SAFE_INTEGER)
   })
 
-  it("upserts the usage count on allowed", async () => {
+  it("checkDailyAILimit only checks, does NOT upsert (commit happens after successful stream)", async () => {
+    mockFindUnique.mockResolvedValue(makeUsage({ interpretationCount: 3 }))
+
+    const result = await checkDailyAILimit("user-1", "FREE")
+
+    expect(result.allowed).toBe(true)
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it("commitDailyAIUsage upserts the usage count after successful stream", async () => {
     mockFindUnique.mockResolvedValue(makeUsage({ interpretationCount: 3 }))
     mockUpsert.mockResolvedValue(makeUsage({ interpretationCount: 4 }))
 
-    await checkDailyAILimit("user-1", "FREE")
+    await commitDailyAIUsage("user-1")
 
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({

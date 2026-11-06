@@ -102,7 +102,8 @@ async function main(): Promise<void> {
       ])
     }
     await worker.close() // drena jobs em andamento antes de sair
-    process.exit(0)
+    // Não usa process.exit(0) — deixa o processo sair naturalmente após
+    // o event loop esvaziar (worker.close() fecha handles, event loop termina)
   }
   process.on("SIGINT", () => void shutdown("SIGINT"))
   process.on("SIGTERM", () => void shutdown("SIGTERM"))

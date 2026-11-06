@@ -54,12 +54,8 @@ export async function checkDailyAILimit(
     }
   }
 
-  await prisma.aIDailyUsage.upsert({
-    where: { userId_date: { userId, date } },
-    create: { userId, date, interpretationCount: 1, followUpCount: 0 },
-    update: { interpretationCount: { increment: 1 } },
-  })
-
+  // NÃO incrementa aqui — só reserva (check). O commit acontece
+  // após a chamada de IA bem-sucedida (evita consumir quota em falhas).
   const remaining =
     limit === Number.MAX_SAFE_INTEGER
       ? Number.MAX_SAFE_INTEGER
@@ -71,6 +67,19 @@ export async function checkDailyAILimit(
     totalLimit: limit,
     tier: normalizedTier,
   }
+}
+
+/**
+ * Commits the AI quota usage after a successful AI call.
+ * Should be called AFTER the AI stream completes successfully (at least 1 token delivered).
+ */
+export async function commitDailyAIUsage(userId: string): Promise<void> {
+  const date = todayStart()
+  await prisma.aIDailyUsage.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, interpretationCount: 1, followUpCount: 0 },
+    update: { interpretationCount: { increment: 1 } },
+  })
 }
 
 export async function checkFollowUpLimit(

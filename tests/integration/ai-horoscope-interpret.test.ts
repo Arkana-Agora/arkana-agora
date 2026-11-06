@@ -197,7 +197,7 @@ describe("POST /api/v1/ai/horoscope-interpret (T101)", () => {
     )
   })
 
-  it("devolve a cota quando a completion vem vazia (empty-completion guard)", async () => {
+  it("NAO incrementa cota quando a completion vem vazia (empty-completion guard)", async () => {
     mockAIClient([])
 
     const res = await POST(makeRequest(VALID_BODY))
@@ -205,15 +205,11 @@ describe("POST /api/v1/ai/horoscope-interpret (T101)", () => {
 
     expect(text).toContain('"type":"error"')
     expect(text).toContain('"retryable":true')
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ userId: "user-1" }),
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it("devolve a cota quando o provedor falha mid-stream (apos 0 tokens entregues)", async () => {
+  it("NAO incrementa cota quando o provedor falha antes de entregar tokens", async () => {
     mockGetAIClient.mockReturnValue({
       chat: {
         completions: {
@@ -226,11 +222,8 @@ describe("POST /api/v1/ai/horoscope-interpret (T101)", () => {
     const text = await res.text()
 
     expect(text).toContain('"type":"error"')
-    expect(mockUsageUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { interpretationCount: { decrement: 1 } },
-      }),
-    )
+    // Com o novo padrão (commit após entrega), não há incremento para reverter
+    expect(mockUsageUpdateMany).not.toHaveBeenCalled()
   })
 
   it("NAO devolve a cota quando falha mid-stream apos tokens entregues (entrega parcial consome)", async () => {

@@ -126,13 +126,13 @@ export function ReadingSession({ className }: ReadingSessionProps) {
     ? getDeckById(deckId)?.cardBackImageUrl
     : undefined
 
-  // BR-TIR-003: revela uma a uma, na ordem do espalhamento, 1.5s por carta;
+  // BR-TIR-003: revela uma a uma, na ordem do espalhamento, 300ms por carta;
   // o usuario pode adiantar clicando numa carta (a sequencia segue para as
   // demais). `isRevealed` evita re-armar timers para cartas ja viradas.
   useSequentialReveal({
     count: enrichedCards.length,
     enabled: step === "reveal",
-    intervalMs: 1500,
+    intervalMs: 300,
     isRevealed: (index) => {
       const card = enrichedCards[index]
       if (!card) return false

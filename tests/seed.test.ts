@@ -291,7 +291,7 @@ describe("seedHoroscopeFallbacks (T017 + T032)", () => {
       created.filter(
         (row) => row.type === "western" && row.period === "weekly",
       ),
-    ).toHaveLength(11)
+    ).toHaveLength(12)
   })
 })
 

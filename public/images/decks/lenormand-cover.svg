@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 315 525" width="315" height="525">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1b2a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f1a0f;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2ec47a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a8c4e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2ec47a;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="pattern" x="0" y="0" width="35" height="35" patternUnits="userSpaceOnUse">
+      <circle cx="17.5" cy="17.5" r="2" fill="url(#emerald)" opacity="0.15"/>
+    </pattern>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="315" height="525" fill="url(#bg)"/>
+  <rect width="315" height="525" fill="url(#pattern)"/>
+  
+  <!-- Border -->
+  <rect x="15" y="15" width="285" height="495" rx="15" fill="none" stroke="url(#emerald)" stroke-width="3"/>
+  <rect x="20" y="20" width="275" height="485" rx="12" fill="none" stroke="url(#emerald)" stroke-width="1" opacity="0.5"/>
+  
+  <!-- Central symbol - Lenormand Cross/Clover -->
+  <g transform="translate(157.5, 262.5)" filter="url(#glow)">
+    <!-- Outer circle -->
+    <circle cx="0" cy="0" r="100" fill="none" stroke="url(#emerald)" stroke-width="2" opacity="0.8"/>
+    <circle cx="0" cy="0" r="85" fill="none" stroke="url(#emerald)" stroke-width="1" opacity="0.5"/>
+    
+    <!-- Four-leaf clover -->
+    <g fill="url(#emerald)" filter="url(#glow)">
+      <circle cx="-25" cy="-25" r="22"/>
+      <circle cx="25" cy="-25" r="22"/>
+      <circle cx="-25" cy="25" r="22"/>
+      <circle cx="25" cy="25" r="22"/>
+      <circle cx="0" cy="0" r="18"/>
+    </g>
+    
+    <!-- Central circle -->
+    <circle cx="0" cy="0" r="35" fill="url(#bg)" stroke="url(#emerald)" stroke-width="2"/>
+    
+    <!-- Number 1 (Rider) in center -->
+    <text x="0" y="5" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="url(#emerald)" font-weight="bold" opacity="0.9">1</text>
+  </g>
+  
+  <!-- Corner decorations - playing card style -->
+  <g stroke="url(#emerald)" stroke-width="1.5" opacity="0.5" font-size="24" font-family="serif">
+    <text x="50" y="50" text-anchor="middle">🍀</text>
+    <text x="265" y="50" text-anchor="middle">🍀</text>
+    <text x="50" y="495" text-anchor="middle">🍀</text>
+    <text x="265" y="495" text-anchor="middle">🍀</text>
+  </g>
+  
+  <!-- Corner indices -->
+  <g font-family="Georgia, serif" font-size="20" fill="url(#emerald)" opacity="0.7">
+    <text x="40" y="45" text-anchor="middle">1</text>
+    <text x="275" y="45" text-anchor="middle">1</text>
+    <text x="40" y="505" text-anchor="middle">1</text>
+    <text x="275" y="505" text-anchor="middle">1</text>
+  </g>
+  
+  <!-- Bottom text -->
+  <text x="157.5" y="495" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="url(#emerald)" opacity="0.8" letter-spacing="2">
+    LENORMAND
+  </text>
+</svg>

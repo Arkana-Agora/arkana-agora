@@ -5,7 +5,7 @@ import { apiError } from "@/lib/api-response"
 import { prisma } from "@/lib/prisma"
 import { getInterpretationModel } from "@/lib/ai/models"
 import { withRetry } from "@/lib/ai/retry"
-import { checkDailyAILimit } from "@/lib/ai/rate-limit"
+import { checkDailyAILimit, commitDailyAIUsage } from "@/lib/ai/rate-limit"
 import {
   requireAIClient,
   createQuotaReservation,
@@ -26,6 +26,7 @@ import {
 } from "@/app/api/v1/horoscopes/_helpers"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 function isKnownSignId(type: string, signId: string): boolean {
   if (type === "western")
@@ -120,7 +121,8 @@ export async function POST(request: Request): Promise<Response> {
         },
       )
     }
-    quota.markConsumed()
+    // NÃO marca quota como consumida aqui — o commit acontece após
+    // o stream entregar pelo menos 1 token (evita consumir quota em falhas).
 
     // Contexto RF-HORO-006: row do horóscopo (T093) ou fallback T032
     // sintetizado — o prompt nunca fica sem base (signo inválido → null).
@@ -247,6 +249,9 @@ export async function POST(request: Request): Promise<Response> {
             return
           }
 
+          // Commit quota apenas após entregar pelo menos 1 token (sucesso real).
+          await commitDailyAIUsage(auth.userId)
+
           safeEnqueue(
             controller,
             encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`),
@@ -254,7 +259,6 @@ export async function POST(request: Request): Promise<Response> {
           safeClose(controller)
         } catch (error) {
           if (streamAbort.signal.aborted) {
-            // desconexão do cliente não é erro de serviço
             return
           }
           logger.error(
@@ -264,7 +268,9 @@ export async function POST(request: Request): Promise<Response> {
             },
             "[ai/horoscope-interpret] erro no streaming",
           )
-          if (fullText === "") {
+          if (fullText !== "") {
+            await commitDailyAIUsage(auth.userId)
+          } else {
             await quota.tryRefund("ai/horoscope-interpret")
           }
           safeEnqueue(

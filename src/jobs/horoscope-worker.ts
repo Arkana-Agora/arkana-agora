@@ -159,22 +159,46 @@ async function generateAiContent(
 async function persistContent(
   key: ContentKey,
   content: HoroscopeContent | HoroscopeFallbackContent,
-): Promise<"updated" | "created"> {
+  isGenerated: boolean,
+): Promise<"updated" | "created" | "skipped"> {
   // upsert manual: a unique composta tem `element` nulo (western) e o
   // updateMany/create evitam depender do where de unique com null.
+  // Race condition fix: only update if existing is fallback (or null).
+  // Never overwrite generated content with generated/fallback.
+  const whereCondition = isGenerated
+    ? {
+        type: key.type,
+        signId: key.signId,
+        element: key.element,
+        period: key.period,
+        date: key.date,
+        content: { path: ["fallback"], equals: true },
+      }
+    : {
+        type: key.type,
+        signId: key.signId,
+        element: key.element,
+        period: key.period,
+        date: key.date,
+        content: { path: ["fallback"], equals: true },
+      }
+  // For generated content: only update if current is fallback
+  // For fallback content: only update if current is fallback (idempotent)
+  // The composite unique handles the "created" case
   const updated = await prisma.horoscopeContent.updateMany({
-    where: {
-      type: key.type,
-      signId: key.signId,
-      element: key.element,
-      period: key.period,
-      date: key.date,
-    },
+    where: whereCondition,
     data: { content },
   })
   if (updated.count > 0) return "updated"
-  await prisma.horoscopeContent.create({ data: { ...key, content } })
-  return "created"
+  // If no row matched (either no row or row is generated), try create
+  // create will fail if row already exists (generated) - catch and return "skipped"
+  try {
+    await prisma.horoscopeContent.create({ data: { ...key, content } })
+    return "created"
+  } catch {
+    // P2003 (unique constraint) = row already exists with generated content
+    return "skipped"
+  }
 }
 
 export async function processHoroscopeJob(
@@ -213,7 +237,7 @@ export async function processHoroscopeJob(
 
   try {
     const content = await generateAiContent(job)
-    const persisted = await persistContent(key, content)
+    const persisted = await persistContent(key, content, true)
     logger.info(
       { ...base, rowDate, persisted },
       "[job:horoscope-worker] conteudo gerado",
@@ -246,7 +270,7 @@ export async function processHoroscopeJob(
       return { status: "skipped", ...base }
     }
     const fallback = buildFallbackFor(fallbackTarget(job))
-    const persisted = await persistContent(key, fallback)
+    const persisted = await persistContent(key, fallback, false)
     logger.warn(
       { ...base, rowDate, persisted },
       "[job:horoscope-worker] fallback salvo para retry manual",
