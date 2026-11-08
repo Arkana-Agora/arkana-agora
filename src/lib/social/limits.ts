@@ -162,6 +162,19 @@ async function slidingWindowCheck(
     const [allowedFlag, count, oldestScore] = reply
 
     if (allowedFlag === 1) {
+      // Record polling attempt for minute-based fallback consistency
+      if (limit === "polling") {
+        try {
+          await prisma.pollingAttempt.create({
+            data: { userId, endpoint: "polling" },
+          })
+        } catch (pollError) {
+          logger.warn(
+            { err: pollError, limit, userId },
+            "rate_limiter_polling_record_error",
+          )
+        }
+      }
       return {
         allowed: true,
         remaining: Math.max(0, max - count),
@@ -180,7 +193,7 @@ async function slidingWindowCheck(
   }
 }
 
-// Fallback Prisma dos daily limits quando o Redis falha/não está configurado
+// Fallback Prisma dos daily/minute limits quando o Redis falha/não está configurado
 // (Q26): a contagem persiste no banco e continua válida entre instâncias.
 // `reason` propaga o motivo original para o bypass dos limites sem backing
 // table (upload) ou de minuto.
@@ -190,7 +203,11 @@ async function dailyFallback(
   max: number,
   reason: string,
 ): Promise<LimitCheck> {
-  if (WINDOW_MS[limit] !== DAY) return bypass(limit, reason, max)
+  if (WINDOW_MS[limit] !== DAY) {
+    // Minute-based limits: use minuteFallback for polling, bypass for others
+    if (limit === "polling") return minuteFallback(limit, userId, max, reason)
+    return bypass(limit, reason, max)
+  }
 
   try {
     const since = startOfUtcDay()
@@ -220,6 +237,35 @@ async function dailyFallback(
       "rate_limiter_prisma_fallback_error",
     )
     return bypass(limit, "prisma_fallback_error", max)
+  }
+}
+
+// Fallback Prisma para limites por minuto (polling)
+async function minuteFallback(
+  limit: SocialLimit,
+  userId: string,
+  max: number,
+  reason: string,
+): Promise<LimitCheck> {
+  if (limit !== "polling") return bypass(limit, reason, max)
+
+  try {
+    const since = new Date(Date.now() - MINUTE)
+    const count = await prisma.pollingAttempt.count({
+      where: { userId, createdAt: { gte: since } },
+    })
+
+    return {
+      allowed: count < max,
+      remaining: Math.max(0, max - count),
+      resetAt: new Date(Date.now() + MINUTE),
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, limit, userId },
+      "rate_limiter_minute_fallback_error",
+    )
+    return bypass(limit, "prisma_minute_fallback_error", max)
   }
 }
 

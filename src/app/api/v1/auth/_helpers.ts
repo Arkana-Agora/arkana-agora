@@ -7,7 +7,7 @@ import { logger } from "@/lib/logger"
 export const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
 
 export const NOOP_EQUALIZE_MS = 250
-const NOOP_JITTER_MIN_MS = 240
+const NOOP_JITTER_MIN_MS = 250
 const NOOP_JITTER_MAX_MS = 400
 
 // ── Error / Success responses ──────────────────────────────────────────────

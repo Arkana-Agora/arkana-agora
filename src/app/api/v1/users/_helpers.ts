@@ -115,6 +115,11 @@ export async function optionalAuth(request: Request): Promise<string | null> {
   }
 }
 
+export type RequireAuth = (
+  request: Request,
+  reqId: string,
+) => Promise<{ userId: string } | Response>
+
 export async function requireAuth(
   request: Request,
   reqId: string,

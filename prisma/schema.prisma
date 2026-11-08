@@ -71,6 +71,7 @@ model User {
   postLikeRewards       PostLikeReward[]
   postLikes             PostLike[]
   posts                 Post[]
+  pollingAttempts     PollingAttempt[]
   readings              Reading[]
 
   @@unique([provider, providerId])
@@ -485,6 +486,17 @@ model HoroscopeNotification {
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("horoscope_notifications")
+}
+
+model PollingAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   // e.g., "posts", "likes", "comments", "notifications"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("polling_attempts")
 }
 
 enum UserRole {

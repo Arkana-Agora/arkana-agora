@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { isFallbackContent } from "@/lib/horoscopes/fallback"
 import { civilDateBrt, periodRowKey } from "@/lib/horoscopes/dates"
 import { WESTERN_SIGNS } from "@/lib/horoscopes/western"
+import { CHINESE_COMBOS } from "@/lib/horoscopes/fallback"
 import {
   closeHoroscopeQueue,
   enqueueHoroscopeGeneration,
@@ -21,8 +22,8 @@ import {
  *
  * `date` do job é sempre a data civil plana (YYYY-MM-DD — schema T033);
  * a row key de weekly/monthly é derivada no worker T098 (civilIsoWeek/
- * civilMonth). Escopo desta fase: 12 signos ocidentais × 3 períodos —
- * T107/T114 estendem para os 60 combos chineses e os 260 kins maias.
+ * civilMonth). Escopo: 12 signos ocidentais × 3 períodos + 60 combos
+ * chineses × 3 períodos (T107) + 260 kins maias × 3 períodos (T114).
  */
 export const HOROSCOPE_GENERATION_CRON = "0 7 * * *"
 
@@ -49,25 +50,55 @@ export async function runHoroscopeGenerationJob(
       // YYYY-MM) — consultar weekly/monthly com a data plana sempre achava 0
       // rows e re-enfileirava 12 jobs/dia sem necessidade (review julik I5).
       const rowDate = periodRowKey(period, date)
-      const rows = await prisma.horoscopeContent.findMany({
+
+      // Ocidental: 12 signos
+      const westernRows = await prisma.horoscopeContent.findMany({
         where: { type: "western", period, date: rowDate },
         select: { signId: true, content: true },
       })
-      const ready = new Set(
-        rows
+      const westernReady = new Set(
+        westernRows
           .filter((row) => !isFallbackContent(row.content))
           .map((row) => row.signId),
       )
 
       for (const sign of WESTERN_SIGNS) {
         checked += 1
-        if (ready.has(sign.id)) {
+        if (westernReady.has(sign.id)) {
           existing += 1
           continue
         }
         await enqueueHoroscopeGeneration({
           type: "western",
           signId: sign.id,
+          period,
+          date,
+        })
+        enqueued += 1
+      }
+
+      // Chinês: 60 combos (animal + elemento)
+      const chineseRows = await prisma.horoscopeContent.findMany({
+        where: { type: "chinese", period, date: rowDate },
+        select: { signId: true, element: true, content: true },
+      })
+      const chineseReady = new Set(
+        chineseRows
+          .filter((row) => !isFallbackContent(row.content))
+          .map((row) => `${row.signId}:${row.element}`),
+      )
+
+      for (const combo of CHINESE_COMBOS) {
+        checked += 1
+        const key = `${combo.animalId}:${combo.element}`
+        if (chineseReady.has(key)) {
+          existing += 1
+          continue
+        }
+        await enqueueHoroscopeGeneration({
+          type: "chinese",
+          signId: combo.animalId,
+          element: combo.element,
           period,
           date,
         })
