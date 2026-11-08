@@ -60,6 +60,19 @@ const PERIOD_WORD: Record<FallbackPeriod, string> = {
 const PLAIN_CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
+ * Safe array access with bounds checking — throws descriptive error if OOB.
+ */
+function getOrThrow<T>(array: readonly T[], index: number, context: string): T {
+  const value = array.at(index)
+  if (value === undefined) {
+    throw new Error(
+      `${context}: index ${index} out of bounds (length ${array.length})`,
+    )
+  }
+  return value
+}
+
+/**
  * `content.date` T035 para uma key de período: daily (YYYY-MM-DD) mantém a
  * key; weekly/monthly (YYYY-Www/YYYY-MM) usam a data civil corrente como
  * âncora interna do template.
@@ -87,8 +100,16 @@ export function buildWesternFallback(
   date: string,
   period: FallbackPeriod = "daily",
 ): HoroscopeFallbackContent {
-  const sign = WESTERN_SIGNS[index]!
-  const next = WESTERN_SIGNS[(index + 1) % WESTERN_SIGNS.length]!
+  const sign = getOrThrow(
+    WESTERN_SIGNS,
+    index,
+    "buildWesternFallback: WESTERN_SIGNS",
+  )
+  const next = getOrThrow(
+    WESTERN_SIGNS,
+    (index + 1) % WESTERN_SIGNS.length,
+    "buildWesternFallback: WESTERN_SIGNS next",
+  )
   const firstKeyword = sign.keywords[0] ?? sign.element
   const when = PERIOD_WORD[period]
   const element = sign.element.toLowerCase()
@@ -106,8 +127,16 @@ export function buildWesternFallback(
     career: `${sign.name}: organize as prioridades e conclua uma tarefa pendente ${when}.`,
     health: `${sign.name}: hidrate-se e reserve um momento de descanso ${when}.`,
     luckyNumber: ((index * 7 + 3) % 99) + 1,
-    luckyColor: FALLBACK_COLORS[index % FALLBACK_COLORS.length]!,
-    mood: PROMPT_MOODS[index % PROMPT_MOODS.length]!,
+    luckyColor: getOrThrow(
+      FALLBACK_COLORS,
+      index % FALLBACK_COLORS.length,
+      "buildWesternFallback: FALLBACK_COLORS",
+    ),
+    mood: getOrThrow(
+      PROMPT_MOODS,
+      index % PROMPT_MOODS.length,
+      "buildWesternFallback: PROMPT_MOODS",
+    ),
     compatibility: next.id,
     date,
     fallback: true,
@@ -121,8 +150,19 @@ export function buildWesternFallback(
 // paridade → 5 elementos distintos) → os 60 pares (animal, elemento)
 // são únicos e cobrem a tabela inteira (12 × 5). Use sempre a tabela —
 // derivar animal ou elemento isoladamente mistura pares divergentes.
+// 60 combos sexagenários: y = índice canônico 0..59 ≡ ano chinês 1984+y
+// (animal y%12 e elemento do stem de 1984+y — `chineseYearElement`, a
+// MESMA fórmula de `getChineseZodiac`). Para animal fixo a, y = a + 12k
+// (k = 0..4) percorre stems a, a+2, a+4, a+6, a+8 (módulo 10, mesma
+// paridade → 5 elementos distintos) → os 60 pares (animal, elemento)
+// são únicos e cobrem a tabela inteira (12 × 5). Use sempre a tabela —
+// derivar animal ou elemento isoladamente mistura pares divergentes.
 export const CHINESE_COMBOS = Array.from({ length: 60 }, (_, y) => ({
-  animalId: CHINESE_ANIMALS[y % 12]!.id,
+  animalId: getOrThrow(
+    CHINESE_ANIMALS,
+    y % 12,
+    "CHINESE_COMBOS: CHINESE_ANIMALS",
+  ).id,
   element: chineseYearElement(1984 + y),
 }))
 
@@ -133,11 +173,26 @@ export function buildChineseFallback(
   date: string,
   period: FallbackPeriod = "daily",
 ): { signId: string; element: string; content: HoroscopeFallbackContent } {
-  const animal = CHINESE_ANIMALS[comboIndex % 12]!
-  const nextAnimal = CHINESE_ANIMALS[(comboIndex + 1) % 12]!
-  const element = CHINESE_COMBOS[comboIndex % CHINESE_COMBOS.length]!.element
-  const character =
-    animal.characteristics[comboIndex % animal.characteristics.length]!
+  const animal = getOrThrow(
+    CHINESE_ANIMALS,
+    comboIndex % 12,
+    "buildChineseFallback: CHINESE_ANIMALS",
+  )
+  const nextAnimal = getOrThrow(
+    CHINESE_ANIMALS,
+    (comboIndex + 1) % 12,
+    "buildChineseFallback: CHINESE_ANIMALS next",
+  )
+  const element = getOrThrow(
+    CHINESE_COMBOS,
+    comboIndex % CHINESE_COMBOS.length,
+    "buildChineseFallback: CHINESE_COMBOS",
+  ).element
+  const character = getOrThrow(
+    animal.characteristics,
+    comboIndex % animal.characteristics.length,
+    "buildChineseFallback: animal.characteristics",
+  )
   const when = PERIOD_WORD[period]
 
   return {
@@ -149,8 +204,16 @@ export function buildChineseFallback(
       career: `${animal.name}: aproveite a energia ${element} para destravar uma tarefa ${when}.`,
       health: `${animal.name}: movimento leve e respiração consciente sustentam ${when}.`,
       luckyNumber: ((comboIndex * 7 + 5) % 99) + 1,
-      luckyColor: FALLBACK_COLORS[comboIndex % FALLBACK_COLORS.length]!,
-      mood: PROMPT_MOODS[comboIndex % PROMPT_MOODS.length]!,
+      luckyColor: getOrThrow(
+        FALLBACK_COLORS,
+        comboIndex % FALLBACK_COLORS.length,
+        "buildChineseFallback: FALLBACK_COLORS",
+      ),
+      mood: getOrThrow(
+        PROMPT_MOODS,
+        comboIndex % PROMPT_MOODS.length,
+        "buildChineseFallback: PROMPT_MOODS",
+      ),
       compatibility: nextAnimal.id,
       date,
       fallback: true,
@@ -164,8 +227,16 @@ export function buildMayaFallback(
   period: FallbackPeriod = "daily",
 ): { signId: string; content: HoroscopeFallbackContent } {
   const { sealIndex, toneId } = kinToSealTone(kinNumber) // valida 1-260
-  const seal = MAYAN_SEALS[sealIndex]!
-  const tone = MAYAN_TONES[toneId - 1]!
+  const seal = getOrThrow(
+    MAYAN_SEALS,
+    sealIndex,
+    "buildMayaFallback: MAYAN_SEALS",
+  )
+  const tone = getOrThrow(
+    MAYAN_TONES,
+    toneId - 1,
+    "buildMayaFallback: MAYAN_TONES",
+  )
   const when = PERIOD_WORD[period]
 
   return {
@@ -177,7 +248,11 @@ export function buildMayaFallback(
       health: `Kin ${kinNumber}: respire fundo e desacelere o corpo ${when}.`,
       luckyNumber: ((kinNumber * 13 + 1) % 99) + 1,
       luckyColor: seal.color.toLowerCase(),
-      mood: PROMPT_MOODS[kinNumber % PROMPT_MOODS.length]!,
+      mood: getOrThrow(
+        PROMPT_MOODS,
+        kinNumber % PROMPT_MOODS.length,
+        "buildMayaFallback: PROMPT_MOODS",
+      ),
       compatibility: String(((kinNumber + 64) % MAYAN_KIN_COUNT) + 1),
       date,
       fallback: true,

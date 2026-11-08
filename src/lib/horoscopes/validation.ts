@@ -26,7 +26,7 @@ export const horoscopeContentShape = z.object({
   mood: z.string().min(1),
   compatibility: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  fallback: z.boolean().optional(),
+  fallback: z.boolean().nullable().optional(),
 })
 
 export type HoroscopeContent = z.infer<typeof horoscopeContentShape>
@@ -41,6 +41,15 @@ export interface HoroscopeValidation {
   ok: boolean
   wordCount: number
   issues: string[]
+}
+
+export type HoroscopeSectionKey = "love" | "career" | "health"
+
+export function getHoroscopeSection(
+  content: HoroscopeContent,
+  section: HoroscopeSectionKey,
+): string {
+  return content[section]
 }
 
 export function validateHoroscopeContent(

@@ -11,6 +11,7 @@ const redisMock = vi.hoisted(() => ({
 const prismaMock = vi.hoisted(() => ({
   post: { count: vi.fn() },
   gift: { count: vi.fn() },
+  pollingAttempt: { count: vi.fn() },
 }))
 
 const loggerWarn = vi.hoisted(() => vi.fn())
@@ -266,17 +267,15 @@ describe("checkSocialLimit polling (revisao O)", () => {
     expect(result.remaining).toBe(0)
   })
 
-  it("sem Redis o polling libera com bypass logado (fail-open)", async () => {
+  it("sem Redis o polling usa fallback Prisma e libera se abaixo do limite", async () => {
     redisHolder.current = undefined
+    prismaMock.pollingAttempt.count.mockResolvedValue(0)
     const result = await checkSocialLimit("polling", "usr_1")
     expect(result.allowed).toBe(true)
-    expect(loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reason: "redis_not_configured",
-        limit: "polling",
-      }),
-      "rate_limiter_bypass",
-    )
+    expect(result.remaining).toBe(60)
+    expect(prismaMock.pollingAttempt.count).toHaveBeenCalledWith({
+      where: { userId: "usr_1", createdAt: { gte: expect.any(Date) } },
+    })
   })
 })
 
