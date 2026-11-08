@@ -304,7 +304,7 @@ src/
 | 2.5 | WebSocket Foundation | Phase 2 | âœ… Done |
 | 3 | Interactions (Likes, Comments, Notifications) | Phase 2.5 | âœ… Done |
 | 4 | HorÃ³scopo Ocidental | Phase 0.5 | ✅ Done |
-| 5 | HorÃ³scopo ChinÃªs | Phases 0.5, 4 | â¬œ Pending |
+| 5 | HorÃ³scopo ChinÃªs | Phases 0.5, 4 | ✅ Done |
 | 6 | HorÃ³scopo Maia / Kin Maya | Phases 0.5, 4 | â¬œ Pending |
 | 7 | Gifts + Versos Economy | Phases 0.5, 1, 3 | â¬œ Pending |
 | 8 | Explore + Search | Phase 2 | â¬œ Pending |
@@ -520,18 +520,18 @@ src/
 
 ### Phase 5: HorÃ³scopo ChinÃªs (T104â€“T109)
 
-**Status**: â¬œ Pending
+**Status**: ✅ Done
 **Objective**: Animal, elementos, 60 ciclos, conteÃºdo
 **Dependencies**: Phases 0.5, 4 (estende cron/worker T097/T098)
 
 **Tasks**:
 
-- [ ] T104 [P1] [US-024] Create `ChineseHoroscopeCard` em `src/components/horoscopes/chinese-horoscope-card.tsx` â€” Imagem animal, nome + elemento ("Cavalo de Metal"), caracterÃ­sticas chips
-- [ ] T105 [P1] [US-024] Create `ChineseHoroscopePage` em `src/app/(app)/horoscopos/chines/page.tsx` â€” Animal/elemento em destaque, seletor, diÃ¡rio/semanal/mensal
-- [ ] T106 [P1] [US-024] Implement `GET /api/v1/horoscopes/chinese` em `src/app/api/v1/horoscopes/chinese/route.ts` â€” Query `animal`, `element`, `period`, `date`; fallback template (T032)
-- [ ] T107 [P1] [US-024] Extend cron generation em `src/jobs/horoscope-generation.ts` â€” 60 combos (animal+elemento); via worker T098
-- [ ] T108 [P1] [US-024] Create unit tests em `tests/horoscopes-chinese.test.ts` â€” Antes/depois Ano Novo, 60 ciclos
-- [ ] T109 [P1] [US-024] Create integration tests em `tests/integration/horoscopes-chinese.test.ts` â€” GET endpoints, cron
+- [x] T104 [P1] [US-024] Create `ChineseHoroscopeCard` em `src/components/horoscopes/chinese-horoscope-card.tsx` â€” Imagem animal, nome + elemento ("Cavalo de Metal"), caracterÃ­sticas chips
+- [x] T105 [P1] [US-024] Create `ChineseHoroscopePage` em `src/app/(app)/horoscopos/chines/page.tsx` â€” Animal/elemento em destaque, seletor, diÃ¡rio/semanal/mensal
+- [x] T106 [P1] [US-024] Implement `GET /api/v1/horoscopes/chinese` em `src/app/api/v1/horoscopes/chinese/route.ts` â€” Query `animal`, `element`, `period`, `date`; fallback template (T032)
+- [x] T107 [P1] [US-024] Extend cron generation em `src/jobs/horoscope-generation.ts` â€” 60 combos (animal+elemento); via worker T098
+- [x] T108 [P1] [US-024] Create unit tests em `tests/horoscopes-chinese.test.ts` â€” Antes/depois Ano Novo, 60 ciclos
+- [x] T109 [P1] [US-024] Create integration tests em `tests/integration/horoscopes-chinese.test.ts` â€” GET endpoints, cron
 
 **After completing**: `npm run lint` â†’ `npm run type-check` â†’ `npm run test` â†’ mark Phase 5 âœ…
 
