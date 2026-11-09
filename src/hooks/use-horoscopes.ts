@@ -38,6 +38,13 @@ const horoscopeSchema = z.object({
   date: z.string(),
   content: horoscopeContentShape,
   source: z.enum(["generated", "fallback"]).optional(),
+  kin: z
+    .object({
+      number: z.number().int().min(1).max(260),
+      seal: z.number().int().min(0).max(19),
+      tone: z.number().int().min(1).max(13),
+    })
+    .optional(),
 })
 
 export type Horoscope = z.infer<typeof horoscopeSchema>
@@ -109,7 +116,7 @@ export interface HoroscopeQueryOptions {
   /** Aciona a matriz de compatibilidade T090 na resposta. */
   targetSign?: string | undefined
   /** Desliga a query (ex.: aguardando my-horoscope antes do fallback). */
-  enabled?: boolean
+  enabled?: boolean | undefined
 }
 
 /**
