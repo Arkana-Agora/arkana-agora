@@ -7,6 +7,7 @@ import { drawCards } from "@/lib/tarot/draw"
 import { getDeckCards, getDeckById } from "@/lib/tarot/decks"
 import { getDailyLimitStatus, readingWhereForUser } from "@/lib/tarot/helpers"
 import { apiError } from "@/lib/api-response"
+import { earnVersos, VersosSource } from "@/lib/social/versos"
 import spreadsData from "@/data/spreads.json"
 import type { Spread } from "@/types/tarot"
 import type { Prisma } from "@prisma/client"
@@ -118,7 +119,7 @@ export async function POST(request: Request): Promise<Response> {
           throw new Error("DAILY_LIMIT_REACHED")
         }
 
-        return tx.reading.create({
+        const created = await tx.reading.create({
           data: {
             userId: auth.userId,
             deckId,
@@ -140,6 +141,10 @@ export async function POST(request: Request): Promise<Response> {
           },
           include: { cards: true },
         })
+
+        await earnVersos(auth.userId, VersosSource.Reading, tx)
+
+        return created
       },
     )
 

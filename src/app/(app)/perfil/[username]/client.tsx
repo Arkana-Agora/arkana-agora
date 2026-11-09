@@ -6,6 +6,7 @@ import { ProfileAstrology } from "@/components/profile/profile-astrology"
 import { ProfileHoroscopes } from "@/components/horoscopes/profile-horoscopes"
 import type { ProfileHoroscopeSigns } from "@/components/horoscopes/profile-horoscopes"
 import type { PublicProfile } from "@/hooks/use-profile"
+import { GiftsStrip } from "@/components/social/gifts-strip"
 
 interface PublicProfileClientProps {
   profile: PublicProfile
@@ -26,6 +27,7 @@ export function PublicProfileClient({
         kinMaya={profile.astrology?.kinMaya ?? null}
       />
       <ProfileHoroscopes signs={horoscopeSigns} />
+      <GiftsStrip userId={profile.id} />
     </main>
   )
 }
