@@ -193,7 +193,6 @@ describe("GiftsPage (T119)", () => {
     await waitForDataLoad()
 
     await waitFor(() => {
-      // Portuguese locale uses 1.500 format
       expect(screen.getByText(/1\.500\s*Versos/i)).toBeInTheDocument()
     })
   })
