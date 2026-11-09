@@ -308,6 +308,7 @@ const CAMARA_THEMES: Readonly<Record<number, string>> = {
 }
 
 export const GMT_CORRELATION_JDN = 584283
+export const MAYAN_KIN_COUNT = 260
 
 export function gregorianToJdn(
   year: number,
@@ -352,6 +353,18 @@ export function gregorianToMayanLongCount(
     tzolkinSeal,
     kinNumber,
   }
+}
+
+export function calculateKinMaya(
+  birthDate: Date | null | undefined,
+): number | null {
+  if (!birthDate) return null
+
+  return gregorianToMayanLongCount(
+    birthDate.getUTCFullYear(),
+    birthDate.getUTCMonth() + 1,
+    birthDate.getUTCDate(),
+  ).kinNumber
 }
 
 export function kinToSealTone(kinNumber: number): {

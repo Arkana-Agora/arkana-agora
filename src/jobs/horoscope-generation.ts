@@ -4,6 +4,7 @@ import { isFallbackContent } from "@/lib/horoscopes/fallback"
 import { civilDateBrt, periodRowKey } from "@/lib/horoscopes/dates"
 import { WESTERN_SIGNS } from "@/lib/horoscopes/western"
 import { CHINESE_COMBOS } from "@/lib/horoscopes/fallback"
+import { MAYAN_KIN_COUNT } from "@/lib/horoscopes/maya"
 import {
   closeHoroscopeQueue,
   enqueueHoroscopeGeneration,
@@ -99,6 +100,32 @@ export async function runHoroscopeGenerationJob(
           type: "chinese",
           signId: combo.animalId,
           element: combo.element,
+          period,
+          date,
+        })
+        enqueued += 1
+      }
+
+      // Maia: 260 kins
+      const mayaRows = await prisma.horoscopeContent.findMany({
+        where: { type: "maya", period, date: rowDate },
+        select: { signId: true, content: true },
+      })
+      const mayaReady = new Set(
+        mayaRows
+          .filter((row) => !isFallbackContent(row.content))
+          .map((row) => row.signId),
+      )
+
+      for (let kin = 1; kin <= MAYAN_KIN_COUNT; kin++) {
+        checked += 1
+        if (mayaReady.has(String(kin))) {
+          existing += 1
+          continue
+        }
+        await enqueueHoroscopeGeneration({
+          type: "maya",
+          signId: String(kin),
           period,
           date,
         })

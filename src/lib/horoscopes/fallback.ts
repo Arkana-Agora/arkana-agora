@@ -36,6 +36,8 @@ const FALLBACK_COLORS = [
   "coral",
 ]
 
+const OPPOSITE_KIN_OFFSET = 64 // Tzolkin opposite kin offset (mod 260)
+
 export type FallbackPeriod = "daily" | "weekly" | "monthly"
 
 export type HoroscopeFallbackContent = {
@@ -253,7 +255,9 @@ export function buildMayaFallback(
         kinNumber % PROMPT_MOODS.length,
         "buildMayaFallback: PROMPT_MOODS",
       ),
-      compatibility: String(((kinNumber + 64) % MAYAN_KIN_COUNT) + 1),
+      compatibility: String(
+        ((kinNumber + OPPOSITE_KIN_OFFSET) % MAYAN_KIN_COUNT) + 1,
+      ),
       date,
       fallback: true,
     },
