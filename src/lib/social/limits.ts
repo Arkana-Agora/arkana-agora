@@ -88,6 +88,15 @@ function bypass(
   reason: string,
   remaining: number,
 ): LimitCheck {
+  // Fail-closed for gift limit (monetary impact) — never bypass rate limit for gifts
+  if (limit === "gift") {
+    logger.error({ limit, reason }, "rate_limiter_fail_closed_gift")
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: new Date(Date.now() + WINDOW_MS[limit]),
+    }
+  }
   logger.warn({ limit, reason }, "rate_limiter_bypass")
   return {
     allowed: true,
@@ -209,12 +218,23 @@ async function dailyFallback(
     return bypass(limit, reason, max)
   }
 
+  // Fail-closed for gift limit even in Prisma fallback
+  const isGiftLimit = limit === "gift"
+  if (isGiftLimit) {
+    logger.error({ limit, reason }, "rate_limiter_fail_closed_gift_fallback")
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: endOfUtcDay(),
+    }
+  }
+
   try {
     const since = startOfUtcDay()
     const where =
       limit === "post"
         ? { authorId: userId, createdAt: { gte: since } }
-        : limit === "gift"
+        : isGiftLimit
           ? { fromUserId: userId, createdAt: { gte: since } }
           : undefined
     // upload/dia não tem tabela de contagem — bypass explícito e logado
@@ -236,6 +256,18 @@ async function dailyFallback(
       { err: error, limit, userId },
       "rate_limiter_prisma_fallback_error",
     )
+    // Fail-closed for gift limit even in catch
+    if (isGiftLimit) {
+      logger.error(
+        { limit, reason: "prisma_fallback_error" },
+        "rate_limiter_fail_closed_gift_catch",
+      )
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt: endOfUtcDay(),
+      }
+    }
     return bypass(limit, "prisma_fallback_error", max)
   }
 }

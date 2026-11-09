@@ -15,6 +15,7 @@ const prismaMock = vi.hoisted(() => ({
 }))
 
 const loggerWarn = vi.hoisted(() => vi.fn())
+const loggerError = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/redis", () => ({
   get redis() {
@@ -23,7 +24,7 @@ vi.mock("@/lib/redis", () => ({
 }))
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 vi.mock("@/lib/logger", () => ({
-  logger: { warn: loggerWarn, info: vi.fn(), error: vi.fn() },
+  logger: { warn: loggerWarn, info: vi.fn(), error: loggerError },
 }))
 
 import {
@@ -171,16 +172,21 @@ describe("fail-open Q26 (T027)", () => {
     expect(result.remaining).toBe(0)
   })
 
-  it("Redis down + Prisma também falha → libera com bypass", async () => {
+  it("Redis down + Prisma também falha → falha fechada (fail-closed) para gift", async () => {
     redisMock.eval.mockRejectedValue(new Error("redis down"))
     prismaMock.gift.count.mockRejectedValue(new Error("db down"))
 
     const result = await checkGiftLimit("usr_1")
 
-    expect(result.allowed).toBe(true)
+    expect(result.allowed).toBe(false)
+    expect(result.remaining).toBe(0)
     expect(loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: "gift" }),
-      "rate_limiter_bypass",
+      expect.objectContaining({ limit: "gift", key: "rl:gift:usr_1" }),
+      "rate_limiter_redis_error",
+    )
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: "gift", reason: "redis_error" }),
+      "rate_limiter_fail_closed_gift_fallback",
     )
   })
 

@@ -306,7 +306,7 @@ src/
 | 4 | Horóscopo Ocidental | Phase 0.5 | ? Done |
 | 5 | Horóscopo Chinês | Phases 0.5, 4 | ? Done |
 | 6 | Horóscopo Maia / Kin Maya | Phases 0.5, 4 | ✅ Done |
-| 7 | Gifts + Versos Economy | Phases 0.5, 1, 3 | ? Done |
+| 7 | Gifts + Versos Economy | Phases 0.5, 1, 3 | ✅ Done |
 | 8 | Explore + Search | Phase 2 | ? Done |
 | 9 | Frontend Integration & Polish | Phases 1–8 | ? Done |
 | 10 | Data Integrity & Compliance | Phases 0, 3 | ✅ Done |
@@ -788,17 +788,17 @@ src/
 - [x] TypeScript validation + lint + tests pass
 
 ### Phase 7: Gifts + Versos
-- [ ] T118 GiftSelector
-- [ ] T119 GiftsPage
-- [ ] T120 POST /gifts/send (+Notification +emit)
-- [ ] T121 GET /versos/balance
-- [ ] T122 POST /versos/claim-daily
-- [ ] T123 Wire earnVersos hooks
-- [ ] T124 Gifts unit tests
-- [ ] T125 Gifts integration tests
-- [ ] T142 GET /gifts/received
-- [ ] T143 GiftsStrip no perfil (RF-SOC-006)
-- [ ] TypeScript validation + lint + tests pass
+- [x] T118 GiftSelector
+- [x] T119 GiftsPage
+- [x] T120 POST /gifts/send (+Notification +emit)
+- [x] T121 GET /versos/balance
+- [x] T122 POST /versos/claim-daily
+- [x] T123 Wire earnVersos hooks
+- [x] T124 Gifts unit tests
+- [x] T125 Gifts integration tests
+- [x] T142 GET /gifts/received
+- [x] T143 GiftsStrip no perfil (RF-SOC-006)
+- [x] TypeScript validation + lint + tests pass
 
 ### Phase 8: Explore + Search
 - [ ] T126 ExplorePage

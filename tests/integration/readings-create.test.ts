@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const prismaMock = vi.hoisted(() => ({
   reading: { count: vi.fn(), create: vi.fn() },
   user: { findUnique: vi.fn() },
+  userProfile: { update: vi.fn().mockResolvedValue({ versesBalance: 10 }) },
   $transaction: vi.fn(),
 }))
 
