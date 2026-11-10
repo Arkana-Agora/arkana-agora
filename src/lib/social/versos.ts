@@ -18,6 +18,7 @@ export enum VersosSource {
   Comment = "comment",
   Follow = "follow",
   Reading = "reading",
+  ClaimDaily = "claim_daily",
 }
 
 export const VERSOS_REWARDS: Record<VersosSource, number> = {
@@ -25,6 +26,7 @@ export const VERSOS_REWARDS: Record<VersosSource, number> = {
   [VersosSource.Comment]: 2,
   [VersosSource.Follow]: 5,
   [VersosSource.Reading]: 10,
+  [VersosSource.ClaimDaily]: 10,
 }
 
 function isProfileMissing(error: unknown): boolean {

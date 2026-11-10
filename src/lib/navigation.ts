@@ -1,29 +1,16 @@
 export type AppNavHref =
-  | "/dashboard"
-  | "/feed"
-  | "/tirar"
-  | "/minhas-tiragens"
-  | "/meu-arcano"
-  | "/horoscopos/ocidental"
-  | "/perfil"
+  "/feed" | "/explorar" | "/notificacoes" | "/presentes" | "/perfil"
 
 export function isAppNavActive(pathname: string, href: AppNavHref): boolean {
   switch (href) {
-    case "/dashboard":
-      return pathname === "/dashboard"
     case "/feed":
       return pathname === "/feed" || pathname.startsWith("/feed/")
-    case "/tirar":
-      return pathname === "/tirar"
-    case "/minhas-tiragens":
-      return (
-        pathname.startsWith("/minhas-tiragens") ||
-        pathname.startsWith("/tiragem")
-      )
-    case "/meu-arcano":
-      return pathname.startsWith("/meu-arcano")
-    case "/horoscopos/ocidental":
-      return pathname.startsWith("/horoscopos")
+    case "/explorar":
+      return pathname === "/explorar" || pathname.startsWith("/busca")
+    case "/notificacoes":
+      return pathname === "/notificacoes"
+    case "/presentes":
+      return pathname === "/presentes" || pathname.startsWith("/presentes/")
     case "/perfil":
       return pathname === "/perfil" || pathname.startsWith("/perfil/")
   }

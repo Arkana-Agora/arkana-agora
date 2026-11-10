@@ -25,7 +25,9 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 
 const tokenServiceMock = vi.hoisted(() => ({
-  verifyAccessToken: vi.fn().mockResolvedValue({ userId: "usr_sender" }),
+  verifyAccessToken: vi
+    .fn()
+    .mockResolvedValue({ userId: "clx1234567890abcdef123456" }),
 }))
 
 vi.mock("@/services/token-service", () => ({
@@ -166,10 +168,10 @@ const emitterMock = vi.hoisted(() => ({
 vi.mock("@socket/src/emitters", () => emitterMock)
 
 const sender = {
-  id: "usr_sender",
+  id: "clx1234567890abcdef123456",
   name: "Maria Silva",
   email: "maria@email.com",
-  subscriptionTier: "FREE",
+  plan: "FREE",
   profile: {
     versosBalance: 1000,
     versosStreak: 5,
@@ -178,10 +180,10 @@ const sender = {
 }
 
 const recipient = {
-  id: "usr_recipient",
+  id: "clx1234567890abcdef123457",
   name: "Joao Santos",
   email: "joao@email.com",
-  subscriptionTier: "FREE",
+  plan: "FREE",
   profile: {
     versosBalance: 500,
     versosStreak: 3,
@@ -190,10 +192,10 @@ const recipient = {
 }
 
 const professionalRecipient = {
-  id: "usr_pro",
+  id: "clx1234567890abcdef123458",
   name: "Profissional",
   email: "pro@email.com",
-  subscriptionTier: "PLUS",
+  plan: "PLUS",
   profile: {
     versosBalance: 500,
     versosStreak: 10,
@@ -202,7 +204,7 @@ const professionalRecipient = {
 }
 
 function validBody() {
-  return { toUserId: "usr_recipient", giftId: "estrela-cadente" }
+  return { toUserId: "clx1234567890abcdef123457", giftId: "estrela-cadente" }
 }
 
 async function callPost(
@@ -269,8 +271,8 @@ describe("POST /api/v1/social/gifts/send (T120)", () => {
     expect(prismaMock.gift.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          fromUserId: "usr_sender",
-          toUserId: "usr_recipient",
+          fromUserId: "clx1234567890abcdef123456",
+          toUserId: "clx1234567890abcdef123457",
           giftId: "estrela-cadente",
           coinCost: 10,
           recipientEarnsHalf: false,
@@ -280,7 +282,7 @@ describe("POST /api/v1/social/gifts/send (T120)", () => {
     expect(prismaMock.notification.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          userId: "usr_recipient",
+          userId: "clx1234567890abcdef123457",
           type: "GIFT_RECEIVED",
         }),
       }),
@@ -289,7 +291,7 @@ describe("POST /api/v1/social/gifts/send (T120)", () => {
     expect(emitterMock.emitNotification).toHaveBeenCalled()
   })
 
-  it("credita metade ao destinatario se PROFESSIONAL (+50%)", async () => {
+  it("credita metade ao destinatario se PLUS (+50%)", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ ...professionalRecipient })
 
     const res = await callPost(validBody())
@@ -308,11 +310,11 @@ describe("POST /api/v1/social/gifts/send (T120)", () => {
   it("bloqueia self-gift com 403 SELF_GIFT", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...recipient,
-      id: "usr_sender",
+      id: "clx1234567890abcdef123456",
     })
 
     const res = await callPost({
-      toUserId: "usr_sender",
+      toUserId: "clx1234567890abcdef123456",
       giftId: "estrela-cadente",
     })
     const json = await res.json()
@@ -326,7 +328,7 @@ describe("POST /api/v1/social/gifts/send (T120)", () => {
     prismaMock.user.findUnique.mockResolvedValue(recipient)
 
     const res = await callPost({
-      toUserId: "usr_recipient",
+      toUserId: "clx1234567890abcdef123457",
       giftId: "gift-inexistente",
     })
     const json = await res.json()

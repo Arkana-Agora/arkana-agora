@@ -23,8 +23,13 @@ const feedAuthorSchema = z
     displayName: z.string().nullable().optional(),
     avatar: z.string().nullable().optional(),
     profile: z
-      .object({ privacy: z.unknown() })
-      .passthrough()
+      .object({
+        privacy: z
+          .object({
+            profileVisibility: z.string().optional(),
+          })
+          .optional(),
+      })
       .nullable()
       .optional(),
   })
@@ -151,8 +156,14 @@ export function useFeed(cursor?: string | null) {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   })
 
-  const flushPending = useCallback(() => {
+  const flushPending = useCallback(async () => {
     if (pendingPosts.length === 0) return
+    // Wait for any in-flight refetch to complete to avoid using stale cache
+    const state = queryClient.getQueryState(feedKey(cursor))
+    if (state?.fetchStatus === "fetching") {
+      // Wait a bit for the refetch to complete
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
     const data = queryClient.getQueryData<FeedQueryData>(feedKey(cursor))
     const first = data?.pages[0]
     // com os dados ainda não carregados a fila é mantida (não descarta)
@@ -228,6 +239,8 @@ function advanceSinceCursor(requestedAt: string, serverTime?: string): string {
  */
 export function useFeedRealtime(): void {
   const idsRef = useRef<Set<string>>(new Set())
+  // Track the earliest createdAt in the current batch to avoid skipping posts
+  const batchMinCreatedAtRef = useRef<string | null>(null)
   // Ancoragem inicial de 5min (paridade com o INITIAL_CURSOR do use-socket),
   // calculada no PRIMEIRO flush (não durante o render): o teste/usuário pode
   // criar um post ANTES de o cliente hidratar e montar este hook — com
@@ -235,7 +248,10 @@ export function useFeedRealtime(): void {
   // a resposta volta vazia, `wanted` esvazia o lote e a pill "N novos
   // posts" nunca nasce (sem retry: só falha re-agenda).
   const sinceRef = useRef<string | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  ) as React.RefObject<ReturnType<typeof setTimeout> | null>
+  const abortControllerRef = useRef<AbortController | null>(null)
   // Revisão R1: o retry do catch re-agenda via ref (o flush não pode se
   // referenciar antes da própria declaração no useCallback)
   const flushRef = useRef<() => void>(() => undefined)
@@ -247,21 +263,45 @@ export function useFeedRealtime(): void {
     timerRef.current = null
     const batch = idsRef.current
     idsRef.current = new Set()
+    // Reset batch min createdAt after capturing it
+    const batchMinCreatedAt = batchMinCreatedAtRef.current
+    batchMinCreatedAtRef.current = null
     const since =
       sinceRef.current ??
       new Date(Date.now() - POLLING_DEFAULT_SINCE_MS).toISOString()
     const requestedAt = new Date().toISOString()
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
     void authApi
-      .get("/social/polling/posts", { params: { since } })
+      .get("/social/polling/posts", {
+        params: { since },
+        signal: abortController.signal,
+      })
       .then((res) => {
+        abortControllerRef.current = null
         const envelope = pollingPostsEnvelopeSchema.parse(res.data)
         const posts = envelope.data.posts
+        // Update batch min createdAt from the returned posts that were in our batch
+        const batchPosts = posts.filter((post) => batch.has(post.id))
+        if (batchPosts.length > 0) {
+          const firstPost = batchPosts[0]!
+          const minCreatedAt = batchPosts.reduce(
+            (min, post) => (post.createdAt < min ? post.createdAt : min),
+            firstPost.createdAt,
+          )
+          batchMinCreatedAtRef.current = minCreatedAt
+        }
         // só avança a janela quando não há backlog (um evento que chegou
         // durante o voo seria perdido por `createdAt > since`) e nunca
         // além do serverTime do servidor (revisão R1 — skew de relógio)
+        // Use the batch min createdAt as floor for cursor advancement
         if (idsRef.current.size === 0) {
+          const cursorFloor = batchMinCreatedAt ?? requestedAt
           sinceRef.current = advanceSinceCursor(
-            requestedAt,
+            cursorFloor,
             envelope.serverTime,
           )
         }
@@ -269,7 +309,12 @@ export function useFeedRealtime(): void {
         // mais novo por último no prepend → topo do pill = post mais novo
         for (const post of [...wanted].reverse()) emitPendingPost(post)
       })
-      .catch(() => {
+      .catch((error) => {
+        abortControllerRef.current = null
+        // Ignore abort errors
+        if (error.name === "AbortError" || error.name === "CancellationError") {
+          return
+        }
         // Revisão R1: re-enfileira o lote E re-agenda o retry — sem um
         // novo evento o pill nunca sairia da fila (timer já zerado)
         idsRef.current = new Set([...idsRef.current, ...batch])
@@ -287,20 +332,22 @@ export function useFeedRealtime(): void {
   })
 
   useSocket({
-    "new-post": (event) => {
+    "new-post": (event: { postId: string }) => {
       idsRef.current.add(event.postId)
-      if (timerRef.current === null) {
+      if (!timerRef.current) {
         timerRef.current = setTimeout(flush, FEED_REALTIME_BATCH_MS)
       }
     },
-    "like-updated": (event) => {
+    "like-updated": (event: { postId: string; newCount: number }) => {
       // Reconcilia o overlay otimista com o contador real do servidor
-      // event: { postId, newCount }
       updatePostLike(event.postId, undefined, event.newCount)
     },
-    "comment-like-updated": (event) => {
+    "comment-like-updated": (event: {
+      commentId: string
+      postId: string
+      newCount: number
+    }) => {
       // Reconcilia o overlay de like de comentário
-      // event: { commentId, postId, newCount }
       updateCommentLike(event.commentId, undefined, event.newCount)
     },
   })
@@ -308,6 +355,10 @@ export function useFeedRealtime(): void {
   useEffect(
     () => () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current)
+      // Abort any in-flight request on unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
     },
     [],
   )
@@ -371,6 +422,23 @@ export function useExploreSuggestions() {
   })
 }
 
+/**
+ * Hashtags em alta (T062/US-022) —
+ * `GET /social/explore/hashtags` (T054): `{ data: { hashtags } }`.
+ */
+export function useTrendingHashtags() {
+  return useQuery({
+    queryKey: ["social", "trending-hashtags"],
+    queryFn: async () => {
+      const res = await authApi.get("/social/explore/hashtags")
+      const parsed = z
+        .object({ data: z.object({ hashtags: z.array(hashtagSchema) }) })
+        .parse(res.data)
+      return parsed.data.hashtags
+    },
+  })
+}
+
 export type SearchResult = {
   posts: FeedPost[]
   users: FeedUser[]
@@ -401,6 +469,24 @@ export function useSearch(q: string) {
         })
         .parse(res.data)
       return parsed.data satisfies SearchResult
+    },
+  })
+}
+
+/**
+ * Single post detail (T127) — `GET /social/posts/:id`
+ * Uses React Query for caching, retry, and proper error handling.
+ */
+export function usePost(postId: string) {
+  return useQuery({
+    queryKey: ["social", "post", postId],
+    enabled: !!postId,
+    queryFn: async () => {
+      const res = await authApi.get(`/social/posts/${postId}`)
+      const parsed = z
+        .object({ data: z.object({ post: feedPostSchema }) })
+        .parse(res.data)
+      return parsed.data.post
     },
   })
 }

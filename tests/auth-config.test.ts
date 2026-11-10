@@ -36,7 +36,9 @@ function providerIds(providers: readonly unknown[]): string[] {
 }
 
 function findEmailProvider(providers: readonly unknown[]): ProviderLike {
-  return (providers as readonly ProviderLike[]).find((p) => p.id === "email")!
+  return (providers as readonly ProviderLike[]).find(
+    (p) => p.id === "nodemailer",
+  )!
 }
 
 beforeEach(() => {
@@ -63,7 +65,7 @@ describe("authConfig — provider contract (T1 — ADR-010)", () => {
   it("email sempre presente; google só com credenciais", async () => {
     const { authConfig } = await import(AUTH_CONFIG_PATH)
     const ids = providerIds(authConfig.providers)
-    expect(ids).toContain("email")
+    expect(ids).toContain("nodemailer")
     expect(ids).not.toContain("google")
   })
 
@@ -73,7 +75,7 @@ describe("authConfig — provider contract (T1 — ADR-010)", () => {
     const { authConfig } = await import(AUTH_CONFIG_PATH)
     const ids = providerIds(authConfig.providers)
     expect(ids).toContain("google")
-    expect(ids).toContain("email")
+    expect(ids).toContain("nodemailer")
   })
 
   it("EmailProvider configurado para magic link de 15 minutos (maxAge 15*60)", async () => {

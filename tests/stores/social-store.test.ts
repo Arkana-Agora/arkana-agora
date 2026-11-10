@@ -31,9 +31,9 @@ describe("SocialStore (T087)", () => {
     expect(result.current.postLikes).toEqual({})
     expect(result.current.commentLikes).toEqual({})
     expect(result.current.postComments).toEqual({})
+    expect(result.current.notifications).toEqual({})
+    expect(result.current.unreadCount).toBe(0)
     expect("feedPosts" in result.current).toBe(false)
-    expect("unreadCount" in result.current).toBe(false)
-    expect("notifications" in result.current).toBe(false)
   })
 
   it("updatePostLike grava overlay otimista por postId", async () => {
@@ -140,6 +140,8 @@ describe("SocialStore (T087)", () => {
     expect(result.current.postLikes).toEqual({})
     expect(result.current.commentLikes).toEqual({})
     expect(result.current.postComments).toEqual({})
+    expect(result.current.notifications).toEqual({})
+    expect(result.current.unreadCount).toBe(0)
   })
 
   it("clearPostOverlays limpa o overlay de likes de posts, preservando demais", async () => {

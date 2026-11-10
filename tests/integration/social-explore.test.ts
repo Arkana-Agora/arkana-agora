@@ -2,18 +2,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const prismaMock = vi.hoisted(() => ({
-  post: { findMany: vi.fn() },
+  post: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
+  comment: {
+    findUnique: vi.fn(),
+  },
+  user: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
   postHashtag: { findMany: vi.fn() },
-  user: { findMany: vi.fn() },
-  follow: { findMany: vi.fn() },
+  follow: { findMany: vi.fn(), findUnique: vi.fn() },
+}))
+
+const contentReportMock = vi.hoisted(() => ({
+  create: vi.fn(),
+  findUnique: vi.fn(),
 }))
 
 const helpersMock = vi.hoisted(() => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
+const reportCsrfMock = vi.hoisted(() => ({
+  enforceCsrf: vi.fn().mockReturnValue(null),
+}))
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    ...prismaMock,
+    contentReport: contentReportMock,
+  },
+}))
 vi.mock("@/app/api/v1/users/_helpers", () => helpersMock)
+vi.mock("@/lib/middleware/csrf", () => ({
+  enforceCsrf: reportCsrfMock.enforceCsrf,
+}))
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   newReqId: () => "req_test",
@@ -43,6 +69,21 @@ function callSuggestions() {
 function callSearch(query: string) {
   return import("@/app/api/v1/social/search/route").then(({ GET }) =>
     GET(new Request(`http://localhost:3000/api/v1/social/search${query}`)),
+  )
+}
+
+function callReport(body: unknown) {
+  return import("@/app/api/v1/social/report/route").then(({ POST }) =>
+    POST(
+      new Request("http://localhost:3000/api/v1/social/report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer valid-token",
+        },
+        body: JSON.stringify(body),
+      }),
+    ),
   )
 }
 
@@ -643,5 +684,146 @@ describe("GET /api/v1/social/search (T056)", () => {
       { tag: "amor", count: 1 },
     ])
     expect(res.headers.get("Cache-Control")).toBe("private, no-store")
+  })
+})
+
+describe("POST /api/v1/social/report (T128)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    helpersMock.requireAuth.mockResolvedValue({ userId: "usr_reporter" })
+    contentReportMock.create.mockResolvedValue({
+      id: "report_1",
+      reporterId: "usr_reporter",
+      targetType: "post",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "SPAM",
+      status: "PENDING",
+      createdAt: new Date("2026-09-25T10:00:00Z"),
+    })
+    contentReportMock.findUnique.mockResolvedValue(null)
+    reportCsrfMock.enforceCsrf.mockReturnValue(null)
+    // Mock target validation - post exists and is public
+    prismaMock.post.findUnique.mockResolvedValue({
+      id: "cm9r8q7x0000000000000001",
+      authorId: "u1",
+      audience: "public",
+      isHidden: false,
+      author: {
+        isBanned: false,
+        deletedAt: null,
+        isActive: true,
+        profile: { privacy: {} },
+      },
+    })
+    prismaMock.follow.findUnique.mockResolvedValue(null)
+  })
+
+  it("exige autenticação (401) — não cria report", async () => {
+    helpersMock.requireAuth.mockResolvedValue(
+      Response.json(
+        { error: { code: "UNAUTHENTICATED", message: "Token ausente" } },
+        { status: 401 },
+      ),
+    )
+
+    const res = await callReport({
+      targetType: "post",
+      targetId: "post_1",
+      reason: "SPAM",
+    })
+
+    expect(res.status).toBe(401)
+    expect(contentReportMock.create).not.toHaveBeenCalled()
+  })
+
+  it("CSRF invalido bloqueia antes de auth, rate limit e DB", async () => {
+    reportCsrfMock.enforceCsrf.mockReturnValue(
+      Response.json(
+        {
+          error: { code: "CSRF_TOKEN_INVALID", message: "CSRF token invalido" },
+        },
+        { status: 403 },
+      ),
+    )
+
+    const res = await callReport({
+      targetType: "post",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "SPAM",
+    })
+
+    expect(res.status).toBe(403)
+    expect(contentReportMock.create).not.toHaveBeenCalled()
+  })
+
+  it("valida body obrigatório: targetType, targetId, reason", async () => {
+    const res = await callReport({})
+
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.error.code).toBe("VALIDATION_ERROR")
+  })
+
+  it("valida targetType em enum permitido", async () => {
+    const res = await callReport({
+      targetType: "invalid",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "SPAM",
+    })
+
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.error.code).toBe("VALIDATION_ERROR")
+  })
+
+  it("valida reason não vazio", async () => {
+    const res = await callReport({
+      targetType: "post",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "",
+    })
+
+    expect(res.status).toBe(422)
+    const json = await res.json()
+    expect(json.error.code).toBe("VALIDATION_ERROR")
+  })
+
+  it("cria ContentReport com reporterId do token, targetType, targetId, reason, status PENDING", async () => {
+    const res = await callReport({
+      targetType: "post",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "SPAM",
+    })
+
+    expect(res.status).toBe(201)
+    expect(contentReportMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reporterId: "usr_reporter",
+          targetType: "post",
+          targetId: "cm9r8q7x0000000000000001",
+          reason: "SPAM",
+          status: "PENDING",
+        }),
+      }),
+    )
+    const body = await res.json()
+    expect(body.data.id).toBe("report_1")
+  })
+
+  it("retorna 500 INTERNAL_ERROR com meta.requestId quando falha ao criar report", async () => {
+    contentReportMock.create.mockRejectedValue(new Error("db down"))
+
+    const res = await callReport({
+      targetType: "post",
+      targetId: "cm9r8q7x0000000000000001",
+      reason: "SPAM",
+    })
+
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error.code).toBe("INTERNAL_ERROR")
+    expect(body.meta.requestId).toBe("req_test")
   })
 })

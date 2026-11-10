@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { newReqId } from "@/lib/logger"
+import { newReqId, logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 import { validateGiftId, getGiftCost, getGiftById } from "@/lib/social/gifts"
 import { checkGiftLimit } from "@/lib/social/limits"
 import { emitGiftReceived, emitNotification } from "@socket/src/emitters"
 import { enforceCsrf } from "@/lib/middleware/csrf"
+import { trackGiftSend } from "@/lib/analytics"
+import { z } from "zod"
+
+const giftSendSchema = z.object({
+  toUserId: z.string().cuid(),
+  giftId: z.string().min(1).max(50),
+})
 
 export async function POST(request: Request) {
   const reqId = newReqId()
@@ -22,16 +29,11 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { toUserId, giftId } = body
-
-    if (!toUserId || !giftId) {
-      return apiError(
-        "VALIDATION_ERROR",
-        "toUserId e giftId sao obrigatorios",
-        reqId,
-        422,
-      )
+    const parsed = giftSendSchema.safeParse(body)
+    if (!parsed.success) {
+      return apiError("VALIDATION_ERROR", "Corpo invalido", reqId, 422)
     }
+    const { toUserId, giftId } = parsed.data
 
     if (fromUserId === toUserId) {
       return apiError(
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
       return apiError("INSUFFICIENT_VERSOS", "Versos insuficientes", reqId, 403)
     }
 
-    const recipientEarnsHalf = recipient.subscriptionTier === "PLUS"
+    const recipientEarnsHalf = recipient.plan === "PLUS"
     const recipientEarnAmount = recipientEarnsHalf ? Math.floor(cost / 2) : 0
 
     const gift = getGiftById(giftId)
@@ -146,12 +148,17 @@ export async function POST(request: Request) {
       }),
     ])
 
+    trackGiftSend(giftId, cost, toUserId)
+
     return NextResponse.json(
       { message: "Presente enviado com sucesso" },
       { status: 200 },
     )
   } catch (error) {
-    console.error("[POST /api/v1/social/gifts/send]", error)
+    logger.error(
+      { err: error, reqId },
+      "[POST /api/v1/social/gifts/send] error",
+    )
     return apiError("INTERNAL_ERROR", "Erro interno do servidor", reqId, 500)
   }
 }

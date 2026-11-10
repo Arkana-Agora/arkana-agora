@@ -70,10 +70,11 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
     const body = await res.json()
 
     // 1990-05-21 → Cavalo de Metal (após CNY 1990-01-27)
+    // Element now capitalized: "Metal" instead of "metal"
     expect(body.horoscope).toMatchObject({
       type: "chinese",
       signId: "cavalo",
-      element: "metal",
+      element: "Metal",
       period: "daily",
       date: civilDateBrt(0),
       source: "fallback",
@@ -89,7 +90,7 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
       where: {
         type: "chinese",
         signId: "cavalo",
-        element: "metal",
+        element: "Metal",
         period: "daily",
         date: civilDateBrt(0),
       },
@@ -99,18 +100,18 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
         userId: "usr_1",
         type: "chinese",
         signId: "cavalo",
-        element: "metal",
+        element: "Metal",
         period: "daily",
       },
     })
   })
 
   it("animal explícito tem prioridade e dispensa o lookup do usuário", async () => {
-    const res = await callGet("?animal=rato&element=agua")
+    const res = await callGet("?animal=rato&element=Water")
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.horoscope.signId).toBe("rato")
-    expect(body.horoscope.element).toBe("agua")
+    expect(body.horoscope.element).toBe("Water")
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
   })
 
@@ -118,8 +119,8 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
     const res = await callGet("?animal=cavalo")
     expect(res.status).toBe(200)
     const body = await res.json()
-    // Cavalo tem fixedElement = fogo
-    expect(body.horoscope.element).toBe("fogo")
+    // Cavalo tem fixedElement = fogo → capitalized "Fire"
+    expect(body.horoscope.element).toBe("Fire")
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
   })
 
@@ -152,10 +153,10 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
     const body = await res.json()
     expect(body.horoscope.period).toBe("weekly")
     expect(body.horoscope.date).toBe(civilIsoWeek())
-    // Elemento derivado do ano (2026 = fogo), não do fixedElement do animal
+    // Elemento derivado do ano (2026 = Fire), não do fixedElement do animal
     const currentYear = new Date().getUTCFullYear()
     const stemIndex = (((currentYear - 4) % 10) + 10) % 10
-    const elements = ["madeira", "fogo", "terra", "metal", "agua"]
+    const elements = ["Wood", "Fire", "Earth", "Metal", "Water"]
     const expectedElement = elements[Math.floor(stemIndex / 2)]
     expect(prismaMock.horoscopeContent.findFirst).toHaveBeenCalledWith({
       where: {
@@ -181,7 +182,7 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
     prismaMock.horoscopeContent.findFirst.mockResolvedValue({
       type: "chinese",
       signId: "cavalo",
-      element: "metal",
+      element: "Metal",
       period: "daily",
       date: civilDateBrt(0),
       content: {
@@ -196,7 +197,7 @@ describe("GET /api/v1/horoscopes/chinese (T106/T109)", () => {
         date: civilDateBrt(0),
       },
     })
-    const res = await callGet("?animal=cavalo&element=metal")
+    const res = await callGet("?animal=cavalo&element=Metal")
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.horoscope.source).toBe("generated")
@@ -237,11 +238,20 @@ describe("GET /api/v1/horoscopes/my-horoscope inclui chinês (T094/T109)", () =>
     const body = await res.json()
 
     const zodiac = getChineseZodiac(1990, 5, 21)
+    // my-horoscope endpoint returns lowercase Portuguese element (unlike chinese endpoint which capitalizes)
+    const elementMap: Record<string, string> = {
+      madeira: "madeira",
+      fogo: "fogo",
+      terra: "terra",
+      metal: "metal",
+      agua: "agua",
+    }
+    const expectedElement = elementMap[zodiac.element] ?? zodiac.element
 
     expect(body.chinese).toMatchObject({
       type: "chinese",
       signId: zodiac.animal,
-      element: zodiac.element,
+      element: expectedElement,
       period: "daily",
       date: civilDateBrt(0),
       source: "fallback",

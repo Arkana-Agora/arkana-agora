@@ -3,9 +3,9 @@
 import React from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { X } from "lucide-react"
-import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 import { GIFT_CATALOG, getGiftCost } from "@/lib/social/gifts"
+import authApi from "@/lib/api"
 
 interface GiftSelectorProps {
   isOpen: boolean
@@ -22,8 +22,6 @@ export function GiftSelector({
   recipientName,
   userVersosBalance,
 }: GiftSelectorProps) {
-  const { data: session } = useSession()
-
   const [sendingGiftId, setSendingGiftId] = React.useState<string | null>(null)
 
   const handleSendGift = async (giftId: string) => {
@@ -38,38 +36,36 @@ export function GiftSelector({
     setSendingGiftId(giftId)
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-      if (session?.accessToken) {
-        headers.Authorization = `Bearer ${session.accessToken}`
-      }
-
-      const response = await fetch("/api/v1/social/gifts/send", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ toUserId: recipientId, giftId }),
+      const res = await authApi.post("/social/gifts/send", {
+        toUserId: recipientId,
+        giftId,
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        if (error.error?.code === "INSUFFICIENT_VERSOS") {
-          toast.error("Versos insuficientes")
-        } else if (error.error?.code === "SELF_GIFT") {
-          toast.error("Não pode enviar presente para si mesmo")
-        } else if (error.error?.code === "RATE_LIMITED") {
-          toast.error("Limite de presentes diários atingido")
-        } else {
-          toast.error("Erro ao enviar presente")
-        }
-        return
+      if (!res.data?.data) {
+        throw new Error("Invalid response")
       }
 
       const gift = GIFT_CATALOG.find((g) => g.id === giftId)
       toast.success(`${gift?.name ?? giftId} enviado para ${recipientName}!`)
       onClose()
-    } catch {
-      toast.error("Erro de conexão ao enviar presente")
+    } catch (error) {
+      const axiosError = error as {
+        response?: { data?: { error?: { code?: string } } }
+      }
+      const code = axiosError.response?.data?.error?.code
+      if (code === "INSUFFICIENT_VERSOS") {
+        toast.error("Versos insuficientes")
+      } else if (code === "SELF_GIFT") {
+        toast.error("Não pode enviar presente para si mesmo")
+      } else if (code === "RATE_LIMITED") {
+        toast.error("Limite de presentes diários atingido")
+      } else if (code === "VALIDATION_ERROR") {
+        toast.error("Dados inválidos")
+      } else if (code === "NOT_FOUND") {
+        toast.error("Destinatário não encontrado")
+      } else {
+        toast.error("Erro ao enviar presente")
+      }
     } finally {
       setSendingGiftId(null)
     }
@@ -86,6 +82,7 @@ export function GiftSelector({
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
+            style={{ willChange: "opacity" }}
           />
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -95,6 +92,7 @@ export function GiftSelector({
             role="dialog"
             aria-modal="true"
             aria-labelledby="gift-selector-title"
+            style={{ willChange: "transform, opacity" }}
           >
             <div className="bg-background rounded-t-2xl md:rounded-tl-2xl md:rounded-tr-2xl shadow-xl border-t border-border p-4 md:p-6">
               <div className="flex items-center justify-between mb-4">
@@ -150,6 +148,7 @@ export function GiftSelector({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-xl"
+                            style={{ willChange: "opacity" }}
                           >
                             <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
                           </motion.div>

@@ -28,7 +28,9 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }))
 
 const tokenServiceMock = vi.hoisted(() => ({
-  verifyAccessToken: vi.fn().mockResolvedValue({ userId: "usr_sender" }),
+  verifyAccessToken: vi
+    .fn()
+    .mockResolvedValue({ userId: "clx1234567890abcdef123456" }),
 }))
 
 vi.mock("@/services/token-service", () => ({
@@ -176,10 +178,10 @@ const emitterMock = vi.hoisted(() => ({
 vi.mock("@socket/src/emitters", () => emitterMock)
 
 const sender = {
-  id: "usr_sender",
+  id: "clx1234567890abcdef123456",
   name: "Maria Silva",
   email: "maria@email.com",
-  subscriptionTier: "FREE",
+  plan: "FREE",
   profile: {
     versosBalance: 1000,
     versosStreak: 5,
@@ -188,10 +190,10 @@ const sender = {
 }
 
 const recipient = {
-  id: "usr_recipient",
+  id: "clx1234567890abcdef123457",
   name: "Joao Santos",
   email: "joao@email.com",
-  subscriptionTier: "FREE",
+  plan: "FREE",
   profile: {
     versosBalance: 500,
     versosStreak: 3,
@@ -200,10 +202,10 @@ const recipient = {
 }
 
 const professionalRecipient = {
-  id: "usr_pro",
+  id: "clx1234567890abcdef123458",
   name: "Profissional",
   email: "pro@email.com",
-  subscriptionTier: "PLUS",
+  plan: "PLUS",
   profile: {
     versosBalance: 500,
     versosStreak: 10,
@@ -212,7 +214,7 @@ const professionalRecipient = {
 }
 
 function validBody() {
-  return { toUserId: "usr_recipient", giftId: "estrela-cadente" }
+  return { toUserId: "clx1234567890abcdef123457", giftId: "estrela-cadente" }
 }
 
 async function callPost(
@@ -302,11 +304,11 @@ describe("POST /api/v1/social/gifts/send — integration (T125)", () => {
   it("POST send → bloqueia self-gift com 403 SELF_GIFT", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...recipient,
-      id: "usr_sender",
+      id: "clx1234567890abcdef123456",
     })
 
     const res = await callPost({
-      toUserId: "usr_sender",
+      toUserId: "clx1234567890abcdef123456",
       giftId: "estrela-cadente",
     })
     const json = await res.json()
@@ -317,7 +319,7 @@ describe("POST /api/v1/social/gifts/send — integration (T125)", () => {
 
   it("POST send → valida giftId invalido com 422", async () => {
     const res = await callPost({
-      toUserId: "usr_recipient",
+      toUserId: "clx1234567890abcdef123457",
       giftId: "gift-inexistente",
     })
     const json = await res.json()
@@ -369,23 +371,31 @@ describe("GET /api/v1/social/gifts/received — integration (T142)", () => {
   const receivedGifts = [
     {
       id: "gift_1",
-      fromUserId: "usr_sender",
-      toUserId: "usr_recipient",
+      fromUserId: "clx1234567890abcdef123456",
+      toUserId: "clx1234567890abcdef123457",
       giftId: "estrela-cadente",
       coinCost: 10,
       recipientEarnsHalf: false,
       createdAt: new Date("2026-01-15T10:00:00Z"),
-      fromUser: { id: "usr_sender", name: "Maria Silva", avatar: null },
+      fromUser: {
+        id: "clx1234567890abcdef123456",
+        name: "Maria Silva",
+        avatar: null,
+      },
     },
     {
       id: "gift_2",
-      fromUserId: "usr_other",
-      toUserId: "usr_recipient",
+      fromUserId: "clx1234567890abcdef123459",
+      toUserId: "clx1234567890abcdef123457",
       giftId: "rosa-mistica",
       coinCost: 25,
       recipientEarnsHalf: false,
       createdAt: new Date("2026-01-14T15:30:00Z"),
-      fromUser: { id: "usr_other", name: "Outro User", avatar: "avatar.png" },
+      fromUser: {
+        id: "clx1234567890abcdef123459",
+        name: "Outro User",
+        avatar: "avatar.png",
+      },
     },
   ]
 

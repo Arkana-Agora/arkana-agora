@@ -430,6 +430,7 @@ model ContentReport {
 
   @@index([targetType, targetId])
   @@index([reporterId])
+  @@unique([reporterId, targetType, targetId])
   @@map("content_reports")
 }
 

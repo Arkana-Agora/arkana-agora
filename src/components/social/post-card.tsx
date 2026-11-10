@@ -94,6 +94,7 @@ export function PostCard({ post }: PostCardProps) {
       transition={{ duration: 0.2 }}
       data-testid={`post-${post.id}`}
       className="bg-card border border-border rounded-xl p-4 space-y-3"
+      style={{ willChange: "transform, opacity" }}
     >
       <header className="flex items-center gap-3">
         {post.author.avatar ? (

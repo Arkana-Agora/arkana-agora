@@ -26,7 +26,13 @@ vi.mock("sonner", () => ({
 
 const toastMock = vi.mocked(toast)
 
-const mockFetch = vi.fn()
+const mockAuthApiPost = vi.hoisted(() => vi.fn())
+
+vi.mock("@/lib/api", () => ({
+  default: {
+    post: mockAuthApiPost,
+  },
+}))
 
 vi.mock("@/lib/social/gifts", () => ({
   GIFT_CATALOG: [
@@ -103,16 +109,13 @@ vi.mock("@/lib/social/gifts", () => ({
 beforeEach(() => {
   cleanup()
   vi.clearAllMocks()
-  vi.stubGlobal("fetch", mockFetch)
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ message: "Presente enviado com sucesso" }),
+  mockAuthApiPost.mockResolvedValue({
+    data: { data: { message: "Presente enviado com sucesso" } },
   })
 })
 
 afterEach(() => {
   cleanup()
-  vi.unstubAllGlobals()
 })
 
 function renderSelector(open = true, balance = 1000) {
@@ -173,18 +176,11 @@ describe("GiftSelector (T118)", () => {
     )
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/v1/social/gifts/send",
+      expect(mockAuthApiPost).toHaveBeenCalledWith(
+        "/social/gifts/send",
         expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            "Content-Type": "application/json",
-            Authorization: "Bearer token",
-          }),
-          body: JSON.stringify({
-            toUserId: "usr_recipient",
-            giftId: "estrela-cadente",
-          }),
+          toUserId: "usr_recipient",
+          giftId: "estrela-cadente",
         }),
       )
     })
@@ -253,11 +249,11 @@ describe("GiftSelector (T118)", () => {
   })
 
   it("mostra loading state durante envio", async () => {
-    let resolveFetch: (value: unknown) => void
-    mockFetch.mockImplementation(
+    let resolvePost: (value: unknown) => void
+    mockAuthApiPost.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveFetch = resolve
+          resolvePost = resolve
         }),
     )
 
@@ -268,17 +264,17 @@ describe("GiftSelector (T118)", () => {
 
     expect(screen.getByText(/enviando/i)).toBeInTheDocument()
 
-    resolveFetch!({ ok: true, json: () => Promise.resolve({ message: "ok" }) })
+    resolvePost!({ data: { message: "ok" } })
     await waitFor(() =>
       expect(screen.queryByText(/enviando/i)).not.toBeInTheDocument(),
     )
   })
 
   it("mostra toast de erro quando a API falha", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-      json: () => Promise.resolve({ error: { code: "INSUFFICIENT_VERSOS" } }),
+    mockAuthApiPost.mockRejectedValueOnce({
+      response: {
+        data: { error: { code: "INSUFFICIENT_VERSOS" } },
+      },
     })
 
     renderSelector()
@@ -307,10 +303,11 @@ describe("GiftSelector (T118)", () => {
       screen.getByRole("button", { name: /enviar estrela cadente/i }),
     )
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/social/gifts/send",
+    expect(mockAuthApiPost).toHaveBeenCalledWith(
+      "/social/gifts/send",
       expect.objectContaining({
-        body: JSON.stringify({ toUserId: "usr_1", giftId: "estrela-cadente" }),
+        toUserId: "usr_1",
+        giftId: "estrela-cadente",
       }),
     )
   })

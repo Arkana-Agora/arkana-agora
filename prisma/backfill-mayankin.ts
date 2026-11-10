@@ -66,7 +66,7 @@ async function main(): Promise<void> {
       if (user.mayanKin === expectedStr) continue
 
       stale += 1
-      console.log(
+      console.info(
         `${apply ? "[apply]" : "[dry-run]"} ${maskEmail(user.email)}: ${user.mayanKin ?? "null"} → ${expectedStr}`,
       )
       if (apply) {
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     if (pending.length > 0) await prisma.$transaction(pending)
   }
 
-  console.log(
+  console.info(
     `Backfill ${apply ? "aplicado" : "dry-run"}: ${stale}/${scanned} usuários com birthDate divergente`,
   )
 }

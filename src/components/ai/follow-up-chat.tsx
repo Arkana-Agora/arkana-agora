@@ -31,7 +31,7 @@ export function FollowUpChat({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isStreaming) return
     onSendMessage(input.trim())

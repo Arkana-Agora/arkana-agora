@@ -1,6 +1,6 @@
 import type { NextAuthConfig } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
-import EmailProvider from "next-auth/providers/email"
+import EmailProvider from "next-auth/providers/nodemailer"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { createRefreshSession, signAccessToken } from "@/services/token-service"
@@ -188,6 +188,7 @@ export const authConfig = {
         })
       : undefined,
     EmailProvider({
+      id: "email",
       from: emailFrom,
       maxAge: 15 * 60,
       server: smtpServer,
@@ -198,7 +199,7 @@ export const authConfig = {
               "AUTH_EMAIL_SKIP_SEND só é permitido em desenvolvimento",
             )
           }
-          console.log(`[auth:magic-link] ${identifier}: ${url}`)
+          console.info(`[auth:magic-link] ${identifier}: ${url}`)
           return
         }
         if (!smtpConfigured) {
