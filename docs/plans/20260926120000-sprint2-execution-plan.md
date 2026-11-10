@@ -303,12 +303,12 @@ src/
 | 2 | Feed Backend & Post System | Phase 0.5 | ✅ Done |
 | 2.5 | WebSocket Foundation | Phase 2 | ✅ Done |
 | 3 | Interactions (Likes, Comments, Notifications) | Phase 2.5 | ✅ Done |
-| 4 | Horóscopo Ocidental | Phase 0.5 | ? Done |
-| 5 | Horóscopo Chinês | Phases 0.5, 4 | ? Done |
+| 4 | Horóscopo Ocidental | Phase 0.5 | ✅ Done |
+| 5 | Horóscopo Chinês | Phases 0.5, 4 | ✅ Done |
 | 6 | Horóscopo Maia / Kin Maya | Phases 0.5, 4 | ✅ Done |
 | 7 | Gifts + Versos Economy | Phases 0.5, 1, 3 | ✅ Done |
-| 8 | Explore + Search | Phase 2 | ? Done |
-| 9 | Frontend Integration & Polish | Phases 1–8 | ? Done |
+| 8 | Explore + Search | Phase 2 | ✅ Done |
+| 9 | Frontend Integration & Polish | Phases 1–8 | ✅ Done |
 | 10 | Data Integrity & Compliance | Phases 0, 3 | ✅ Done |
 
 ---
@@ -583,17 +583,17 @@ src/
 
 ### Phase 8: Explore + Search (T126–T130)
 
-**Status**: ? Done
+**Status**: ✅ Done
 **Objective**: Explore page, busca, moderação básica (UI + report endpoint)
 **Dependencies**: Phase 2
 
 **Tasks**:
 
-- [ ] T126 [P1] [US-022] Create `ExplorePage` em `src/app/(app)/explorar/page.tsx` — Tabs Em Alta/Hashtags/Pessoas/Tiragens; busca topo; infinite scroll; skeleton
-- [ ] T127 [P1] [US-022] Create `SearchPage` em `src/app/(app)/busca/page.tsx` — Unificada (posts, usuários, hashtags); filtros; paginada
-- [ ] T128 [P1] [US-022] Implement `POST /api/v1/social/report` em `src/app/api/v1/social/report/route.ts` — Bearer; CSRF; Zod `{ targetType, targetId, reason }`; cria `ContentReport` (T012)
-- [ ] T129 [P1] [US-022] Integrate moderation em feed/explore — `checkContent` (T025) em `src/app/api/v1/social/posts/route.ts` (T051); filtrar `Post.isHidden` e `User.isBanned` em `src/app/api/v1/social/feed/route.ts` (T052), `.../explore/trending/route.ts` (T053), `.../search/route.ts` (T056)
-- [ ] T130 [P1] [US-022] Create integration tests em `tests/integration/social-explore.test.ts` — Explore tabs, search, report, moderação filters
+- [x] T126 [P1] [US-022] Create `ExplorePage` em `src/app/(app)/explorar/page.tsx` — Tabs Em Alta/Hashtags/Pessoas/Tiragens; busca topo; infinite scroll; skeleton
+- [x] T127 [P1] [US-022] Create `SearchPage` em `src/app/(app)/busca/page.tsx` — Unificada (posts, usuários, hashtags); filtros; paginada
+- [x] T128 [P1] [US-022] Implement `POST /api/v1/social/report` em `src/app/api/v1/social/report/route.ts` — Bearer; CSRF; Zod `{ targetType, targetId, reason }`; cria `ContentReport` (T012)
+- [x] T129 [P1] [US-022] Integrate moderation em feed/explore — `checkContent` (T025) em `src/app/api/v1/social/posts/route.ts` (T051); filtrar `Post.isHidden` e `User.isBanned` em `src/app/api/v1/social/feed/route.ts` (T052), `.../explore/trending/route.ts` (T053), `.../search/route.ts` (T056)
+- [x] T130 [P1] [US-022] Create integration tests em `tests/integration/social-explore.test.ts` — Explore tabs, search, report, moderação filters
 
 **After completing**: `npm run lint` → `npm run type-check` → `npm run test` → mark Phase 8 ✅
 
@@ -601,24 +601,24 @@ src/
 
 ### Phase 9: Frontend Integration & Polish (T131–T141, T146)
 
-**Status**: ? Done
+**Status**: ✅ Done
 **Objective**: Páginas finais, components layout, E2E tests, polish
 **Dependencies**: Phases 1–8
 
 **Tasks**:
 
-- [ ] T131 [P1] [US-021] Create `PostDetailPage` em `src/app/(app)/post/[id]/page.tsx` — PostCard + CommentSection + ShareModal; SEO meta tags
-- [ ] T132 [P1] [US-023] Create `NotificationsPage` em `src/app/(app)/notificacoes/page.tsx` — Lista completa, filtros, mark-all-read
-- [ ] T133 [P1] [US-020] Update `MobileNav` em `src/components/layout/mobile-nav.tsx` — 5 tabs: Feed, Explorar, Notificações, Presentes, Perfil
+- [x] T131 [P1] [US-021] Create `PostDetailPage` em `src/app/(app)/post/[id]/page.tsx` — PostCard + CommentSection + ShareModal; SEO meta tags
+- [x] T132 [P1] [US-023] Create `NotificationsPage` em `src/app/(app)/notificacoes/page.tsx` — Lista completa, filtros, mark-all-read
+- [x] T133 [P1] [US-020] Update `MobileNav` em `src/components/layout/mobile-nav.tsx` — 5 tabs: Feed, Explorar, Notificações, Presentes, Perfil
 - [x] T134 [P1] [US-023] Update `AppHeader` em `src/components/layout/app-header.tsx` — Notification bell + badge unreadCount + dropdown (T073)
-- [ ] T135 [P1] [US-020] Add loading/error/empty states em `src/app/(app)/feed/page.tsx`, `src/app/(app)/explorar/page.tsx`, `src/components/horoscopes/*` — Skeleton; empty states com CTAs
-- [ ] T136 [P1] [US-020] Integrate PostHog events (T024) nos consumers — `src/app/api/v1/social/posts/route.ts` (T051), `.../posts/[id]/like/route.ts` (T076), `.../posts/[id]/comments/route.ts` (T077), `.../follow/[userId]/route.ts` (T043), `.../gifts/send/route.ts` (T120), `src/app/api/v1/horoscopes/western/route.ts` (T093), `.../versos/claim-daily/route.ts` (T122), `src/lib/social/limits.ts` (`rate_limiter_bypass`, T027)
-- [ ] T137 [P2] [US-021] Animation optimization em `src/components/social/post-card.tsx`, `src/components/social/gift-selector.tsx`, feed scroll — `will-change`, `transform` GPU, 60fps; medir com Chrome DevTools
-- [ ] T138 [P1] [US-020] Create E2E tests em `tests/e2e/social-flows.spec.ts` — Feed CRUD, follow, like/comment, gift, horoscopes, explore, real-time 2 browsers
-- [ ] T139 [P1] [US-024] Create E2E test em `tests/e2e/horoscopes-flow.spec.ts` — 3 sistemas, my-horoscope, compatibilidade, Onda Encantada, history, AI interpret
-- [ ] T140 [P2] [US-020] Responsive polish em `src/app/(app)/**` + `src/components/layout/mobile-nav.tsx` — Mobile-first todas páginas; bottom tabs; drawer desktop
-- [ ] T141 [P1] [US-020] Create full-flow E2E em `tests/e2e/full-flow-sprint2.spec.ts` — Cadastro → perfil → follow → post (+upload) → like/comment → gift → horóscopo → explore → notificações → moderação
-- [ ] T146 [P1] [US-020] Create bench suite em `tests/bench/` (Q29, NFRs) — p95 endpoints sociais <500ms; feed <300ms com 1000 following sintéticos; Playwright tracing página de horóscopo <800ms; cronômetro unitário Kin <1ms; **método: ≥30 reqs/endpoint, 1 warmup descartado, P95 = percentile 95**; **isolamento: `vitest.config.ts` ganha `exclude: ["tests/bench/**"]` (não roda em `npm run test`) + package.json `bench` → `vitest run tests/bench/`**; roda via `npm run bench` no gate da Phase 9
+- [x] T135 [P1] [US-020] Add loading/error/empty states em `src/app/(app)/feed/page.tsx`, `src/app/(app)/explorar/page.tsx`, `src/components/horoscopes/*` — Skeleton; empty states com CTAs
+- [x] T136 [P1] [US-020] Integrate PostHog events (T024) nos consumers — `src/app/api/v1/social/posts/route.ts` (T051), `.../posts/[id]/like/route.ts` (T076), `.../posts/[id]/comments/route.ts` (T077), `.../follow/[userId]/route.ts` (T043), `.../gifts/send/route.ts` (T120), `src/app/api/v1/horoscopes/western/route.ts` (T093), `.../versos/claim-daily/route.ts` (T122), `src/lib/social/limits.ts` (`rate_limiter_bypass`, T027)
+- [x] T137 [P2] [US-021] Animation optimization em `src/components/social/post-card.tsx`, `src/components/social/gift-selector.tsx`, feed scroll — `will-change`, `transform` GPU, 60fps; medir com Chrome DevTools
+- [x] T138 [P1] [US-020] Create E2E tests em `tests/e2e/social-flows.spec.ts` — Feed CRUD, follow, like/comment, gift, horoscopes, explore, real-time 2 browsers
+- [x] T139 [P1] [US-024] Create E2E test em `tests/e2e/horoscopes-flow.spec.ts` — 3 sistemas, my-horoscope, compatibilidade, Onda Encantada, history, AI interpret
+- [x] T140 [P2] [US-020] Responsive polish em `src/app/(app)/**` + `src/components/layout/mobile-nav.tsx` — Mobile-first todas páginas; bottom tabs; drawer desktop
+- [x] T141 [P1] [US-020] Create full-flow E2E em `tests/e2e/full-flow-sprint2.spec.ts` — Cadastro → perfil → follow → post (+upload) → like/comment → gift → horóscopo → explore → notificações → moderação
+- [x] T146 [P1] [US-020] Create bench suite em `tests/bench/` (Q29, NFRs) — p95 endpoints sociais <500ms; feed <300ms com 1000 following sintéticos; Playwright tracing página de horóscopo <800ms; cronômetro unitário Kin <1ms; **método: ≥30 reqs/endpoint, 1 warmup descartado, P95 = percentile 95**; **isolamento: `vitest.config.ts` ganha `exclude: ["tests/bench/**"]` (não roda em `npm run test`) + package.json `bench` → `vitest run tests/bench/`**; roda via `npm run bench` no gate da Phase 9
 
 **After completing**: `npm run lint` → `npm run type-check` → `npx playwright test` → `npm run bench` → mark Phase 9 ✅
 

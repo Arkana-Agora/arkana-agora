@@ -37,7 +37,7 @@ function SettingsForm({ settings }: SettingsFormProps) {
   const save = useSaveHoroscopeNotificationSettings()
   const [form, setForm] = useState<HoroscopeNotificationSettings>(settings)
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     save.mutate(form, {
       onSuccess: () => toast.success("Preferências de notificação salvas"),

@@ -15,6 +15,7 @@ import { enforceSocialLimit } from "@/lib/middleware/rate-limit"
 import { logger, newReqId } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 import type { HoroscopeContent } from "@/lib/horoscopes/validation"
+import { trackHoroscopeView } from "@/lib/analytics"
 
 export const dynamic = "force-dynamic"
 
@@ -141,6 +142,8 @@ export async function GET(request: Request): Promise<Response> {
         ...getCompatibility(signId, targetSign),
       }
     }
+
+    trackHoroscopeView("western", period)
 
     return Response.json(body)
   } catch (err) {

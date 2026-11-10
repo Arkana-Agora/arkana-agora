@@ -2,17 +2,23 @@
 
 import { cn } from "@/lib/utils"
 import { useNotifications } from "@/components/social/notifications-provider"
-import { isAppNavActive } from "@/lib/navigation"
-import { History, Home, Newspaper, SquarePen, Stars, User } from "lucide-react"
+import { isAppNavActive, type AppNavHref } from "@/lib/navigation"
+import { Newspaper, Bell, Gift, User, Compass } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Home", icon: Home },
+type NavIcon =
+  typeof Newspaper | typeof Bell | typeof Gift | typeof User | typeof Compass
+
+const NAV_ITEMS: ReadonlyArray<{
+  href: AppNavHref
+  label: string
+  icon: NavIcon
+}> = [
   { href: "/feed", label: "Feed", icon: Newspaper },
-  { href: "/tirar", label: "Tirar", icon: SquarePen },
-  { href: "/minhas-tiragens", label: "Histórico", icon: History },
-  { href: "/horoscopos/ocidental", label: "Horóscopos", icon: Stars },
+  { href: "/explorar", label: "Explorar", icon: Compass },
+  { href: "/notificacoes", label: "Notificações", icon: Bell },
+  { href: "/presentes", label: "Presentes", icon: Gift },
   { href: "/perfil", label: "Perfil", icon: User },
 ] as const
 
@@ -28,9 +34,6 @@ export function MobileNav() {
     >
       <div className="flex h-16 items-center justify-around">
         {NAV_ITEMS.map((item) => {
-          // Revisão UX: matching exato apagava o tab ativo em subrotas
-          // (/tiragem/:id, /perfil/...) — reutiliza a mesma semântica do
-          // AppHeader (isAppNavActive).
           const isActive = isAppNavActive(pathname, item.href)
           const Icon = item.icon
           return (
@@ -45,11 +48,9 @@ export function MobileNav() {
               )}
               aria-current={isActive ? "page" : undefined}
             >
-              {/* Revisão U: indicador de não-lidas no tab mobile — o
-                  AppHeader (md+) é hidden no mobile. */}
               <span className="relative">
                 <Icon className="h-5 w-5" aria-hidden="true" />
-                {item.href === "/dashboard" && unreadCount > 0 ? (
+                {item.href === "/notificacoes" && unreadCount > 0 ? (
                   <span
                     aria-label={`${unreadCount} notificações não lidas`}
                     data-testid="unread-notifications-badge-mobile"

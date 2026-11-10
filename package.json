@@ -17,7 +17,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:coverage": "node --max-old-space-size=4096 node_modules/vitest/vitest.mjs run --coverage",
-    "bench": "vitest run tests/bench/auth-load.test.ts",
+    "bench": "vitest run --config vitest.bench.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

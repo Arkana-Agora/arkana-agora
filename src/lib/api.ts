@@ -57,10 +57,23 @@ const fetchAdapter: AxiosAdapter = async (config) => {
     }
   }
 
+  // Support AbortSignal for request cancellation
+  const abortController = new AbortController()
+  // Use a type guard to narrow the signal type
+  function isAbortSignal(s: unknown): s is AbortSignal {
+    return s instanceof AbortSignal
+  }
+  if (isAbortSignal(config.signal)) {
+    config.signal.addEventListener("abort", () => {
+      abortController.abort()
+    })
+  }
+
   const init: RequestInit = {
     method: config.method?.toUpperCase() ?? "GET",
     headers,
     credentials: "include",
+    signal: abortController.signal,
   }
   if (config.data && config.method?.toUpperCase() !== "GET") {
     init.body =

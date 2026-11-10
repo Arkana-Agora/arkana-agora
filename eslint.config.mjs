@@ -2,9 +2,25 @@ import { defineConfig } from "eslint/config"
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals"
 import nextTypescript from "eslint-config-next/typescript"
 
+const tsParser = nextTypescript.find((config) => config.languageOptions?.parser)
+  ?.languageOptions?.parser
+
 export default defineConfig([
   ...nextCoreWebVitals,
   ...nextTypescript,
+  {
+    files: ["**/*.ts", "**/*.tsx"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: "./tsconfig.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-deprecated": "error",
+    },
+  },
   {
     // Só `error`/`warn` em app code: `log`/`info`/`debug` viram warning
     // (não falha o `eslint .` do package.json, que não usa --max-warnings).

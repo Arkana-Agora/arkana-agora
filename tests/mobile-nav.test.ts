@@ -25,11 +25,11 @@ describe("Mobile Navigation", () => {
   })
 
   it("has 5 navigation items", () => {
-    // Home, Feed, Tirar, Histórico, Perfil
-    expect(navContent).toContain("Home")
+    // Feed, Explorar, Notificações, Presentes, Perfil
     expect(navContent).toContain("Feed")
-    expect(navContent).toContain("Tirar")
-    expect(navContent).toContain("Histórico")
+    expect(navContent).toContain("Explorar")
+    expect(navContent).toContain("Notificações")
+    expect(navContent).toContain("Presentes")
     expect(navContent).toContain("Perfil")
   })
 

@@ -18,6 +18,7 @@ import { enforceSocialLimit } from "@/lib/middleware/rate-limit"
 import { logger, newReqId } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 import type { HoroscopeContent } from "@/lib/horoscopes/validation"
+import { trackHoroscopeView } from "@/lib/analytics"
 
 export const dynamic = "force-dynamic"
 
@@ -26,11 +27,13 @@ const CHINESE_ANIMAL_IDS = CHINESE_ANIMALS.map((animal) => animal.id) as [
   ...string[],
 ]
 
+const CHINESE_ELEMENTS = ["Wood", "Fire", "Earth", "Metal", "Water"] as const
+
 const chineseQuerySchema = z
   .object({
     ...horoscopePeriodFields,
     animal: z.enum(CHINESE_ANIMAL_IDS).optional(),
-    element: z.string().min(1).optional(),
+    element: z.enum(CHINESE_ELEMENTS).optional(),
   })
   .superRefine(refineHoroscopeDate)
 
@@ -71,7 +74,21 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     let animalId = parsed.data.animal
-    let elementId = parsed.data.element
+    let elementId: (typeof CHINESE_ELEMENTS)[number] | undefined =
+      parsed.data.element
+    let portugueseElementForFallback: string | null = null
+
+    // If elementId is provided explicitly (capitalized English), convert to Portuguese for fallback
+    if (elementId !== undefined) {
+      const reverseElementMap: Record<string, string> = {
+        Wood: "madeira",
+        Fire: "fogo",
+        Earth: "terra",
+        Metal: "metal",
+        Water: "agua",
+      }
+      portugueseElementForFallback = reverseElementMap[elementId] ?? null
+    }
 
     if (animalId === undefined) {
       const user = await prisma.user.findUnique({
@@ -94,7 +111,12 @@ export async function GET(request: Request): Promise<Response> {
         user.birthDate.getUTCDate(),
       )
       animalId = zodiac.animal
-      elementId = zodiac.element
+      // Convert lowercase element to capitalized (e.g., "metal" -> "Metal")
+      // Also track Portuguese element for fallback function
+      const portugueseElement = zodiac.element
+      elementId = (portugueseElement.charAt(0).toUpperCase() +
+        portugueseElement.slice(1)) as (typeof CHINESE_ELEMENTS)[number]
+      portugueseElementForFallback = portugueseElement
     }
 
     if (elementId === undefined) {
@@ -103,14 +125,27 @@ export async function GET(request: Request): Promise<Response> {
       // elemento do zodíaco chinês é do ano (stem celeste), não do animal.
       // O date pode ser YYYY-MM-DD (daily), YYYY-Www (weekly) ou YYYY-MM (monthly).
       const year = parseInt(date.slice(0, 4), 10)
-      elementId = chineseYearElement(year)
+      // Map Portuguese lowercase to English capitalized
+      const elementMap: Record<string, (typeof CHINESE_ELEMENTS)[number]> = {
+        madeira: "Wood",
+        fogo: "Fire",
+        terra: "Earth",
+        metal: "Metal",
+        agua: "Water",
+      }
+      const portugueseElement = chineseYearElement(year)
+      elementId = elementMap[portugueseElement]
+      portugueseElementForFallback = portugueseElement
     }
+
+    // Convert undefined to null for Prisma (exactOptionalPropertyTypes)
+    const elementForQuery = elementId ?? null
 
     const row = await prisma.horoscopeContent.findFirst({
       where: {
         type: "chinese",
         signId: animalId,
-        element: elementId,
+        element: elementForQuery,
         period,
         date,
       },
@@ -118,12 +153,15 @@ export async function GET(request: Request): Promise<Response> {
 
     const stored =
       row !== null ? parseStoredHoroscopeContent(row.content) : null
+    // buildFallbackFor expects lowercase Portuguese (madeira, fogo, terra, metal, agua)
+    // Use tracked Portuguese element for fallback
+    const elementForFallback = portugueseElementForFallback
     const content: HoroscopeContent =
       stored ??
       buildFallbackFor({
         type: "chinese",
         signId: animalId,
-        element: elementId,
+        element: elementForFallback,
         period,
         date,
       })
@@ -135,7 +173,7 @@ export async function GET(request: Request): Promise<Response> {
           userId: auth.userId,
           type: "chinese",
           signId: animalId,
-          element: elementId,
+          element: elementId ?? null,
           period,
         },
       })
@@ -150,13 +188,15 @@ export async function GET(request: Request): Promise<Response> {
       horoscope: {
         type: "chinese",
         signId: animalId,
-        element: elementId,
+        element: elementId ?? null,
         period,
         date,
         content,
         source,
       },
     }
+
+    trackHoroscopeView("chinese", period)
 
     return Response.json(body)
   } catch (err) {

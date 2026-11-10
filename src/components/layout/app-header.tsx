@@ -4,29 +4,19 @@ import { cn } from "@/lib/utils"
 import { NotificationsDropdown } from "@/components/social/notifications"
 import type { AppNavHref } from "@/lib/navigation"
 import { isAppNavActive } from "@/lib/navigation"
-import {
-  History,
-  Home,
-  Newspaper,
-  Sparkles,
-  SquarePen,
-  Stars,
-  User,
-} from "lucide-react"
+import { Newspaper, Bell, Gift, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const NAV_ITEMS: ReadonlyArray<{
   href: AppNavHref
   label: string
-  icon: typeof Home
+  icon: typeof Newspaper
 }> = [
-  { href: "/dashboard", label: "Home", icon: Home },
   { href: "/feed", label: "Feed", icon: Newspaper },
-  { href: "/tirar", label: "Tirar", icon: SquarePen },
-  { href: "/minhas-tiragens", label: "Histórico", icon: History },
-  { href: "/meu-arcano", label: "Meu Arcano", icon: Sparkles },
-  { href: "/horoscopos/ocidental", label: "Horóscopos", icon: Stars },
+  { href: "/explorar", label: "Explorar", icon: Newspaper },
+  { href: "/notificacoes", label: "Notificações", icon: Bell },
+  { href: "/presentes", label: "Presentes", icon: Gift },
   { href: "/perfil", label: "Perfil", icon: User },
 ]
 
@@ -41,7 +31,7 @@ export function AppHeader() {
         aria-label="Navegação principal"
       >
         <Link
-          href="/dashboard"
+          href="/feed"
           className="font-bold tracking-tight hover:text-primary"
         >
           Arkana Ágora

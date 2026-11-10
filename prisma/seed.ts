@@ -164,7 +164,7 @@ export async function seedHoroscopeFallbacks(): Promise<void> {
     await prisma.horoscopeContent.createMany({ data, skipDuplicates: true })
   }
 
-  console.log(
+  console.info(
     `Horoscope fallbacks: ${data.length} criados, ${stale.length} reparados ` +
       `(western ${WESTERN_SIGNS.length} × chinese ${CHINESE_COMBOS.length} × maya ${MAYAN_KIN_COUNT} × periods ${FALLBACK_PERIODS.length} × dates ${dates.length})`,
   )
@@ -180,7 +180,7 @@ export async function seedHoroscopeNotifications(
       create: { userId },
     })
   }
-  console.log(
+  console.info(
     `Horoscope notifications: ${userIds.length} usuários com defaults`,
   )
 }
@@ -219,7 +219,7 @@ export async function seed(): Promise<void> {
   await seedHoroscopeNotifications([admin.id, test.id])
   await seedHoroscopeFallbacks()
 
-  console.log(
+  console.info(
     `Seed ok: admin=${admin.email} (id ${admin.id}) | test=${test.email} (id ${test.id})`,
   )
 }

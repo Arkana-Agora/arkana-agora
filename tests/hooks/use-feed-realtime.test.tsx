@@ -108,6 +108,7 @@ describe("useFeedRealtime — batch de new-post → pill (T072/Q27, revisao Q: s
     expect(pollingCalls()).toHaveLength(1)
     expect(pollingCalls()[0]?.[1]).toEqual({
       params: { since: expect.any(String) },
+      signal: expect.any(AbortSignal),
     })
     expect(detailCalls()).toHaveLength(0)
   })

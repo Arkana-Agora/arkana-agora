@@ -137,7 +137,7 @@ export function trackRateLimiterBypass(limit: SocialLimit, reason: string) {
 
 export function setUserProperties(properties: Record<string, unknown>) {
   if (!initialized || !hasConsent()) return
-  posthog.people.set(properties)
+  posthog.setPersonProperties(properties)
 }
 
 export function resetUser() {

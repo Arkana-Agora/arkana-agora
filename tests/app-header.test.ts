@@ -4,47 +4,35 @@ import { join } from "path"
 import { isAppNavActive } from "@/lib/navigation"
 
 describe("isAppNavActive", () => {
-  it("highlights Home only on /dashboard", () => {
-    expect(isAppNavActive("/dashboard", "/dashboard")).toBe(true)
-    expect(isAppNavActive("/tirar", "/dashboard")).toBe(false)
+  it("highlights Feed only on /feed", () => {
+    expect(isAppNavActive("/feed", "/feed")).toBe(true)
+    expect(isAppNavActive("/feed/some-post", "/feed")).toBe(true)
+    expect(isAppNavActive("/explorar", "/feed")).toBe(false)
   })
 
-  it("highlights Tirar only on /tirar", () => {
-    expect(isAppNavActive("/tirar", "/tirar")).toBe(true)
-    expect(isAppNavActive("/tiragem/abc", "/tirar")).toBe(false)
+  it("highlights Explorar only on /explorar and /busca", () => {
+    expect(isAppNavActive("/explorar", "/explorar")).toBe(true)
+    expect(isAppNavActive("/busca", "/explorar")).toBe(true)
+    expect(isAppNavActive("/busca?q=test", "/explorar")).toBe(true)
+    expect(isAppNavActive("/feed", "/explorar")).toBe(false)
   })
 
-  it("highlights Histórico for /minhas-tiragens and /tiragem detail", () => {
-    expect(isAppNavActive("/minhas-tiragens", "/minhas-tiragens")).toBe(true)
-    expect(isAppNavActive("/tiragem/abc", "/minhas-tiragens")).toBe(true)
-    expect(isAppNavActive("/perfil", "/minhas-tiragens")).toBe(false)
+  it("highlights Notificações only on /notificacoes", () => {
+    expect(isAppNavActive("/notificacoes", "/notificacoes")).toBe(true)
+    expect(isAppNavActive("/feed", "/notificacoes")).toBe(false)
   })
 
-  it("highlights Meu Arcano for /meu-arcano and its detail", () => {
-    expect(isAppNavActive("/meu-arcano", "/meu-arcano")).toBe(true)
-    expect(isAppNavActive("/meu-arcano/22", "/meu-arcano")).toBe(true)
+  it("highlights Presentes for /presentes and subpages", () => {
+    expect(isAppNavActive("/presentes", "/presentes")).toBe(true)
+    expect(isAppNavActive("/presentes/loja", "/presentes")).toBe(true)
+    expect(isAppNavActive("/feed", "/presentes")).toBe(false)
   })
 
   it("highlights Perfil for /perfil and subpages", () => {
     expect(isAppNavActive("/perfil", "/perfil")).toBe(true)
     expect(isAppNavActive("/perfil/editar", "/perfil")).toBe(true)
     expect(isAppNavActive("/perfil/firefox", "/perfil")).toBe(true)
-    expect(isAppNavActive("/dashboard", "/perfil")).toBe(false)
-  })
-
-  it("highlights Feed for /feed (CHK009 — alcançar /feed pela nav)", () => {
-    expect(isAppNavActive("/feed", "/feed")).toBe(true)
-    expect(isAppNavActive("/dashboard", "/feed")).toBe(false)
-  })
-
-  it("highlights Horóscopos em qualquer subrota (CHK009)", () => {
-    expect(
-      isAppNavActive("/horoscopos/ocidental", "/horoscopos/ocidental"),
-    ).toBe(true)
-    expect(
-      isAppNavActive("/horoscopos/historico", "/horoscopos/ocidental"),
-    ).toBe(true)
-    expect(isAppNavActive("/feed", "/horoscopos/ocidental")).toBe(false)
+    expect(isAppNavActive("/feed", "/perfil")).toBe(false)
   })
 })
 
@@ -70,17 +58,16 @@ describe("App Header Navigation", () => {
     expect(headerContent).toContain("use client")
   })
 
-  it("has the brand link to /dashboard", () => {
+  it("has the brand link to /feed", () => {
     expect(headerContent).toContain("Arkana Ágora")
-    expect(headerContent).toContain('href="/dashboard"')
+    expect(headerContent).toContain('href="/feed"')
   })
 
-  it("has 6 navigation items", () => {
-    expect(headerContent).toContain("Home")
+  it("has 5 navigation items", () => {
     expect(headerContent).toContain("Feed")
-    expect(headerContent).toContain("Tirar")
-    expect(headerContent).toContain("Histórico")
-    expect(headerContent).toContain("Meu Arcano")
+    expect(headerContent).toContain("Explorar")
+    expect(headerContent).toContain("Notificações")
+    expect(headerContent).toContain("Presentes")
     expect(headerContent).toContain("Perfil")
   })
 
@@ -88,9 +75,20 @@ describe("App Header Navigation", () => {
     expect(headerContent).toContain('href: "/feed"')
   })
 
-  it("inclui /horoscopos/ocidental nos itens (CHK009)", () => {
-    expect(headerContent).toContain('href: "/horoscopos/ocidental"')
-    expect(headerContent).toContain("Horóscopos")
+  it("inclui /explorar nos itens", () => {
+    expect(headerContent).toContain('href: "/explorar"')
+  })
+
+  it("inclui /notificacoes nos itens", () => {
+    expect(headerContent).toContain('href: "/notificacoes"')
+  })
+
+  it("inclui /presentes nos itens", () => {
+    expect(headerContent).toContain('href: "/presentes"')
+  })
+
+  it("inclui /perfil nos itens", () => {
+    expect(headerContent).toContain('href: "/perfil"')
   })
 
   it("uses Lucide icons", () => {

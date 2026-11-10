@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/v1/users/_helpers"
 import { apiError } from "@/lib/api-response"
-import { newReqId } from "@/lib/logger"
+import { newReqId, logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 import { enforceCsrf } from "@/lib/middleware/csrf"
-import { logger } from "@/lib/logger"
+import { checkSocialLimit } from "@/lib/social/limits"
+import { trackGiftClaimDaily, trackVersosEarned } from "@/lib/analytics"
+import { VersosSource } from "@/lib/social/versos"
 
 const BASE_CLAIM = 10
 const MILESTONES: Record<number, number> = {
@@ -45,6 +47,21 @@ export async function POST(request: Request) {
 
   const csrfError = enforceCsrf(request, reqId)
   if (csrfError) return csrfError
+
+  // Rate limiting for claim endpoint
+  const rateLimit = await checkSocialLimit("polling", userId)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMIT_EXCEEDED",
+          message: "Muitas tentativas. Tente novamente mais tarde.",
+        },
+        meta: { requestId: reqId },
+      },
+      { status: 429 },
+    )
+  }
 
   try {
     const now = new Date()
@@ -97,6 +114,9 @@ export async function POST(request: Request) {
         lastClaimAt: true,
       },
     })
+
+    trackGiftClaimDaily(earned, newStreak)
+    trackVersosEarned(VersosSource.ClaimDaily, earned)
 
     return NextResponse.json({
       message: "Claim diario realizado",

@@ -30,12 +30,13 @@ afterEach(() => {
 })
 
 describe("VERSOS_REWARDS (T037)", () => {
-  it("tabela fixa do spec: like 1, comment 2, follow 5, reading 10", () => {
+  it("tabela fixa do spec: like 1, comment 2, follow 5, reading 10, claim_daily 10", () => {
     expect(VERSOS_REWARDS).toEqual({
       [VersosSource.Like]: 1,
       [VersosSource.Comment]: 2,
       [VersosSource.Follow]: 5,
       [VersosSource.Reading]: 10,
+      [VersosSource.ClaimDaily]: 10,
     })
   })
 

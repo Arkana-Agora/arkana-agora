@@ -3,6 +3,7 @@ import type { UserPlan } from "@prisma/client"
 import { logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
 import { redis } from "@/lib/redis"
+import { trackRateLimiterBypass } from "@/lib/analytics"
 
 /**
  * Rate limits sociais (T027/S2-10) — única casa dos limites sociais.
@@ -38,8 +39,9 @@ export type SocialLimit =
   | "upload"
   | "polling"
   | "notification"
+  | "report"
 
-const WINDOW_MS: Record<SocialLimit, number> = {
+const WINDOW_MS = {
   post: DAY,
   like: MINUTE,
   comment: MINUTE,
@@ -53,9 +55,11 @@ const WINDOW_MS: Record<SocialLimit, number> = {
   // Revisão R7a: PATCH :id/read + PATCH read-all sem nenhum bucket antes —
   // janela compartilhada entre as duas rotas, espelho do `polling`.
   notification: MINUTE,
-}
+  // Report: daily limit to prevent spam
+  report: DAY,
+} as const satisfies Record<SocialLimit, number>
 
-const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
+const FIXED_LIMITS = {
   like: 100,
   comment: 30,
   follow: 20,
@@ -63,9 +67,15 @@ const FIXED_LIMITS: Record<Exclude<SocialLimit, "post">, number> = {
   upload: 20,
   polling: 60,
   notification: 60,
-}
+  report: 10, // 10 reports per day for FREE tier
+} as const satisfies Record<Exclude<SocialLimit, "post">, number>
 
 export const POST_LIMIT_BY_TIER: Record<UserPlan, number> = {
+  FREE: 10,
+  PLUS: 50,
+}
+
+export const REPORT_LIMIT_BY_TIER: Record<UserPlan, number> = {
   FREE: 10,
   PLUS: 50,
 }
@@ -75,7 +85,9 @@ export function getSocialLimitValue(
   limit: SocialLimit,
   tier: UserPlan = "FREE",
 ): number {
-  return limit === "post" ? POST_LIMIT_BY_TIER[tier] : FIXED_LIMITS[limit]
+  if (limit === "post") return POST_LIMIT_BY_TIER[tier]
+  if (limit === "report") return REPORT_LIMIT_BY_TIER[tier]
+  return FIXED_LIMITS[limit as Exclude<SocialLimit, "post">]
 }
 
 export interface SocialLimitResult extends LimitCheck {
@@ -98,6 +110,7 @@ function bypass(
     }
   }
   logger.warn({ limit, reason }, "rate_limiter_bypass")
+  trackRateLimiterBypass(limit, reason)
   return {
     allowed: true,
     remaining,
@@ -157,7 +170,7 @@ async function slidingWindowCheck(
   if (!redis) return dailyFallback(limit, userId, max, "redis_not_configured")
 
   try {
-    const member = `${now}:${Math.random().toString(36).slice(2)}`
+    const member = `${now}:${crypto.randomUUID()}`
     const reply = (await redis.eval(
       RATE_LIMIT_SCRIPT,
       1,
