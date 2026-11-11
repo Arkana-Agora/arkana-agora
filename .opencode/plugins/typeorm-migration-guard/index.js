@@ -9,13 +9,16 @@
 // generated, since forgetting to run it immediately is called out there as
 // "the #1 source of production bugs".
 
+import { Plugin } from "@opencode/plugin";
+
 const GENERATE_PATTERN = /typeorm:generate\b/;
 
-export const TypeormMigrationGuard = async () => {
-  return {
-    "tool.execute.after": async (input, output) => {
-      if (input?.tool !== "bash") return;
-      const command = output?.args?.command;
+export default Plugin.define({
+  id: "typeorm-migration-guard",
+  async setup(ctx) {
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (event?.tool !== "bash") return;
+      const command = event.input?.command ?? event.args?.command;
       if (!command || !GENERATE_PATTERN.test(command)) return;
 
       console.warn(
@@ -24,8 +27,6 @@ export const TypeormMigrationGuard = async () => {
           "verified, before starting any other entity/migration change. See " +
           ".opencode/rules/typeorm-migrations.mdc."
       );
-    },
-  };
-};
-
-export default TypeormMigrationGuard;
+    });
+  },
+});

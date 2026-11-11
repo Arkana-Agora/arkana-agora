@@ -22,8 +22,10 @@
 // target project (not this plugin repo) so the reminder survives process
 // restarts within the same OpenCode session id.
 
+// D:\GitHub\Arkana-Agora\arkana-agora\.opencode\plugins\docs-memory-guard\index.js
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { Plugin } from "@opencode/plugin";
 
 const EDIT_TOOLS = new Set(["write", "edit", "patch"]);
 
@@ -49,8 +51,6 @@ function saveState(file, state) {
   writeFileSync(file, JSON.stringify(state, null, 2));
 }
 
-// Guards against path-traversal payloads polluting the touched-files list,
-// same safety property the old (dead) track-edit.mjs test expected.
 function sanitizeRelativePath(filePath) {
   if (typeof filePath !== "string" || filePath.length === 0) return null;
   const normalized = filePath.replace(/\\/g, "/");
@@ -62,28 +62,31 @@ function isDocPath(filePath) {
   return /(^|\/)docs\//.test(filePath);
 }
 
-function extractFilePath(output) {
+function extractFilePath(event) {
+  const args = event?.input ?? event?.args ?? {};
   return (
-    output?.args?.filePath ||
-    output?.args?.path ||
-    output?.args?.file ||
-    output?.metadata?.filePath ||
+    args.filePath ||
+    args.path ||
+    args.file ||
+    event?.metadata?.filePath ||
     null
   );
 }
 
-export const DocsMemoryGuard = async ({ directory, client }) => {
-  const file = statePath(directory);
+export default Plugin.define({
+  id: "docs-memory-guard",
+  async setup(ctx) {
+    const directory = ctx.location?.directory || process.cwd();
+    const file = statePath(directory);
 
-  return {
-    "tool.execute.after": async (input, output) => {
-      if (!EDIT_TOOLS.has(input?.tool)) return;
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (!EDIT_TOOLS.has(event?.tool)) return;
 
-      const rawPath = extractFilePath(output);
+      const rawPath = extractFilePath(event);
       const filePath = sanitizeRelativePath(rawPath);
       if (!filePath) return;
 
-      const sessionId = input?.sessionID || "default";
+      const sessionId = event?.sessionID || "default";
       const state = loadState(file);
       const session =
         state.sessions[sessionId] ||
@@ -97,37 +100,31 @@ export const DocsMemoryGuard = async ({ directory, client }) => {
       if (!session.touched.includes(filePath)) session.touched.push(filePath);
 
       saveState(file, state);
-    },
+    });
 
-    event: async ({ event }) => {
-      if (event?.type !== "session.idle") return;
+    const controller = new AbortController();
 
-      const sessionId = event?.properties?.sessionID || event?.sessionID || "default";
-      const state = loadState(file);
-      const session = state.sessions[sessionId];
-      if (!session) return;
+    ctx.event.subscribe(
+      async (event) => {
+        if (event?.type !== "session.idle") return;
 
-      if (session.codeEdits > 0 && session.docEdits === 0) {
-        const message =
-          "Documentation guard: code changed this session but docs/ was not " +
-          "updated. Consider /pwf-doc, /pwf-doc-capture, or /pwf-doc-refresh " +
-          "before finishing.";
-        if (typeof client?.tui?.showToast === "function") {
-          try {
-            await client.tui.showToast({ body: { message, variant: "warning" } });
-          } catch {
-            // Toast call failed at runtime — still surface the reminder.
-            console.warn(`[docs-memory-guard] ${message}`);
-          }
-        } else {
-          // Toast API not available on this client version (or no client
-          // was provided, e.g. in tests) — fall back to stderr so the
-          // reminder is still visible.
+        const data = event?.data ?? event?.properties ?? {};
+        const sessionId = data?.sessionID || event?.sessionID || "default";
+        const state = loadState(file);
+        const session = state.sessions[sessionId];
+        if (!session) return;
+
+        if (session.codeEdits > 0 && session.docEdits === 0) {
+          const message =
+            "Documentation guard: code changed this session but docs/ was not " +
+            "updated. Consider /pwf-doc, /pwf-doc-capture, or /pwf-doc-refresh " +
+            "before finishing.";
           console.warn(`[docs-memory-guard] ${message}`);
         }
-      }
-    },
-  };
-};
+      },
+      { signal: controller.signal }
+    );
 
-export default DocsMemoryGuard;
+    return () => controller.abort();
+  },
+});

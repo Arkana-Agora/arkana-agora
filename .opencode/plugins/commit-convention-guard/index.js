@@ -10,27 +10,27 @@
 // PWF_STRICT_COMMIT_CONVENTION=1 in the environment to hard-block commits
 // whose message is missing the required `[TICKET-XXXX]` prefix.
 
+// commit-convention-guard.js
+import { Plugin } from "@opencode/plugin";
+
 const TICKET_PATTERN = /\[[A-Z][A-Z0-9]*-\d+\]/;
 
 function extractInlineMessage(command) {
-  // Matches: git commit -m "..."   or   git commit -m '...'
   const match = command.match(/-m\s+"([^"]*)"|-m\s+'([^']*)'/);
   if (!match) return null;
   return match[1] ?? match[2] ?? null;
 }
 
-export const CommitConventionGuard = async () => {
-  return {
-    "tool.execute.before": async (input, output) => {
-      if (input?.tool !== "bash") return;
+export default Plugin.define({
+  id: "commit-convention-guard",
+  async setup(ctx) {
+    await ctx.tool.hook("execute.before", async (event) => {
+      if (event.tool !== "bash") return;
 
-      const command = output?.args?.command;
+      const command = event.input?.command ?? event.args?.command;
       if (!command || !/\bgit\s+commit\b/.test(command)) return;
 
       const message = extractInlineMessage(command);
-      // Commits using -F <file>, an editor, or --amend without -m are not
-      // inspected here — we only reliably see the message text for the
-      // inline `-m` form.
       if (!message) return;
 
       if (TICKET_PATTERN.test(message)) return;
@@ -47,8 +47,7 @@ export const CommitConventionGuard = async () => {
       }
 
       console.warn(`[commit-convention-guard] ${warning}`);
-    },
-  };
-};
+    });
+  },
+});
 
-export default CommitConventionGuard;
